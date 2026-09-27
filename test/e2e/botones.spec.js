@@ -18,7 +18,8 @@ test('ir-ajustes / ir-respaldo / ir-lista cambian de pantalla', async ({ page })
   await expect(page).toHaveURL(/#\/ajustes$/);
   await expect(page.locator('#titulo-pantalla')).toHaveText('Ajustes');
 
-  await page.locator('[data-accion="ir-respaldo"]').click();
+  // Ajustes también tiene su propio botón "Ir a Respaldo" (sección Datos): apuntar al de la nav.
+  await page.locator('.nav-inferior [data-accion="ir-respaldo"]').click();
   await expect(page).toHaveURL(/#\/respaldo$/);
   await expect(page.locator('#titulo-pantalla')).toHaveText('Respaldo');
 
@@ -84,28 +85,36 @@ test('exportar dispara la descarga del respaldo', async ({ page }) => {
   expect(descarga.suggestedFilename()).toMatch(/\.json$/);
 });
 
-test('precio vacío o negativo en el alta muestra error y no guarda (QA.md #8)', async ({ page }) => {
+test('precio vacío es válido (producto sin precio); negativo sigue siendo error (CREAR-BRIEF.md 2026-09-27)', async ({ page }) => {
   await page.goto('/');
   await page.locator('[data-accion="agregar"]').click();
   await page.locator('#campo-nombre').fill('Sin precio');
   await page.locator('#campo-precio').fill('');
   await page.locator('[data-accion="guardar"]').click();
-  await expect(page.locator('#campo-precio').locator('..').locator('.campo__error')).toHaveText(/mayor a cero/i);
-  await expect(page).toHaveURL(/#\/producto\/nuevo$/); // no navegó: no se guardó
+  await expect(page.locator('[data-accion="editar"]', { hasText: 'Sin precio' })).toBeVisible(); // se guardó
+  await expect(page.locator('[data-accion="precio"]').first()).toHaveValue(''); // "Sin precio" es el placeholder
 
+  await page.locator('[data-accion="editar"]', { hasText: 'Sin precio' }).click();
   await page.locator('#campo-precio').fill('-500');
   await page.locator('[data-accion="guardar"]').click();
   await expect(page.locator('#campo-precio').locator('..').locator('.campo__error')).toHaveText(/mayor a cero/i);
-  await expect(page).toHaveURL(/#\/producto\/nuevo$/);
+  await expect(page).toHaveURL(/#\/producto\//); // no navegó: no se guardó el negativo
 });
 
-test('precio vacío o negativo editado en línea desde la lista se revierte (QA.md #8)', async ({ page }) => {
+test('precio vacío editado en línea desde la lista lo quita (válido); negativo se revierte (QA.md #8 + CREAR-BRIEF.md)', async ({ page }) => {
   await crearProducto(page, { nombre: 'Con precio', precio: '10000' });
   const inputPrecio = page.locator('[data-accion="precio"]').first();
-  await inputPrecio.fill('');
+
+  await inputPrecio.fill('-500');
   await inputPrecio.blur();
   await expect(page.locator('#toast')).toHaveText(/mayor a cero/i);
-  await expect(inputPrecio).toHaveValue('$ 10.000');
+  await expect(inputPrecio).toHaveValue('$ 10.000'); // se revierte, no se guarda el negativo
+
+  await inputPrecio.fill('');
+  await inputPrecio.blur();
+  await expect(page.locator('#toast')).toHaveText(/Precio quitado/);
+  await expect(inputPrecio).toHaveValue('');
+  await expect(inputPrecio).toHaveAttribute('placeholder', 'Sin precio');
 });
 
 test('borrar todos los datos: pide confirmación fuerte y vuelve al vacío sin recargar (QA.md #5)', async ({ page }) => {

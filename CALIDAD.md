@@ -29,11 +29,18 @@ A.8.24 criptografía (no hay datos que cifrar en reposo más allá de lo que el 
 para IndexedDB — HTTPS lo da GitHub Pages en tránsito).
 
 ## Cómo se verificó (para que el próximo que lea esto sepa que no es de palabra)
-- `npm test` → 30/30 (`test/modelo.test.js`, `test/layout.test.js`, `test/respaldo.test.js`, `test/sw-estrategia.test.js`).
-- `npm run test:e2e` → 17/17 (`test/e2e/*.spec.js`, viewport 412×915, Chromium).
+- `npm test` → 67/67 (`test/*.test.js`: modelo, layout, respaldo, estrategia del SW, compartir, geometría del editor).
+- `npm run test:e2e` → 33/33 (`test/e2e/*.spec.js`, viewport 412×915, Chromium).
 - Verificación manual en navegador con `agent-browser` (viewport 412×915): alta de producto con
-  imagen de prueba, cambio de precio en la lista, pantalla Plantilla con vista previa en vivo,
-  Publicar (mock), exportar/importar. Captura de una imagen compuesta real en `docs/ejemplo-estado.png`.
+  imagen de prueba, cambio de precio en la lista (incluido sin precio), las 4 tarjetas de estilo con
+  miniatura en vivo en Ajustes, el editor de plantilla (seleccionar/mover/redimensionar/cambiar
+  tipografía y color), Publicar (mock), exportar/importar. Capturas reales en `docs/` (`ajustes.png`,
+  `editor-plantilla.png`, un `estilo-*.png` por cada uno de los 4 estilos).
+- `impeccable /audit` (detector mecánico) sobre `js/vistas/ajustes.js`, `js/vistas/plantilla.js` y
+  `css/estilos.css`: 0 hallazgos. Revisión manual encontró un objetivo táctil chico (la casilla de
+  selección de producto, 24×24px) — corregido a 44×44px (`css/estilos.css`, `.tarjeta__seleccion`).
+  Las manijas de redimensión del editor (18px) quedan como excepción deliberada: son manipulación de
+  precisión (como en Figma/Photoshop), agrandarlas a 44px estorbaría el ajuste fino en un lienzo chico.
 - Lo que **no** se pudo verificar en esta sesión: que WhatsApp acepte de verdad la imagen compartida
   en "Mi estado" desde el Android de Bruno — eso requiere el share sheet real de un teléfono, que
   solo Bruno puede probar.

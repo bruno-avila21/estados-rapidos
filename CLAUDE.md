@@ -9,10 +9,20 @@ uno o varios archivos juntos) para elegir WhatsApp → Mi estado. Sin backend, s
 dependencias de runtime. Todo el dato vive en el IndexedDB del celular de quien la usa — el repo es
 público pero solo tiene código, nunca datos de producto.
 
-Tres estilos de imagen (Ajustes → estilo general, con override opcional por producto):
-**Solo la foto** (por defecto, sin textos), **Foto con precio** (franja con nombre y precio) y
-**Mi plantilla** (plantilla PNG propia con posiciones ajustables — pantalla "Plantilla", solo
-accesible desde Ajustes cuando ese es el estilo elegido).
+Cuatro estilos de imagen (Ajustes → tarjetas con miniatura en vivo, con override opcional por
+producto): **Solo la foto** (por defecto, sin textos), **Foto con precio**, **Foto con descripción**
+(cada estado lleva su propio texto aunque se publiquen varios juntos) y **Mi plantilla** (fondo PNG
+propio). Precio **opcional**: vacío es válido ("Sin precio"), solo un negativo es error. Nombre,
+precio y descripción comparten un solo **editor de plantilla** tipo inspector (pantalla "Plantilla",
+se abre desde Ajustes): clic/toque selecciona un elemento sobre la vista previa, arrastrar mueve,
+las manijas de las esquinas redimensionan, con panel de propiedades (tamaño, tipografía, color,
+fondo/etiqueta, visible), capas, deshacer/rehacer y restablecer.
+
+Identidad visual: paleta azul→violeta (índigo primario `--color-primario`, violeta `--color-acento`;
+contraste AA verificado — ver `CALIDAD.md`), logo propio (`assets/logo.svg`, anillo segmentado +
+rayo) rasterizado a PNG 192/512 maskable con Playwright (`npm run iconos`). Tipografía: 6 fuentes OFL
+autoalojadas en `fonts/*.woff2` (Inter, Montserrat, Poppins, Playfair Display, Bebas Neue, Pacifico),
+cargadas con `FontFace` (`js/fuentes.js`) — nada de Google Fonts remoto (la CSP no lo permite).
 
 Fuente de verdad del alcance: `CREAR-BRIEF.md`.
 
@@ -30,19 +40,20 @@ inicio" para instalarla igual que en producción.
 
 Tests:
 ```bash
-npm test          # unidad: node --test (modelo, layout, respaldo, estrategia del SW)
+npm test          # unidad: node --test (modelo, layout, respaldo, estrategia del SW, geometría del editor)
 npm run test:e2e  # Playwright, viewport 412x915 (Chromium)
 npm run test:todo # ambos
 ```
 
 ## Cómo se publica
-GitHub Pages sirve la raíz de `main` en `https://bruno-avila21.github.io/estados-rapidos/`. No hay
-paso de build: lo que está en `main` es lo que se sirve. Un push a `main` se refleja solo (unos
-minutos de propagación de Pages).
+GitHub Pages, pero con un workflow de **GitHub Actions** (`.github/workflows/pages.yml`, "Publicar en
+Pages"), no el "legacy build" por branch — ese no reconstruía solo en cada push (BUGS.md #13). Un
+push a `main` dispara el workflow; se verifica con `gh run list -w "Publicar en Pages"` (o
+`gh run watch <id>`) y queda servido en `https://bruno-avila21.github.io/estados-rapidos/`. No hay
+paso de build real: el workflow solo empaqueta y sube los archivos tal cual están en `main`.
 
-Para regenerar los íconos PNG (192/512, maskable) sin dependencias: `npm run iconos`
-(`scripts/generar-iconos.js`, dibuja el PNG a mano con `node:zlib`, igual técnica que
-`claude-GUIA-USO/bin/guia.js iconos`).
+Para regenerar los íconos PNG (192/512, maskable) desde `assets/logo.svg`: `npm run iconos`
+(`scripts/generar-iconos.mjs`, rasteriza con Playwright — ya es devDependency de test, no se suma nada).
 
 ## Las 8 reglas de UI (obligatorias, de `patrones.md`)
 1. Tokens CSS en `:root` (`css/estilos.css`); nada de estilos inline en el HTML.
@@ -67,18 +78,22 @@ propósito desde la pestaña "Respaldo" — y ese archivo tampoco se commitea (v
 `.tmp-respaldo-*.json` que generan los tests E2E están explícitamente ignorados).
 
 ## Mapa del código
-- `js/modelo.js` — reglas puras: formato de precio (es-AR), validación de producto y de respaldo,
-  resolución de estilo (`resolverEstilo`, override por producto vs. general) y de descripción
-  (`resolverDescripcion`/`aplicarPlantillaDescripcion`, marcadores `{nombre} {precio} {descripcion}`).
+- `js/modelo.js` — reglas puras: formato de precio (es-AR, opcional), validación de producto y de
+  respaldo, resolución de estilo (`resolverEstilo`) y de descripción (`resolverDescripcion`/
+  `aplicarPlantillaDescripcion`, marcadores `{nombre} {precio} {descripcion}`, limpieza sin precio),
+  `normalizarAjustes` (compatibilidad con respaldos viejos).
 - `js/layout.js` — cálculo puro de wrap de texto y cover-fit (sin canvas; recibe un medidor inyectado).
+- `js/editor-geometria.js` — hit-testing, mover/redimensionar con límites y snap del editor (puro).
+- `js/fuentes.js` — carga de las 6 tipografías OFL con `FontFace`, memoizada.
 - `js/componer.js` — dibuja en un canvas 1080×1920 → Blob PNG; `componerSegunEstilo` elige entre
-  `componerSoloFoto`, `componerFotoConPrecio` y `componerImagen` (estilo "Mi plantilla").
-- `js/db.js` / `js/repositorio.js` — IndexedDB y las operaciones de dominio (incluida selección
-  persistente y ajustes generales).
+  `componerSoloFoto`, `componerFotoConPrecio`, `componerFotoConDescripcion` y `componerImagen`
+  ("Mi plantilla"); nombre/precio/descripción comparten los mismos `ajustes`.
+- `js/db.js` / `js/repositorio.js` — IndexedDB y las operaciones de dominio (selección persistente,
+  ajustes generales, normalización de ajustes al leer/importar).
 - `js/vistas/*.js` — pantallas: `lista` (productos + selección + barra "Publicar N"), `detalle`
-  (alta/edición, con override de estilo en "Opciones avanzadas"), `ajustes` (estilo general,
-  descripción modelo, formato de precio), `plantilla` (solo si el estilo es "Mi plantilla"),
-  `respaldo` (exportar/importar/borrar todo), `revision` (hoja de revisión antes de publicar).
+  (alta/edición, con override de estilo en "Opciones avanzadas"), `ajustes` (tarjetas de estilo con
+  miniatura en vivo, descripción modelo, formato de precio), `plantilla` (editor de plantilla
+  interactivo), `respaldo` (exportar/importar/borrar todo), `revision` (hoja de revisión antes de publicar).
 - `js/utils/*.js` — toast, confirmación propia (nunca `confirm()` nativo), compartir (con timeout
   de seguridad y soporte multi-archivo), achicar fotos.
 - `sw.js` + `js/sw-estrategia.js` — Service Worker network-first, con la decisión de cacheo separada como función pura y testeada.

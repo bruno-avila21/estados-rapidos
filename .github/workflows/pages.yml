@@ -27,7 +27,7 @@ jobs:
       - name: Armar el sitio (solo lo que se sirve)
         run: |
           mkdir _sitio
-          cp -r index.html manifest.webmanifest sw.js css js icons .nojekyll _sitio/
+          cp -r index.html manifest.webmanifest sw.js css js icons fonts .nojekyll _sitio/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

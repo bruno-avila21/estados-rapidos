@@ -8,16 +8,16 @@ export async function generarPlantillaPorDefecto() {
   canvas.height = ALTO;
   const ctx = canvas.getContext('2d');
 
-  // Fondo sobrio: un solo color, sin gradientes.
-  ctx.fillStyle = '#12161c';
+  // Fondo sobrio: un solo color, sin gradientes (identidad visual azul→violeta, ver CLAUDE.md).
+  ctx.fillStyle = '#0d0f1a';
   ctx.fillRect(0, 0, ANCHO, ALTO);
 
   // Banda inferior, apenas más clara, para que nombre y precio tengan contraste.
-  ctx.fillStyle = '#1b2028';
+  ctx.fillStyle = '#161a2c';
   ctx.fillRect(0, 940, ANCHO, ALTO - 940);
 
   // Línea de acento fina, separando la banda.
-  ctx.fillStyle = '#f5a623';
+  ctx.fillStyle = '#6366f1';
   ctx.fillRect(0, 940, ANCHO, 6);
 
   // Marco discreto para la caja de la foto (referencia visual; el ajuste real se hace en Plantilla).

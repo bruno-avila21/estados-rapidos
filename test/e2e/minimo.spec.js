@@ -70,10 +70,10 @@ test('mínimo del día 1: cargar producto, precio en línea, plantilla y publica
 
   // Ajustes → "Mi plantilla": pantalla Plantilla con vista previa en vivo
   await page.locator('[data-accion="ir-ajustes"]').first().click();
-  await page.locator('input[name="estilo-general"][value="mi-plantilla"]').check();
+  await page.locator('[data-accion="estilo-mi-plantilla"]').click();
   await page.locator('[data-accion="ir-plantilla"]').click();
   await expect(page.locator('.previa-plantilla')).toBeVisible();
-  await expect(page.locator('.previa-plantilla')).toHaveAttribute('src', /^blob:/);
+  await expect(page.locator('.editor-plantilla__imagen')).toHaveAttribute('src', /^blob:/);
 
   // volver a la lista y Publicar: abre la hoja de revisión con la imagen ya armada
   await page.locator('[data-accion="ir-lista"]').click();

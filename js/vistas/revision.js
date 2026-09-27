@@ -4,7 +4,7 @@
 // CREAR-BRIEF.md, cambio de producto 2026-09-27.
 import * as repo from '../repositorio.js';
 import { componerSegunEstilo } from '../componer.js';
-import { resolverEstilo, resolverDescripcion, ESTILOS_IMAGEN, AJUSTES_FRANJA_POR_DEFECTO } from '../modelo.js';
+import { resolverEstilo, resolverDescripcion, ESTILOS_IMAGEN } from '../modelo.js';
 import { compartirArchivos, copiarDescripcion, descargarImagen, puedeCompartirArchivos } from '../utils/compartir.js';
 import { mostrarToast } from '../utils/toast.js';
 
@@ -130,14 +130,15 @@ export async function abrirHojaRevision({ ids }) {
     if (estilo === 'mi-plantilla') {
       plantillaImagen = await createImageBitmap(await repo.obtenerImagenPlantillaBlob());
     }
+    const descripcion = resolverDescripcion(producto, { ...general, formatoPrecio: plantillaConfig.formatoPrecio });
     return await componerSegunEstilo({
       estilo,
       plantillaImagen,
       fotoImagen,
       producto,
       ajustes: plantillaConfig.ajustes,
-      ajustesFranja: AJUSTES_FRANJA_POR_DEFECTO,
       formatoPrecio: plantillaConfig.formatoPrecio,
+      descripcion,
     });
   }
 

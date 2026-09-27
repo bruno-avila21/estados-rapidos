@@ -3,5 +3,6 @@
 export function tipoDeCache(urlComoTexto) {
   const url = new URL(urlComoTexto);
   if (/\/icons\/.+\.png$/.test(url.pathname)) return 'cache-first';
+  if (/\/fonts\/.+\.woff2$/.test(url.pathname)) return 'cache-first'; // idempotente, URL única
   return 'network-first';
 }

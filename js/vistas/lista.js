@@ -182,19 +182,27 @@ async function tarjeta(producto, { navegar, recargar }) {
   inputPrecio.className = 'tarjeta__precio';
   inputPrecio.setAttribute('data-accion', 'precio');
   inputPrecio.setAttribute('aria-label', `Precio de ${producto.nombre}`);
-  inputPrecio.value = formatearPrecio(producto.precio, await formatoActual());
+  inputPrecio.placeholder = 'Sin precio'; // precio opcional (CREAR-BRIEF.md 2026-09-27)
+  inputPrecio.value = producto.precio != null ? formatearPrecio(producto.precio, await formatoActual()) : '';
   const guardarPrecio = async () => {
-    const nuevo = parsearPrecio(inputPrecio.value);
-    if (!Number.isFinite(nuevo) || nuevo <= 0) {
-      // vacío o negativo: se revierte, nunca se guarda un "$ 0" en silencio (QA.md #8).
-      inputPrecio.value = formatearPrecio(producto.precio, await formatoActual());
-      mostrarToast('El precio tiene que ser mayor a cero: no se guardó.');
-      return;
+    const texto = inputPrecio.value.trim();
+    let nuevo;
+    if (!texto) {
+      nuevo = null; // vacío = sin precio, válido
+    } else {
+      const parseado = parsearPrecio(texto);
+      if (!Number.isFinite(parseado) || parseado <= 0) {
+        // negativo/0/no numérico: se revierte, nunca se guarda en silencio (QA.md #8).
+        inputPrecio.value = producto.precio != null ? formatearPrecio(producto.precio, await formatoActual()) : '';
+        mostrarToast('El precio tiene que ser mayor a cero (o dejalo vacío para no mostrarlo).');
+        return;
+      }
+      nuevo = parseado;
     }
     producto.precio = nuevo;
     await repo.actualizarPrecio(producto.id, nuevo);
-    inputPrecio.value = formatearPrecio(nuevo, await formatoActual());
-    mostrarToast('Precio actualizado');
+    inputPrecio.value = nuevo != null ? formatearPrecio(nuevo, await formatoActual()) : '';
+    mostrarToast(nuevo != null ? 'Precio actualizado' : 'Precio quitado');
   };
   inputPrecio.addEventListener('blur', guardarPrecio);
   inputPrecio.addEventListener('keydown', (ev) => {

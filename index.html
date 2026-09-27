@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#12161c" />
+<meta name="theme-color" content="#0d0f1a" />
 <meta name="color-scheme" content="dark light" />
 <meta name="description" content="Estados de WhatsApp de tus productos en 3 segundos." />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob: data:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'" />
@@ -16,6 +16,17 @@
 <body class="cargando">
   <div class="app">
     <header class="encabezado">
+      <svg class="encabezado__logo" viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <linearGradient id="ergrad" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#3b82f6" />
+            <stop offset="1" stop-color="#8b5cf6" />
+          </linearGradient>
+        </defs>
+        <circle cx="32" cy="32" r="26" fill="none" stroke="url(#ergrad)" stroke-width="6"
+          stroke-linecap="round" stroke-dasharray="27 14" transform="rotate(-90 32 32)" />
+        <path d="M34 12 L18 34 L28 34 L26 52 L46 28 L35 28 Z" fill="url(#ergrad)" />
+      </svg>
       <h1 class="encabezado__titulo" id="titulo-pantalla">Productos</h1>
     </header>
 

@@ -9,6 +9,10 @@ test('tipoDeCache: los íconos son cache-first', () => {
   assert.equal(tipoDeCache('https://bruno-avila21.github.io/estados-rapidos/icons/icon-512.png'), 'cache-first');
 });
 
+test('tipoDeCache: las fuentes woff2 son cache-first (URL estable, idempotente)', () => {
+  assert.equal(tipoDeCache('https://bruno-avila21.github.io/estados-rapidos/fonts/inter-400.woff2'), 'cache-first');
+});
+
 test('tipoDeCache: el html/js/css/manifest son network-first', () => {
   assert.equal(tipoDeCache('https://bruno-avila21.github.io/estados-rapidos/index.html'), 'network-first');
   assert.equal(tipoDeCache('https://bruno-avila21.github.io/estados-rapidos/js/main.js'), 'network-first');

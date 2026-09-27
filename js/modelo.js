@@ -3,11 +3,65 @@
 
 export const VERSION_RESPALDO = 1;
 
+// --- Tipografías OFL autoalojadas (ver js/fuentes.js para la carga con FontFace) ---
+export const FUENTES_DISPONIBLES = Object.freeze(['inter', 'montserrat', 'poppins', 'playfair', 'bebas-neue', 'pacifico']);
+export const FUENTE_POR_DEFECTO = 'inter';
+export const ETIQUETA_FUENTE = Object.freeze({
+  inter: 'Inter',
+  montserrat: 'Montserrat',
+  poppins: 'Poppins',
+  playfair: 'Playfair Display',
+  'bebas-neue': 'Bebas Neue',
+  pacifico: 'Pacifico',
+});
+
+function cajaTexto(extra) {
+  return {
+    x: 60,
+    y: 1460,
+    w: 960,
+    h: 130,
+    tamano: 60,
+    color: '#ffffff',
+    peso: 700,
+    alineacion: 'center',
+    familia: FUENTE_POR_DEFECTO,
+    fondoColor: '#05060a',
+    fondoOpacidad: 0.55,
+    fondoRadio: 18,
+    visible: true,
+    ...extra,
+  };
+}
+
+// Ajustes COMPARTIDOS (posición, tamaño, tipografía, color, fondo/etiqueta, visibilidad) que
+// se editan una sola vez en el editor de plantilla y valen para los 3 estilos con texto
+// ("Foto con precio", "Foto con descripción" y "Mi plantilla"). `foto` es la excepción: solo
+// se usa en "Mi plantilla" (en los otros dos la foto siempre ocupa toda la imagen).
 export const AJUSTES_POR_DEFECTO = Object.freeze({
   foto: { x: 140, y: 130, w: 800, h: 800, modo: 'cover' },
-  nombre: { x: 60, y: 990, w: 960, h: 160, tamano: 72, color: '#ffffff', peso: 700, alineacion: 'center' },
-  precio: { x: 60, y: 1180, w: 960, h: 200, tamano: 100, color: '#f5a623', peso: 800, alineacion: 'center' },
+  nombre: cajaTexto({ y: 1460, h: 120, tamano: 58 }),
+  precio: cajaTexto({ y: 1590, h: 130, tamano: 84, color: '#a78bfa', peso: 800 }),
+  descripcion: cajaTexto({ y: 1730, h: 150, tamano: 38, peso: 400 }),
 });
+
+/** Completa una caja guardada (posiblemente parcial, de un respaldo viejo) con los valores por
+ * defecto de esa caja — así un respaldo de antes de 2026-09-27 (sin `familia`/`fondoColor`/etc.,
+ * o directamente sin `descripcion`) sigue importando bien. */
+function normalizarCaja(base, guardada) {
+  if (!guardada || typeof guardada !== 'object') return { ...base };
+  return { ...base, ...guardada };
+}
+
+export function normalizarAjustes(ajustesGuardados) {
+  const g = ajustesGuardados || {};
+  return {
+    foto: normalizarCaja(AJUSTES_POR_DEFECTO.foto, g.foto),
+    nombre: normalizarCaja(AJUSTES_POR_DEFECTO.nombre, g.nombre),
+    precio: normalizarCaja(AJUSTES_POR_DEFECTO.precio, g.precio),
+    descripcion: normalizarCaja(AJUSTES_POR_DEFECTO.descripcion, g.descripcion),
+  };
+}
 
 export const FORMATO_PRECIO_POR_DEFECTO = Object.freeze({
   prefijo: '$ ',
@@ -15,16 +69,14 @@ export const FORMATO_PRECIO_POR_DEFECTO = Object.freeze({
   decimales: false,
 });
 
-// --- Estilo de imagen (cambio de producto 2026-09-27: 3 modos, ver CREAR-BRIEF.md) ---
-export const ESTILOS_IMAGEN = Object.freeze(['solo-foto', 'foto-precio', 'mi-plantilla']);
+// --- Estilo de imagen (2026-09-27: 4 modos, ver CREAR-BRIEF.md) ---
+export const ESTILOS_IMAGEN = Object.freeze(['solo-foto', 'foto-precio', 'foto-descripcion', 'mi-plantilla']);
 export const ESTILO_POR_DEFECTO = 'solo-foto';
-
-// Franja de "Foto con precio": posiciones fijas (no configurables por ahora, a diferencia de
-// "Mi plantilla"). Banda inferior semitransparente con nombre y precio sobre la foto.
-export const AJUSTES_FRANJA_POR_DEFECTO = Object.freeze({
-  franja: { x: 0, y: 1500, w: 1080, h: 420, color: 'rgba(10,12,16,0.72)' },
-  nombre: { x: 60, y: 1560, w: 960, h: 140, tamano: 64, color: '#ffffff', peso: 700, alineacion: 'center' },
-  precio: { x: 60, y: 1710, w: 960, h: 180, tamano: 92, color: '#f5a623', peso: 800, alineacion: 'center' },
+export const ETIQUETA_ESTILO = Object.freeze({
+  'solo-foto': 'Solo la foto',
+  'foto-precio': 'Foto con precio',
+  'foto-descripcion': 'Foto con descripción',
+  'mi-plantilla': 'Mi plantilla',
 });
 
 export const DESCRIPCION_MODELO_POR_DEFECTO = '{nombre} a {precio} 🔥 Pedilo por privado';
@@ -37,13 +89,25 @@ export function resolverEstilo(producto, config) {
   return general && ESTILOS_IMAGEN.includes(general) ? general : ESTILO_POR_DEFECTO;
 }
 
-/** Reemplaza {nombre} {precio} {descripcion} en el texto modelo. Pura: recibe el precio ya formateado. */
+/**
+ * Reemplaza {nombre} {precio} {descripcion} en el texto modelo. Pura: recibe el precio ya
+ * formateado (o `''` si el producto no tiene precio). Sin precio, se saca el marcador JUNTO con
+ * un conector inmediatamente antes ("a", "por", "de", "en") para no dejar nada colgando —
+ * "{nombre} a {precio} 🔥" sin precio da "{nombre} 🔥", no "{nombre} a  🔥" (precio opcional,
+ * CREAR-BRIEF.md 2026-09-27).
+ */
 export function aplicarPlantillaDescripcion(plantillaTexto, { nombre = '', precio = '', descripcion = '' } = {}) {
   const texto = plantillaTexto ?? DESCRIPCION_MODELO_POR_DEFECTO;
-  return texto
-    .replaceAll('{nombre}', nombre)
-    .replaceAll('{precio}', precio)
-    .replaceAll('{descripcion}', descripcion);
+  let resultado = texto;
+  if (!precio) {
+    resultado = resultado.replace(/\s*\b(a|por|de|en)\b\s*\{precio\}/gi, '');
+    resultado = resultado.replace(/\{precio\}/g, '');
+  } else {
+    resultado = resultado.replaceAll('{precio}', precio);
+  }
+  resultado = resultado.replaceAll('{nombre}', nombre).replaceAll('{descripcion}', descripcion);
+  // colapsar espacios dobles que hayan quedado al sacar el marcador, y recortar puntas
+  return resultado.replace(/[ \t]{2,}/g, ' ').trim();
 }
 
 /**
@@ -78,18 +142,22 @@ function obtenerFormateador(decimales) {
   return FORMATEADORES.get(clave);
 }
 
-/** Formatea un precio numérico según las opciones (miles con punto es-AR, prefijo configurable). */
+/**
+ * Formatea un precio numérico según las opciones (miles con punto es-AR, prefijo configurable).
+ * `null`/`undefined` (producto sin precio, CREAR-BRIEF.md 2026-09-27) y cualquier valor no
+ * positivo devuelven `''` — nunca "$ 0": la UI decide qué mostrar ("Sin precio") con eso.
+ */
 export function formatearPrecio(valor, opciones = {}) {
   const { prefijo = FORMATO_PRECIO_POR_DEFECTO.prefijo, separadorMiles = true, decimales = false } =
     opciones;
+  if (valor === null || valor === undefined) return '';
   const numero = Number(valor);
-  if (!Number.isFinite(numero)) return `${prefijo}0`;
-  const positivo = Math.max(0, numero);
+  if (!Number.isFinite(numero) || numero <= 0) return '';
   if (!separadorMiles) {
-    const texto = decimales ? positivo.toFixed(2).replace('.', ',') : String(Math.round(positivo));
+    const texto = decimales ? numero.toFixed(2).replace('.', ',') : String(Math.round(numero));
     return `${prefijo}${texto}`;
   }
-  return `${prefijo}${obtenerFormateador(decimales).format(positivo)}`;
+  return `${prefijo}${obtenerFormateador(decimales).format(numero)}`;
 }
 
 /**
@@ -116,9 +184,15 @@ export function validarProducto(producto) {
   if (!nombre) errores.nombre = 'Poné un nombre.';
   else if (nombre.length > 80) errores.nombre = 'Máximo 80 caracteres.';
 
-  const precio = Number(producto?.precio);
-  // vacío (NaN) o negativo/cero nunca se guarda en silencio como "$ 0" (QA.md 2026-09-27, hallazgo bajo).
-  if (!Number.isFinite(precio) || precio <= 0) errores.precio = 'Poné un precio mayor a cero.';
+  // Precio OPCIONAL (CREAR-BRIEF.md 2026-09-27): null/undefined = "sin precio", válido. Si se
+  // cargó algo, tiene que ser positivo — un negativo sigue siendo inválido.
+  const precioBruto = producto?.precio;
+  if (precioBruto !== null && precioBruto !== undefined) {
+    const precio = Number(precioBruto);
+    if (!Number.isFinite(precio) || precio <= 0) {
+      errores.precio = 'El precio tiene que ser mayor a cero (o dejalo vacío para no mostrarlo).';
+    }
+  }
 
   const descripcion = String(producto?.descripcion ?? '');
   if (descripcion.length > 300) errores.descripcion = 'Máximo 300 caracteres.';
@@ -138,7 +212,8 @@ export function validarRespaldo(objeto) {
     if (!p || typeof p !== 'object') return { ok: false, error: `Producto #${i + 1} inválido.` };
     if (typeof p.id !== 'string' || !p.id) return { ok: false, error: `Producto #${i + 1} sin id.` };
     if (typeof p.nombre !== 'string') return { ok: false, error: `Producto #${i + 1} sin nombre.` };
-    if (typeof p.precio !== 'number' || !Number.isFinite(p.precio))
+    // precio opcional (CREAR-BRIEF.md 2026-09-27): null es "sin precio" y es válido.
+    if (p.precio !== null && (typeof p.precio !== 'number' || !Number.isFinite(p.precio)))
       return { ok: false, error: `Producto #${i + 1} con precio inválido.` };
     if (p.fotoBase64 != null && typeof p.fotoBase64 !== 'string')
       return { ok: false, error: `Producto #${i + 1} con foto inválida.` };

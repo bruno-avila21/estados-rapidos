@@ -1,0 +1,5 @@
+Fuentes autoalojadas (subset "latin", cubre español) bajado de Google Fonts, todas bajo la
+SIL Open Font License 1.1 (OFL): Inter, Montserrat, Poppins, Playfair Display, Bebas Neue, Pacifico.
+Licencia completa: https://openfontlicense.org/open-font-license-official-text/
+Cada autor conserva los derechos de su tipografía; este proyecto solo redistribuye el binario
+woff2 sin modificar, como permite la OFL.

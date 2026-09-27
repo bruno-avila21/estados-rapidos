@@ -12,13 +12,13 @@ import {
   ESTILOS_IMAGEN,
   ESTILO_POR_DEFECTO,
   DESCRIPCION_MODELO_POR_DEFECTO,
-  AJUSTES_FRANJA_POR_DEFECTO,
+  AJUSTES_POR_DEFECTO,
+  normalizarAjustes,
 } from '../js/modelo.js';
 
 test('formatearPrecio: miles es-AR, sin decimales por defecto', () => {
   assert.equal(formatearPrecio(12500), '$ 12.500');
   assert.equal(formatearPrecio(1000000), '$ 1.000.000');
-  assert.equal(formatearPrecio(0), '$ 0');
 });
 
 test('formatearPrecio: con decimales', () => {
@@ -29,10 +29,16 @@ test('formatearPrecio: sin separador de miles', () => {
   assert.equal(formatearPrecio(12500, { separadorMiles: false }), '$ 12500');
 });
 
-test('formatearPrecio: prefijo configurable y valores inválidos', () => {
+test('formatearPrecio: prefijo configurable', () => {
   assert.equal(formatearPrecio(12500, { prefijo: 'ARS ' }), 'ARS 12.500');
-  assert.equal(formatearPrecio(-50), '$ 0');
-  assert.equal(formatearPrecio(NaN), '$ 0');
+});
+
+test('formatearPrecio: sin precio (null/undefined/negativo/0/NaN) da cadena vacía, nunca "$ 0" (precio opcional)', () => {
+  assert.equal(formatearPrecio(null), '');
+  assert.equal(formatearPrecio(undefined), '');
+  assert.equal(formatearPrecio(-50), '');
+  assert.equal(formatearPrecio(0), '');
+  assert.equal(formatearPrecio(NaN), '');
 });
 
 test('parsearPrecio: admite formatos con y sin separadores', () => {
@@ -50,16 +56,23 @@ test('parsearPrecio: vacío o no numérico da NaN, negativo preserva el signo (Q
   assert.equal(parsearPrecio('-500'), -500);
 });
 
-test('validarProducto: nombre y precio obligatorios', () => {
+test('validarProducto: nombre obligatorio, precio negativo inválido', () => {
   const { ok, errores } = validarProducto({ nombre: '', precio: -1 });
   assert.equal(ok, false);
   assert.ok(errores.nombre);
   assert.ok(errores.precio);
 });
 
-test('validarProducto: precio vacío (NaN) o cero también son inválidos (QA.md #8)', () => {
+test('validarProducto: precio OPCIONAL — null/undefined es válido (producto sin precio)', () => {
+  assert.equal(validarProducto({ nombre: 'x', precio: null }).ok, true);
+  assert.equal(validarProducto({ nombre: 'x', precio: undefined }).ok, true);
+  assert.equal(validarProducto({ nombre: 'x' }).ok, true);
+});
+
+test('validarProducto: si se carga un precio, tiene que ser mayor a cero', () => {
   assert.equal(validarProducto({ nombre: 'x', precio: NaN }).ok, false);
   assert.equal(validarProducto({ nombre: 'x', precio: 0 }).ok, false);
+  assert.equal(validarProducto({ nombre: 'x', precio: -5 }).ok, false);
   assert.equal(validarProducto({ nombre: 'x', precio: 1 }).ok, true);
 });
 
@@ -89,6 +102,15 @@ test('validarRespaldo: rechaza si falta productos', () => {
 test('validarRespaldo: acepta un respaldo bien formado', () => {
   const respaldo = construirRespaldo({
     productos: [{ id: 'p1', nombre: 'Remera', precio: 9990, descripcion: '', fotoBase64: null }],
+    plantilla: null,
+  });
+  const { ok, error } = validarRespaldo(respaldo);
+  assert.equal(ok, true, error);
+});
+
+test('validarRespaldo: acepta un producto sin precio (precio: null)', () => {
+  const respaldo = construirRespaldo({
+    productos: [{ id: 'p1', nombre: 'Consulta', precio: null, descripcion: '', fotoBase64: null }],
     plantilla: null,
   });
   const { ok, error } = validarRespaldo(respaldo);
@@ -130,7 +152,8 @@ test('resolverEstilo: ignora un override u estiloGeneral inválido (dato corrupt
   assert.equal(resolverEstilo({}, { estiloGeneral: 'tampoco-existe' }), ESTILO_POR_DEFECTO);
 });
 
-test('resolverEstilo: los 3 estilos declarados son válidos', () => {
+test('resolverEstilo: los 4 estilos declarados son válidos', () => {
+  assert.equal(ESTILOS_IMAGEN.length, 4);
   for (const estilo of ESTILOS_IMAGEN) {
     assert.equal(resolverEstilo({ estilo }, {}), estilo);
   }
@@ -169,9 +192,52 @@ test('resolverDescripcion: sin descripción propia, aplica el modelo con el prec
   assert.equal(resultado, 'Campera a $ 45.000 🔥');
 });
 
-test('AJUSTES_FRANJA_POR_DEFECTO: trae franja, nombre y precio dentro del lienzo 1080x1920', () => {
-  for (const caja of [AJUSTES_FRANJA_POR_DEFECTO.franja, AJUSTES_FRANJA_POR_DEFECTO.nombre, AJUSTES_FRANJA_POR_DEFECTO.precio]) {
-    assert.ok(caja.x >= 0 && caja.x + caja.w <= 1080);
-    assert.ok(caja.y >= 0 && caja.y + caja.h <= 1920);
-  }
+// --- Precio opcional: el marcador {precio} se limpia sin dejar conectores colgando ---
+
+test('aplicarPlantillaDescripcion: sin precio, saca el marcador y el conector inmediato ("a")', () => {
+  const resultado = aplicarPlantillaDescripcion('{nombre} a {precio} 🔥 Pedilo por privado', {
+    nombre: 'Remera',
+    precio: '',
+    descripcion: '',
+  });
+  assert.equal(resultado, 'Remera 🔥 Pedilo por privado');
+  assert.doesNotMatch(resultado, /\ba\b/); // no queda ningún "a" colgando
+});
+
+test('aplicarPlantillaDescripcion: sin precio, también limpia "por"/"de"/"en" antes del marcador', () => {
+  assert.equal(aplicarPlantillaDescripcion('{nombre} por {precio}', { nombre: 'X', precio: '' }), 'X');
+  assert.equal(aplicarPlantillaDescripcion('{nombre} de {precio}', { nombre: 'X', precio: '' }), 'X');
+  assert.equal(aplicarPlantillaDescripcion('{nombre} en {precio}', { nombre: 'X', precio: '' }), 'X');
+});
+
+test('aplicarPlantillaDescripcion: sin precio y sin conector reconocido, igual saca el marcador', () => {
+  const resultado = aplicarPlantillaDescripcion('{nombre}: {precio}', { nombre: 'Remera', precio: '' });
+  assert.doesNotMatch(resultado, /\{precio\}/);
+});
+
+test('resolverDescripcion: producto sin precio no deja "a $" colgando en el modelo por defecto', () => {
+  const producto = { nombre: 'Remera', precio: null, descripcion: '' };
+  const resultado = resolverDescripcion(producto, {});
+  assert.equal(resultado, 'Remera 🔥 Pedilo por privado');
+});
+
+// --- Ajustes compartidos (nombre/precio/descripción) y compatibilidad con respaldos viejos ---
+
+test('normalizarAjustes: sin nada guardado, devuelve los valores por defecto', () => {
+  const resultado = normalizarAjustes(null);
+  assert.deepEqual(resultado.nombre, AJUSTES_POR_DEFECTO.nombre);
+  assert.deepEqual(resultado.descripcion, AJUSTES_POR_DEFECTO.descripcion);
+});
+
+test('normalizarAjustes: un respaldo viejo (sin descripcion ni familia/fondo) sigue importando', () => {
+  const ajustesViejos = {
+    foto: { x: 10, y: 10, w: 500, h: 500, modo: 'cover' },
+    nombre: { x: 60, y: 900, w: 900, h: 100, tamano: 60, color: '#fff', peso: 700, alineacion: 'center' },
+    precio: { x: 60, y: 1000, w: 900, h: 100, tamano: 80, color: '#f5a623', peso: 800, alineacion: 'center' },
+    // sin "descripcion": no existía antes del 2026-09-27
+  };
+  const resultado = normalizarAjustes(ajustesViejos);
+  assert.equal(resultado.nombre.x, 60); // se preservó lo guardado
+  assert.equal(resultado.nombre.familia, AJUSTES_POR_DEFECTO.nombre.familia); // se completó lo que faltaba
+  assert.deepEqual(resultado.descripcion, AJUSTES_POR_DEFECTO.descripcion); // caja nueva, default completo
 });

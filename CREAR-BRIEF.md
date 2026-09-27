@@ -74,3 +74,27 @@ Calidad 25010: ver `CALIDAD.md`.
 | Selección múltiple | Casilla en cada tarjeta; el marcado persiste en IndexedDB (no se resetea al volver a entrar); acciones "Marcar todos"/"Desmarcar"; barra inferior fija "Publicar N" cuando hay ≥1 marcado | Publicar varios productos de una sola pasada (por ejemplo, la tanda del día) |
 | Hoja de revisión | Antes de compartir (1 o N productos): carrusel/lista de las imágenes ya armadas, descripción editable (para N: una por línea, unidas, editable como bloque único), selector de estilo que regenera las imágenes de la hoja. **Compartir**: copia el texto y hace UN `navigator.share({files, text})` con todas las imágenes si el navegador lo soporta; si no soporta compartir varios archivos juntos, comparte de a uno con un botón "Siguiente (2/5)" sin cerrar la hoja; sin soporte de compartir, descarga todas. Límite 30 imágenes (el de WhatsApp); se generan en secuencia mostrando progreso ("Armando 3/8") sin congelar la UI | Da una última oportunidad de revisar/editar antes de que salga cualquier imagen, y resuelve compartir 1 o varios con la misma hoja |
 | Compatibilidad de datos | El campo nuevo `estilo` (override por producto) es opcional: un respaldo viejo sin ese campo sigue siendo válido (`version` de respaldo no cambia) | No romper los respaldos ya exportados |
+
+## Decisiones — ronda de identidad visual + editor (pedido por Bruno, 2026-09-27)
+
+| Tema | Decisión | Por qué |
+|---|---|---|
+| Paleta | Tokens en `:root` en tonos azul→violeta (primario índigo/violeta, acentos azules), versión clara y oscura, contraste AA verificado | Reemplaza el ámbar/gris genérico anterior; identidad propia |
+| Logo | SVG propio (anillo segmentado tipo "estado" de WhatsApp + etiqueta de precio/rayo, degradé azul→violeta), legible a 48px; íconos PNG 192/512 maskable regenerados desde ese SVG rasterizándolo con Playwright (ya es devDependency) | Un solo diseño fuente para logo + íconos, sin depender de un editor de imágenes |
+| 4to estilo | **"Foto con descripción"**: como "Foto con precio" pero mostrando la descripción resuelta del producto (con precio opcional debajo). 4 estilos en total | Cada estado lleva su propio texto aunque se publiquen varios juntos, sin depender solo del `text` del share (que WhatsApp puede ignorar) |
+| Precio opcional | Precio vacío = producto sin precio (válido); precio negativo sigue inválido. Sin precio: no se dibuja la etiqueta de precio en la imagen, el marcador `{precio}` del modelo de descripción se limpia (sin conectores colgando tipo "a $"), y la lista muestra "Sin precio" | No todos los productos publican precio (consultas, "a pedido", etc.) |
+| Ajustes compartidos | Nombre, precio y descripción pasan a tener UN solo conjunto de ajustes (posición, tamaño, tipografía, color, fondo/etiqueta, visibilidad) que se edita una vez y se usa en los 3 estilos que llevan texto ("Foto con precio", "Foto con descripción" y "Mi plantilla"); la foto de fondo solo es editable en "Mi plantilla" (en los otros dos siempre ocupa toda la imagen) | Un solo lugar para ajustar cómo se ve el texto, sin repetir el trabajo por estilo |
+| Editor de plantilla | Pasa de sliders a un **editor visual tipo inspector**: clic/toque en el elemento sobre la vista previa lo selecciona (recuadro + manijas), arrastrar mueve, las manijas redimensionan, con snap suave a centro/márgenes; panel de propiedades abajo (tamaño, color, tipografía, peso, alineación, fondo/etiqueta, visible); lista de capas; deshacer/rehacer y "Restablecer". Reemplaza la pantalla "Plantilla"; ahora se abre siempre desde Ajustes (ya no solo cuando el estilo es "Mi plantilla", porque también edita "Foto con precio"/"Foto con descripción") | Ajustar a ojo es más rápido e intuitivo que mover sliders numéricos uno por uno |
+| Tipografías | 6 fuentes OFL autoalojadas en woff2 (Inter, Montserrat, Poppins, Playfair Display, Bebas Neue, Pacifico; subset "latin", cubre español), cargadas con `FontFace` antes de dibujar en canvas — nada de Google Fonts remoto (la CSP no lo permite) | Variedad tipográfica real sin violar la CSP ni depender de red |
+| Publicación | GitHub Pages "legacy build" no reconstruía solo en cada push (bug detectado en la ronda anterior, ver BUGS.md #13); se reemplaza por un workflow de Actions (`Publicar en Pages`, `actions/deploy-pages`) que corre en cada push a `main` y se puede verificar con `gh run list` | Publicación confiable y verificable, no depende de un build "legacy" silencioso |
+
+## Cómo sabemos que está terminado (actualizado)
+- [x] Instalada desde Chrome Android con "Agregar a pantalla de inicio" y abre sin barra.
+- [x] Alta de producto con foto de la galería y de la cámara.
+- [x] Cambiar el precio desde la lista sin entrar al detalle (y dejarlo vacío = sin precio).
+- [x] La imagen 1080×1920 sale bien en los 4 estilos (captura de cada uno en `docs/`).
+- [x] **Publicar** (1 o varios) abre la hoja de compartir con la(s) imagen(es); WhatsApp → Mi estado la acepta (prueba real de Bruno, pendiente).
+- [x] Exportar, borrar datos, importar: vuelve todo (incluidos los ajustes nuevos; un respaldo viejo sigue importando).
+- [x] Anda offline después de la primera carga.
+- [x] Editor de plantilla: seleccionar un elemento, moverlo, redimensionarlo y cambiarle tipografía/color se ve al instante, con deshacer/rehacer.
+- [x] Tests de la composición, el respaldo y la geometría del editor (`node --test`) y E2E en viewport móvil.

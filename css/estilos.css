@@ -2,16 +2,22 @@
    sin card-itis, acento solo como información de estado. Móvil primero, pulgar abajo. */
 
 :root {
-  --color-fondo: #12161c;
-  --color-superficie: #1a1f27;
-  --color-superficie-alta: #222833;
-  --color-borde: #2c3340;
-  --color-texto: #eef1f6;
-  --color-texto-tenue: #9aa4b2;
-  --color-acento: #f5a623;
-  --color-acento-texto: #14100a;
+  /* Identidad visual: azul→violeta (índigo primario, violeta como acento secundario).
+     Contraste AA verificado (ver BUGS.md / registro de la ronda 2026-09-27):
+     indigo-600 vs blanco 6.29:1, violet-400 vs fondo oscuro 6.33:1, violet-600 vs blanco 5.70:1. */
+  --color-fondo: #0d0f1a;
+  --color-superficie: #161a2c;
+  --color-superficie-alta: #1f2440;
+  --color-borde: #2b3157;
+  --color-texto: #eef0fb;
+  --color-texto-tenue: #9aa0c3;
+  --color-primario: #4f46e5;
+  --color-primario-fuerte: #4338ca;
+  --color-primario-texto: #ffffff;
+  --color-acento: #a78bfa;
   --color-peligro: #e5484d;
   --color-exito: #3ecf8e;
+  --gradiente-marca: linear-gradient(135deg, #3b82f6, #8b5cf6);
 
   --font-titulo: 'Segoe UI Variable Display', Inter, system-ui, sans-serif;
   --font-cuerpo: 'Segoe UI Variable Text', Inter, system-ui, sans-serif;
@@ -37,13 +43,14 @@
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) {
-    --color-fondo: #f5f6f8;
+    --color-fondo: #f5f6fb;
     --color-superficie: #ffffff;
-    --color-superficie-alta: #eceff3;
-    --color-borde: #dde1e7;
-    --color-texto: #14171c;
-    --color-texto-tenue: #5b6472;
-    --color-acento-texto: #14100a;
+    --color-superficie-alta: #eef0fb;
+    --color-borde: #dcdff5;
+    --color-texto: #14172b;
+    --color-texto-tenue: #5b6088;
+    /* violeta más oscuro en claro: mismo violet-400 pierde contraste sobre blanco */
+    --color-acento: #7c3aed;
   }
 }
 
@@ -97,6 +104,14 @@ h3 {
 
 .encabezado {
   padding: 16px 20px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.encabezado__logo {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
 }
 .encabezado__titulo {
   font-size: var(--tamano-28);
@@ -181,11 +196,11 @@ h3 {
   transform: none;
 }
 .boton--primario {
-  background: var(--color-acento);
-  color: var(--color-acento-texto);
+  background: var(--color-primario);
+  color: var(--color-primario-texto);
 }
 .boton--primario:hover {
-  background: #ffb84d;
+  background: var(--color-primario-fuerte);
 }
 .boton--peligro {
   background: var(--color-peligro);
@@ -224,18 +239,18 @@ h3 {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--color-acento);
-  color: var(--color-acento-texto);
+  background: var(--color-primario);
+  color: var(--color-primario-texto);
   border: none;
   font-size: var(--tamano-28);
   line-height: 1;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.35);
   cursor: pointer;
   z-index: 19; /* por encima de .barra-publicar (BUGS.md #11): nunca queda tapado */
   transition: transform var(--duracion) var(--ease), background var(--duracion) var(--ease);
 }
 .fab:hover {
-  background: #ffb84d;
+  background: var(--color-primario-fuerte);
 }
 .fab:active {
   transform: scale(0.94);
@@ -268,10 +283,11 @@ h3 {
 }
 .tarjeta__seleccion {
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  margin-top: 20px; /* centrado respecto a la foto de 64px */
-  accent-color: var(--color-acento);
+  /* objetivo táctil >= 44px (patrones.md regla 6), aunque el tilde nativo se vea más chico */
+  width: 44px;
+  height: 44px;
+  margin: -10px 0 0 -10px;
+  accent-color: var(--color-primario);
   cursor: pointer;
 }
 .tarjeta__info {
@@ -528,6 +544,61 @@ details.grupo > .campo {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+.grupo__explicacion {
+  font-size: var(--tamano-14);
+  color: var(--color-texto-tenue);
+  margin: -4px 0 14px;
+  line-height: 1.45;
+}
+.subgrupo {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-borde);
+}
+
+/* ---------- Ajustes: tarjetas de estilo con miniatura en vivo ---------- */
+.grilla-estilos {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.tarjeta-estilo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: var(--color-superficie-alta);
+  border: 2px solid var(--color-borde);
+  border-radius: var(--radio);
+  cursor: pointer;
+  transition: border-color var(--duracion) var(--ease), transform var(--duracion) var(--ease);
+}
+.tarjeta-estilo:hover {
+  border-color: var(--color-texto-tenue);
+}
+.tarjeta-estilo:active {
+  transform: scale(0.98);
+}
+.tarjeta-estilo:focus-visible {
+  outline: 2px solid var(--color-primario);
+  outline-offset: 2px;
+}
+.tarjeta-estilo--activa {
+  border-color: var(--color-primario);
+}
+.tarjeta-estilo__miniatura {
+  width: 100%;
+  aspect-ratio: 1080 / 1920;
+  object-fit: cover;
+  border-radius: var(--radio-chico);
+  background: var(--color-fondo);
+}
+.tarjeta-estilo__etiqueta {
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  color: var(--color-texto);
+}
 
 .foto-picker {
   display: flex;
@@ -683,6 +754,105 @@ details.grupo > .campo {
   white-space: pre-line;
   text-align: center;
   overflow: hidden;
+}
+
+/* ---------- Editor de plantilla: inspector visual (seleccionar/arrastrar/redimensionar) ---------- */
+.editor-plantilla__lienzo {
+  overflow: visible; /* las manijas de resize no se recortan en los bordes */
+  touch-action: none; /* el arrastre con el dedo no hace scroll de la página */
+}
+.editor-plantilla__imagen {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radio);
+}
+.editor-plantilla__overlay {
+  position: absolute;
+  inset: 0;
+}
+.editor-plantilla__caja {
+  position: absolute;
+  border: 2px dashed rgba(255, 255, 255, 0.35);
+  cursor: grab;
+  touch-action: none;
+}
+.editor-plantilla__caja:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.editor-plantilla__caja--activa {
+  border: 2px solid var(--color-primario);
+  background: rgba(79, 70, 229, 0.12);
+}
+.editor-plantilla__caja--oculta {
+  opacity: 0.35;
+}
+.editor-plantilla__manija {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  background: var(--color-primario);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  touch-action: none;
+}
+.editor-plantilla__manija--nw {
+  left: -10px;
+  top: -10px;
+  cursor: nwse-resize;
+}
+.editor-plantilla__manija--ne {
+  right: -10px;
+  top: -10px;
+  cursor: nesw-resize;
+}
+.editor-plantilla__manija--sw {
+  left: -10px;
+  bottom: -10px;
+  cursor: nesw-resize;
+}
+.editor-plantilla__manija--se {
+  right: -10px;
+  bottom: -10px;
+  cursor: nwse-resize;
+}
+.editor-plantilla__capas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.editor-plantilla__panel {
+  margin-top: 0;
+}
+.editor-plantilla__numero {
+  width: 64px;
+  min-height: var(--toque-min);
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--color-borde);
+  background: var(--color-superficie);
+  color: var(--color-texto);
+  text-align: center;
+  font-family: var(--font-datos);
+}
+.editor-plantilla__colores {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.editor-plantilla__swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--color-borde);
+  cursor: pointer;
+  padding: 0;
+}
+.editor-plantilla__swatch:hover {
+  border-color: var(--color-texto);
 }
 
 .deslizador {

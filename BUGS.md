@@ -39,6 +39,37 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
   4. **`test/e2e/ajustes.spec.js`**: en la pantalla Plantilla hay DOS elementos con `data-accion="ir-ajustes"` (el botón "← Volver a Ajustes" y el ítem de la nav inferior) — mismo valor, incidental, no un choque real de significado (los dos hacen "ir a Ajustes"). `locator(...).click()` sin `.first()` da "strict mode violation". Arreglo: `.first()` en el test.
 - **Resuelto:** sí — 27/27 E2E verdes tras los 4 arreglos.
 
+### 15. `test/e2e/editor.spec.js`: 2 fallos al escribir los tests del editor nuevo
+- **Síntoma 1:** "arrastrar la manija de resize agranda la caja" — `expect(despuesCaja.width).toBeGreaterThan(antesCaja.width + 20)` fallaba por poco (300.3 vs 302.65 esperado).
+  **Causa:** no es un bug de `redimensionarCaja` — la caja "nombre" por defecto ya tiene `x:60, w:960` sobre un lienzo de 1080, así que solo hay 60px de margen para crecer a la derecha antes del clamp (`limites.w - x`); el arrastre de prueba pedía crecer ~202 unidades de lienzo pero el clamp lo cortaba en +60 (~17.7px en pantalla), por debajo del umbral +20 que yo había puesto a ojo sin considerar el clamp.
+  **Arreglo:** bajé el umbral del test a +10px (holgado respecto al incremento real de ~17.7px) — el resize funciona, la aserción estaba mal calibrada.
+- **Síntoma 2:** "cambiar tamaño, color y tipografía... se ve al instante" — el `src` de la vista previa nunca cambiaba tras `input[type=range].fill('140')`.
+  **Causa:** `locator.fill()` de Playwright no dispara correctamente el evento `input` en `<input type="range">` (pensado para campos de texto); el slider quedaba en su valor inicial y el handler `input` de la app nunca corría.
+  **Arreglo:** se reemplazó `.fill()` por `.evaluate()` fijando `el.value` y despachando un `Event('input', {bubbles:true})` a mano, que sí dispara el handler real de la app.
+- **Resuelto:** sí — 5/5 verdes.
+
+### 16. Editor de plantilla: los sliders de tamaño/opacidad/redondeo NO regeneraban la vista previa al instante (bug real, no del test)
+- **Síntoma:** cambiar "Tamaño de letra" (o la opacidad/redondeo del fondo) en el panel de propiedades no actualizaba la imagen de la vista previa; sí lo hacían color, tipografía, peso, alineación y visible.
+- **Causa:** `js/vistas/plantilla.js` (`dibujarPanel`) — `actualizarCampo(campo, valor, regenerarInmediato)` solo llama a `regenerarPrevia()` cuando `regenerarInmediato` es verdadero, pero las 3 llamadas de `campoRangoNumero` para tamaño/opacidad/redondeo pasaban el callback con 2 argumentos únicamente (`(v) => actualizarCampo('tamano', v)`), dejando `regenerarInmediato` en `undefined`. Se detectó porque el test E2E del slider de tamaño nunca veía cambiar el `src` de la vista previa.
+- **Arreglo:** se agregó `true` como tercer argumento en las 3 llamadas (tamaño, opacidad de fondo, redondeo de fondo), igual que ya tenían color/tipografía/peso/alineación/visible.
+- **Resuelto:** sí — 5/5 E2E del editor verdes.
+
+### 13. GitHub Pages "legacy build" no reconstruía solo en cada push
+- **Síntoma:** después de pushear a `main`, `gh api repos/.../pages/builds/latest` seguía mostrando el commit del primer deploy — la app publicada quedó pegada en una versión vieja del `sw.js` durante varios pushes seguidos, aunque el push en sí funcionaba bien.
+- **Causa:** con `build_type: legacy` (el modo por rama, sin Actions), GitHub Pages depende de un webhook interno para reconstruir en cada push, y ese webhook no disparó de forma confiable para los pushes de esta ronda — un forzado manual (`gh api -X POST .../pages/builds`) sí reconstruía, confirmando que no era un problema del contenido ni del push.
+- **Arreglo:** se cambió el origen de Pages a `build_type: workflow` (`gh api -X PUT .../pages -f 'build_type=workflow'`) y se agregó `.github/workflows/pages.yml` ("Publicar en Pages", `actions/deploy-pages`), que corre explícitamente en cada push a `main` y cuyo resultado se puede verificar con `gh run list -w "Publicar en Pages"` — ya no depende de un webhook silencioso. El workflow arma un `_sitio/` curado (solo lo que se sirve: `index.html manifest.webmanifest sw.js css js icons fonts .nojekyll`), sin exponer `test/`, `docs/`, `BUGS.md`, etc. innecesariamente.
+- **Resuelto:** sí — corrida verificada en verde (`gh api repos/.../actions/workflows/.../runs`).
+- ¿Se repetiría en otro proyecto? Sí — cualquier proyecto con GitHub Pages en modo legacy puede sufrir el mismo webhook perdido. Queda como receta: si Pages no refleja un push, pasar a `build_type: workflow` en vez de seguir confiando en el build automático por rama.
+
+### 14. Ronda "identidad visual + editor" (2026-09-27): 3 E2E rotos por cambios intencionales, no regresiones
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js` después de la ronda de estilo/precio opcional/editor.
+- **Síntomas:**
+  1. `botones.spec.js` "ir-ajustes / ir-respaldo / ir-lista" — `locator('[data-accion="ir-respaldo"]').click()` da "strict mode violation: resolved to 2 elements": Ajustes ahora tiene su propio botón "Ir a Respaldo" (sección "Datos") además del ítem de la nav inferior. Mismo significado, dos lugares — no es un bug, hay que apuntar al de la nav.
+  2. `botones.spec.js` "precio vacío o negativo... muestra error y no guarda" — el precio vacío YA NO es un error (CREAR-BRIEF.md: precio opcional). El test estaba probando el comportamiento VIEJO.
+  3. `botones.spec.js` "precio vacío o negativo editado en línea... se revierte" — mismo motivo: vacío ahora guarda `null` ("Precio quitado"), no revierte.
+- **Arreglo:** `.first()` en el selector de `ir-respaldo` del test 1; los tests 2 y 3 se reescribieron para reflejar el comportamiento nuevo (vacío = válido/sin precio, negativo sigue siendo error) en vez de borrarlos, para no perder cobertura del caso negativo.
+- **Resuelto:** sí.
+
 ### 10. `test/e2e/sw.spec.js` intermitente dentro de la suite completa
 - **Paso:** `npx playwright test -c test/e2e/playwright.config.js` (suite completa, 21 specs).
 - **Error exacto:** `Error: page.goto: net::ERR_FAILED at http://127.0.0.1:8991/` — pero pasa siempre en aislado (`npx playwright test test/e2e/sw.spec.js`).

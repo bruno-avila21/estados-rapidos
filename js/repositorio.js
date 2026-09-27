@@ -6,6 +6,7 @@ import {
   ESTILO_POR_DEFECTO,
   DESCRIPCION_MODELO_POR_DEFECTO,
   construirRespaldo,
+  normalizarAjustes,
   generarId,
 } from './modelo.js';
 import { achicarFoto, blobABase64, base64ABlob } from './utils/imagen.js';
@@ -105,7 +106,7 @@ export async function obtenerFotoBlob(fotoId) {
 
 export async function obtenerPlantillaConfig() {
   const guardada = await db.obtener('config', 'plantilla');
-  if (guardada) return guardada;
+  if (guardada) return { ...guardada, ajustes: normalizarAjustes(guardada.ajustes) };
   return {
     id: 'plantilla',
     imagenId: null,
@@ -227,7 +228,7 @@ export async function importarRespaldo(respaldo) {
     await db.guardar('config', {
       id: 'plantilla',
       imagenId,
-      ajustes: respaldo.plantilla.ajustes || AJUSTES_POR_DEFECTO,
+      ajustes: normalizarAjustes(respaldo.plantilla.ajustes),
       formatoPrecio: respaldo.plantilla.formatoPrecio || FORMATO_PRECIO_POR_DEFECTO,
     });
   }

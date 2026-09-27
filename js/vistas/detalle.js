@@ -1,6 +1,6 @@
 // Alta / edición de producto: foto (galería o cámara), nombre, precio, descripción.
 import * as repo from '../repositorio.js';
-import { validarProducto, parsearPrecio, formatearPrecio, ESTILOS_IMAGEN } from '../modelo.js';
+import { validarProducto, parsearPrecio, formatearPrecio, ESTILOS_IMAGEN, ETIQUETA_ESTILO } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 
@@ -95,10 +95,10 @@ export async function render(contenedor, { navegar, params }) {
   const campoPrecio = campoTexto({
     id: 'precio',
     etiqueta: 'Precio',
-    valor: producto ? String(producto.precio) : '',
+    valor: producto?.precio != null ? String(producto.precio) : '',
     tipo: 'text',
     inputMode: 'decimal',
-    ariaDescripcion: 'Solo números; se formatea al guardar.',
+    ariaDescripcion: 'Opcional: dejalo vacío para publicar sin precio.',
   });
 
   // --- Capa 2: descripción (agrupada, para la leyenda del estado) ---
@@ -117,7 +117,6 @@ export async function render(contenedor, { navegar, params }) {
   grupoDescripcion.append(tituloDescripcion, campoDescripcion);
 
   // --- Capa 3: opciones avanzadas, detrás de un gesto explícito (patrones.md, regla 9) ---
-  const ETIQUETA_ESTILO = { 'solo-foto': 'Solo la foto', 'foto-precio': 'Foto con precio', 'mi-plantilla': 'Mi plantilla' };
   const detallesAvanzado = document.createElement('details');
   detallesAvanzado.className = 'grupo';
   const resumenAvanzado = document.createElement('summary');
@@ -194,10 +193,12 @@ export async function render(contenedor, { navegar, params }) {
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     errorGeneral.hidden = true;
+    const textoPrecio = campoPrecio.input.value.trim();
     const datos = {
       id: producto?.id,
       nombre: campoNombre.input.value,
-      precio: parsearPrecio(campoPrecio.input.value),
+      // vacío = sin precio (null, válido); si escribió algo, se parsea y validarProducto exige > 0.
+      precio: textoPrecio ? parsearPrecio(textoPrecio) : null,
       descripcion: textareaDescripcion.value,
       estilo: selectEstiloOverride.value || null,
     };
