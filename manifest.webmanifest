@@ -1,0 +1,16 @@
+{
+  "name": "Estados rápidos",
+  "short_name": "Estados",
+  "description": "Estados de WhatsApp de tus productos en 3 segundos.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#12161c",
+  "theme_color": "#12161c",
+  "orientation": "portrait",
+  "lang": "es-AR",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,108 @@
+// "El mínimo del primer día" (CREAR-BRIEF.md): cargar un producto, ver la lista, cambiar el
+// precio en línea, y Publicar arma un PNG 1080x1920 y llama a navigator.share con un File.
+import { test, expect } from '@playwright/test';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const AQUI = path.dirname(fileURLToPath(import.meta.url));
+const FOTO = path.join(AQUI, 'fixtures', 'producto.png');
+
+// navigator.share/canShare no existen en Chromium headless: se mockean ANTES de cualquier
+// navegación para poder verificar con qué se los llama (File PNG 1080x1920 + texto).
+async function mockearCompartir(page) {
+  await page.addInitScript(() => {
+    window.__compartir = { llamadas: [] };
+    navigator.canShare = (datos) => Array.isArray(datos?.files) && datos.files.length > 0;
+    navigator.share = async (datos) => {
+      const archivo = datos.files?.[0];
+      let dimensiones = null;
+      if (archivo) {
+        const bitmap = await createImageBitmap(archivo);
+        dimensiones = { w: bitmap.width, h: bitmap.height };
+        bitmap.close?.();
+      }
+      window.__compartir.llamadas.push({
+        text: datos.text,
+        nombreArchivo: archivo?.name,
+        tipoArchivo: archivo?.type,
+        dimensiones,
+      });
+      return Promise.resolve();
+    };
+  });
+}
+
+test.beforeEach(async ({ context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+});
+
+test('mínimo del día 1: cargar producto, precio en línea, plantilla y publicar', async ({ page }) => {
+  await mockearCompartir(page);
+  await page.goto('/');
+  await expect(page.locator('body')).toHaveClass(/listo/);
+
+  // estado vacío al principio
+  await expect(page.getByText('Todavía no cargaste productos')).toBeVisible();
+
+  // alta de producto con foto desde "galería"
+  await page.locator('[data-accion="agregar"]').click();
+  await page.locator('#campo-nombre').fill('Zapatillas urbanas');
+  await page.locator('#campo-precio').fill('45000');
+  await page.locator('#campo-descripcion').fill('Talles del 38 al 44. Envíos a todo el país.');
+  await page.locator('[data-accion-input="elegir-galeria"]').setInputFiles(FOTO);
+  await expect(page.locator('.foto-picker__vista:not([hidden])')).toBeVisible();
+  await page.locator('[data-accion="guardar"]').click();
+
+  // vuelve a la lista y aparece la tarjeta con el precio formateado es-AR
+  await expect(page.locator('[data-accion="editar"]', { hasText: 'Zapatillas urbanas' })).toBeVisible();
+  const inputPrecio = page.locator('[data-accion="precio"]').first();
+  await expect(inputPrecio).toHaveValue('$ 45.000');
+
+  // precio editable en línea, sin entrar al detalle
+  await inputPrecio.fill('39990');
+  await inputPrecio.blur();
+  await expect(page.locator('#toast')).toHaveText(/Precio actualizado/);
+  await expect(inputPrecio).toHaveValue('$ 39.990');
+
+  // recargar y el precio sigue
+  await page.reload();
+  await expect(page.locator('[data-accion="precio"]').first()).toHaveValue('$ 39.990');
+
+  // pantalla Plantilla: vista previa en vivo
+  await page.locator('[data-accion="ir-plantilla"]').click();
+  await expect(page.locator('.previa-plantilla')).toBeVisible();
+  await expect(page.locator('.previa-plantilla')).toHaveAttribute('src', /^blob:/);
+
+  // volver y Publicar
+  await page.locator('[data-accion="ir-lista"]').click();
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('#toast')).toHaveText(/Mi estado/);
+
+  const llamadas = await page.evaluate(() => window.__compartir.llamadas);
+  expect(llamadas.length).toBe(1);
+  expect(llamadas[0].tipoArchivo).toBe('image/png');
+  expect(llamadas[0].nombreArchivo).toMatch(/\.png$/);
+  expect(llamadas[0].dimensiones).toEqual({ w: 1080, h: 1920 });
+  expect(llamadas[0].text).toMatch(/Talles del 38/);
+
+  // la descripción se copió al portapapeles antes de compartir
+  const portapapeles = await page.evaluate(() => navigator.clipboard.readText());
+  expect(portapapeles).toMatch(/Talles del 38/);
+});
+
+test('publicar sin soporte de compartir archivos cae a descargar', async ({ page }) => {
+  await page.addInitScript(() => {
+    navigator.canShare = () => false;
+  });
+  await page.goto('/');
+  await page.locator('[data-accion="agregar"]').click();
+  await page.locator('#campo-nombre').fill('Buzo');
+  await page.locator('#campo-precio').fill('20000');
+  await page.locator('[data-accion="guardar"]').click();
+
+  const descargaPromesa = page.waitForEvent('download');
+  await page.locator('[data-accion="publicar"]').first().click();
+  const descarga = await descargaPromesa;
+  expect(descarga.suggestedFilename()).toMatch(/\.png$/);
+  await expect(page.locator('#toast')).toHaveText(/se descargó la imagen/);
+});

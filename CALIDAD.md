@@ -1,0 +1,39 @@
+# Calidad — estados-rapidos
+
+## ISO/IEC 25010 — calidad del producto
+
+| Característica | Pregunta | Cómo se verifica acá |
+|---|---|---|
+| Adecuación funcional | ¿Hace lo del brief, completo y correcto? | `CREAR-BRIEF.md` §"Cómo sabemos que está terminado"; 30 tests unitarios (`npm test`) + 17 E2E (`npm run test:e2e`) cubren alta con foto, precio en línea, plantilla, publicar (mock), exportar/importar. Pendiente de Bruno: que WhatsApp acepte la imagen en "Mi estado" (no automatizable sin riesgo de baneo). |
+| Eficiencia de desempeño | ¿Tiempos, recursos, tokens? | Sin build ni dependencias de runtime: la app pesa lo que pesan sus propios archivos (< 50 KB de JS+CSS). Fotos redimensionadas a máx. 1600 px / JPEG 0.85 antes de guardar (`js/utils/imagen.js`) para no llenar IndexedDB. Composición de la imagen final: un solo canvas 1080×1920, sin librerías. |
+| Compatibilidad | ¿Convive con otros sistemas? | No depende de ningún backend ni API de terceros. Standalone: `manifest.webmanifest` con `start_url`/`scope` relativos para convivir bajo `/estados-rapidos/` en GitHub Pages. |
+| Usabilidad | ¿Aprendible, accesible, protege de errores? | 8 reglas de `patrones.md`: tokens en `:root`, `hover/focus-visible/active/disabled`, un H1 por pantalla, sin gradientes decorativos, estados vacío/carga/error diseñados, móvil primero (targets ≥ 48px, acciones abajo), `prefers-reduced-motion`, divulgación progresiva (foto/nombre/precio primero, descripción agrupada, ajustes de plantilla detrás de la pestaña "Plantilla"). Confirmación de borrado propia (nunca `confirm()` nativo). |
+| Fiabilidad | ¿Madurez, disponibilidad, tolerancia a fallos, recuperable? | Service Worker network-first con fallback a caché (`sw.js` + `js/sw-estrategia.js`, testeado con `node --test` y con un smoke E2E real). `window.onerror`/`unhandledrejection` muestran un cartel legible en vez de pantalla rota. Respaldo exportable/importable (`js/repositorio.js`) — probado con ida y vuelta real por la UI (`test/e2e/respaldo.spec.js`) y con `node --test` (`test/respaldo.test.js`). |
+| Seguridad | ¿Confidencialidad, integridad, no repudio, trazabilidad? | Ver `SEGURIDAD.md`. Sin backend: no hay superficie de red propia. CSP estricta, sin `innerHTML` con datos de usuario, validación de todo archivo importado. |
+| Mantenibilidad | ¿Modular, reusable, analizable, testeable? | Capas separadas: `modelo.js` (reglas puras), `layout.js` (cálculo de texto, puro), `componer.js` (dibujo, DOM), `repositorio.js` (datos), `vistas/*.js` (UI). Las funciones puras se testean con `node --test` sin DOM ni canvas real (se inyecta un medidor de texto simulado). |
+| Portabilidad | ¿Se instala/adapta a otro host o dispositivo? | HTML+JS+CSS planos, sin build: se sirve desde cualquier host estático con HTTPS (GitHub Pages, y también `scripts/servir.js` en la LAN de Bruno). Instalable como PWA en Android ("Agregar a pantalla de inicio"). |
+
+## Alineación ISO 27001 (Anexo A) — lo que este proyecto puede implementar solo
+
+| Control | Qué significa acá | Evidencia |
+|---|---|---|
+| A.8.10 Borrado de información | Los datos no salen del celular salvo que Bruno exporte un respaldo a propósito; borrar un producto borra también su foto (`js/repositorio.js:borrarProducto`) | código + `test/e2e/estados.spec.js` |
+| A.8.13 Respaldo | Exportar/importar `.json` con productos, fotos en base64 y plantilla, con `version` de formato | `js/modelo.js` (`construirRespaldo`/`validarRespaldo`), probado ida y vuelta |
+| A.8.28 Codificación segura | Sin `innerHTML` con datos de usuario, sin `eval`, validación de toda entrada externa (el archivo de respaldo) | `SEGURIDAD.md`, revisor `ciberseguridad` |
+| A.8.9 Gestión de configuración | Sin config secreta; todo el comportamiento es código versionado | `manifest.webmanifest`, `sw.js` con `VERSION` explícita |
+| A.8.32 Gestión de cambios | Git con `main`/`desarrollo`, commits descriptivos, CI (`.github/workflows/test.yml`) corre los tests en cada push | historial de commits |
+
+Fuera de alcance (con motivo): A.5.15/A.5.17 control de acceso y autenticación (un solo usuario, sin
+cuentas), A.5.23 servicios en la nube (el único proveedor es GitHub Pages, ya declarado en el brief),
+A.8.24 criptografía (no hay datos que cifrar en reposo más allá de lo que el propio navegador decida
+para IndexedDB — HTTPS lo da GitHub Pages en tránsito).
+
+## Cómo se verificó (para que el próximo que lea esto sepa que no es de palabra)
+- `npm test` → 30/30 (`test/modelo.test.js`, `test/layout.test.js`, `test/respaldo.test.js`, `test/sw-estrategia.test.js`).
+- `npm run test:e2e` → 17/17 (`test/e2e/*.spec.js`, viewport 412×915, Chromium).
+- Verificación manual en navegador con `agent-browser` (viewport 412×915): alta de producto con
+  imagen de prueba, cambio de precio en la lista, pantalla Plantilla con vista previa en vivo,
+  Publicar (mock), exportar/importar. Captura de una imagen compuesta real en `docs/ejemplo-estado.png`.
+- Lo que **no** se pudo verificar en esta sesión: que WhatsApp acepte de verdad la imagen compartida
+  en "Mi estado" desde el Android de Bruno — eso requiere el share sheet real de un teléfono, que
+  solo Bruno puede probar.

@@ -1,0 +1,94 @@
+// Cada acción visible hace algo (receta e2e.md), pero sin encadenar un loop único sobre un
+// vocabulario fijo asumiendo en qué pantalla deja cada botón anterior: eso resultó frágil
+// (BUGS.md #4). Un test por acción, cada uno arranca desde una pantalla conocida.
+import { test, expect } from '@playwright/test';
+
+async function crearProducto(page, { nombre = 'Producto de prueba', precio = '1000' } = {}) {
+  await page.goto('/');
+  await page.locator('[data-accion="agregar"]').click();
+  await page.locator('#campo-nombre').fill(nombre);
+  await page.locator('#campo-precio').fill(precio);
+  await page.locator('[data-accion="guardar"]').click();
+  await expect(page.locator('[data-accion="editar"]', { hasText: nombre })).toBeVisible();
+}
+
+test('ir-plantilla / ir-respaldo / ir-lista cambian de pantalla', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-accion="ir-plantilla"]').click();
+  await expect(page).toHaveURL(/#\/plantilla$/);
+  await expect(page.locator('#titulo-pantalla')).toHaveText('Plantilla');
+
+  await page.locator('[data-accion="ir-respaldo"]').click();
+  await expect(page).toHaveURL(/#\/respaldo$/);
+  await expect(page.locator('#titulo-pantalla')).toHaveText('Respaldo');
+
+  await page.locator('[data-accion="ir-lista"]').click();
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.locator('#titulo-pantalla')).toHaveText('Productos');
+});
+
+test('agregar abre el alta y cancelar vuelve sin guardar', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-accion="agregar"]').click();
+  await expect(page.locator('[data-accion="guardar"]')).toBeVisible();
+
+  await page.locator('[data-accion="cancelar"]').click();
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.getByText('Todavía no cargaste productos')).toBeVisible();
+});
+
+test('editar abre el detalle con los datos cargados', async ({ page }) => {
+  await crearProducto(page, { nombre: 'Campera', precio: '30000' });
+  await page.locator('[data-accion="editar"]').click();
+  await expect(page.locator('#campo-nombre')).toHaveValue('Campera');
+  await expect(page.locator('#campo-precio')).toHaveValue('30000');
+});
+
+test('publicar arma la imagen (mock de compartir) y avisa por toast', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.addInitScript(() => {
+    navigator.canShare = () => true;
+    navigator.share = async () => {};
+  });
+  await crearProducto(page);
+  await page.locator('[data-accion="publicar"]').click();
+  await expect(page.locator('#toast')).toHaveText(/Mi estado/);
+});
+
+test('borrar desde la lista pide confirmación y, al confirmar, borra', async ({ page }) => {
+  await crearProducto(page, { nombre: 'A borrar' });
+  await page.locator('[data-accion="borrar"]').click();
+  await expect(page.locator('.dialogo')).toBeVisible();
+  await page.locator('[data-accion="confirmar-borrar"]').click();
+  await expect(page.getByText('Todavía no cargaste productos')).toBeVisible();
+});
+
+test('borrar desde el detalle pide confirmación y, al confirmar, vuelve a la lista vacía', async ({ page }) => {
+  await crearProducto(page, { nombre: 'Otro a borrar' });
+  await page.locator('[data-accion="editar"]').click();
+  await page.locator('[data-accion="borrar"]').click();
+  await expect(page.locator('.dialogo')).toBeVisible();
+  await page.locator('[data-accion="confirmar-borrar"]').click();
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.getByText('Todavía no cargaste productos')).toBeVisible();
+});
+
+test('exportar dispara la descarga del respaldo', async ({ page }) => {
+  await crearProducto(page);
+  await page.locator('[data-accion="ir-respaldo"]').click();
+  const descargaPromesa = page.waitForEvent('download');
+  await page.locator('[data-accion="exportar"]').click();
+  const descarga = await descargaPromesa;
+  expect(descarga.suggestedFilename()).toMatch(/\.json$/);
+});
+
+test('formato de precio con decimales (configurado en Plantilla) se refleja en la lista', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-accion="ir-plantilla"]').click();
+  const casillaDecimales = page.locator('text=Mostrar decimales').locator('..').locator('input[type="checkbox"]');
+  await casillaDecimales.check();
+  await page.waitForTimeout(400); // debounce del guardado
+
+  await crearProducto(page, { nombre: 'Con decimales', precio: '1234.5' });
+  await expect(page.locator('[data-accion="precio"]').first()).toHaveValue('$ 1.234,50');
+});

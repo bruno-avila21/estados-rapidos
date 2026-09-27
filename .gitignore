@@ -1,0 +1,19 @@
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Respaldos de prueba generados por la suite E2E (nunca se commitean datos de usuario)
+.tmp-respaldo-test.json
+.tmp-respaldo-invalido.json
+
+# Artefactos locales / editor
+*.log
+.DS_Store
+Thumbs.db

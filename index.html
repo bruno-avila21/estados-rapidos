@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#12161c" />
+<meta name="color-scheme" content="dark light" />
+<meta name="description" content="Estados de WhatsApp de tus productos en 3 segundos." />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob: data:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'" />
+<title>Estados rápidos</title>
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="icon" href="./icons/icon-192.png" />
+<link rel="apple-touch-icon" href="./icons/icon-192.png" />
+<link rel="stylesheet" href="./css/estilos.css" />
+</head>
+<body class="cargando">
+  <div class="app">
+    <header class="encabezado">
+      <h1 class="encabezado__titulo" id="titulo-pantalla">Productos</h1>
+    </header>
+
+    <main id="vista" class="vista" aria-live="polite"></main>
+
+    <div id="aviso-version" class="aviso-version aviso-version--oculto" role="status">
+      <span>Hay una versión nueva</span>
+      <button type="button" data-accion="recargar-version" class="boton boton--chico">Recargar</button>
+    </div>
+
+    <div id="aviso-offline" class="aviso-offline aviso-offline--oculto" role="status">
+      Sin conexión — tus productos siguen acá, se guardan en el celular.
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <nav class="nav-inferior" aria-label="Secciones">
+      <button type="button" class="nav-inferior__item" data-ruta="#/" data-accion="ir-lista">
+        <span class="nav-inferior__icono" aria-hidden="true">▤</span>
+        <span>Productos</span>
+      </button>
+      <button type="button" class="nav-inferior__item" data-ruta="#/plantilla" data-accion="ir-plantilla">
+        <span class="nav-inferior__icono" aria-hidden="true">▧</span>
+        <span>Plantilla</span>
+      </button>
+      <button type="button" class="nav-inferior__item" data-ruta="#/respaldo" data-accion="ir-respaldo">
+        <span class="nav-inferior__icono" aria-hidden="true">⇅</span>
+        <span>Respaldo</span>
+      </button>
+    </nav>
+  </div>
+
+  <noscript>
+    <div class="noscript">Esta app necesita JavaScript para funcionar. Activalo en tu navegador.</div>
+  </noscript>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

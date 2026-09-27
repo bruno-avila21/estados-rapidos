@@ -1,0 +1,17 @@
+{
+  "name": "estados-rapidos",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PWA para armar y compartir estados de WhatsApp de productos en 3 segundos.",
+  "scripts": {
+    "servir": "node scripts/servir.js",
+    "iconos": "node scripts/generar-iconos.js",
+    "test": "node --test test/modelo.test.js test/layout.test.js test/respaldo.test.js test/sw-estrategia.test.js",
+    "test:e2e": "playwright test -c test/e2e/playwright.config.js",
+    "test:todo": "npm test && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0"
+  }
+}
