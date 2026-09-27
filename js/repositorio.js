@@ -1,6 +1,13 @@
 // Capa de datos: une db.js (IndexedDB) con el modelo. Único punto que conoce los "stores".
 import * as db from './db.js';
-import { AJUSTES_POR_DEFECTO, FORMATO_PRECIO_POR_DEFECTO, construirRespaldo, generarId } from './modelo.js';
+import {
+  AJUSTES_POR_DEFECTO,
+  FORMATO_PRECIO_POR_DEFECTO,
+  ESTILO_POR_DEFECTO,
+  DESCRIPCION_MODELO_POR_DEFECTO,
+  construirRespaldo,
+  generarId,
+} from './modelo.js';
 import { achicarFoto, blobABase64, base64ABlob } from './utils/imagen.js';
 import { generarPlantillaPorDefecto } from './plantilla-defecto.js';
 
@@ -31,12 +38,36 @@ export async function guardarProducto(datos, archivoFoto) {
     precio: datos.precio,
     descripcion: (datos.descripcion || '').trim(),
     fotoId,
+    // 'estilo' in datos: "null" explícito significa "usar el general" y tiene que limpiar un
+    // override previo, así que NO puede caer al `existente?.estilo` con `??` (null es nullish).
+    estilo: 'estilo' in datos ? datos.estilo : (existente?.estilo ?? null),
+    // los productos nuevos arrancan marcados: lo más común es querer publicarlos (CREAR-BRIEF.md).
+    seleccionado: existente?.seleccionado ?? true,
     orden: existente?.orden ?? (await siguienteOrden()),
     creado: existente?.creado ?? ahora,
     actualizado: ahora,
   };
   await db.guardar('productos', producto);
   return producto;
+}
+
+/** Marca/desmarca un producto para la selección múltiple persistente (CREAR-BRIEF.md 2026-09-27). */
+export async function actualizarSeleccion(id, seleccionado) {
+  const producto = await db.obtener('productos', id);
+  if (!producto) return null;
+  producto.seleccionado = !!seleccionado;
+  await db.guardar('productos', producto);
+  return producto;
+}
+
+/** Marca o desmarca TODOS los productos de una vez ("Marcar todos" / "Desmarcar"). */
+export async function marcarTodos(seleccionado) {
+  const productos = await listarProductos();
+  for (const producto of productos) {
+    producto.seleccionado = !!seleccionado;
+    await db.guardar('productos', producto);
+  }
+  return productos;
 }
 
 async function siguienteOrden() {
@@ -115,6 +146,31 @@ export async function guardarFormatoPrecio(formatoPrecio) {
   return config;
 }
 
+// --- Ajustes generales: estilo de imagen por defecto y modelo de descripción ---
+export async function obtenerAjustesGenerales() {
+  const guardado = await db.obtener('config', 'general');
+  if (guardado) return guardado;
+  return {
+    id: 'general',
+    estiloGeneral: ESTILO_POR_DEFECTO,
+    descripcionModelo: DESCRIPCION_MODELO_POR_DEFECTO,
+  };
+}
+
+export async function guardarEstiloGeneral(estiloGeneral) {
+  const config = await obtenerAjustesGenerales();
+  config.estiloGeneral = estiloGeneral;
+  await db.guardar('config', config);
+  return config;
+}
+
+export async function guardarDescripcionModelo(descripcionModelo) {
+  const config = await obtenerAjustesGenerales();
+  config.descripcionModelo = descripcionModelo;
+  await db.guardar('config', config);
+  return config;
+}
+
 export async function exportarRespaldo() {
   const productos = await listarProductos();
   const productosConFoto = await Promise.all(
@@ -127,10 +183,12 @@ export async function exportarRespaldo() {
   const imagenBase64 = config.imagenId
     ? await blobABase64((await db.obtener('blobs', config.imagenId)).blob)
     : null;
+  const general = await obtenerAjustesGenerales();
 
   return construirRespaldo({
     productos: productosConFoto,
     plantilla: { imagenBase64, ajustes: config.ajustes, formatoPrecio: config.formatoPrecio },
+    general: { estiloGeneral: general.estiloGeneral, descripcionModelo: general.descripcionModelo },
   });
 }
 
@@ -152,6 +210,8 @@ export async function importarRespaldo(respaldo) {
       precio: p.precio,
       descripcion: p.descripcion ?? '',
       fotoId,
+      estilo: p.estilo ?? null,
+      seleccionado: p.seleccionado ?? true,
       orden: i,
       creado: p.creado ?? new Date().toISOString(),
       actualizado: p.actualizado ?? new Date().toISOString(),
@@ -171,4 +231,11 @@ export async function importarRespaldo(respaldo) {
       formatoPrecio: respaldo.plantilla.formatoPrecio || FORMATO_PRECIO_POR_DEFECTO,
     });
   }
+
+  // respaldos viejos (antes de 2026-09-27) no tienen "general": quedan los valores por defecto.
+  await db.guardar('config', {
+    id: 'general',
+    estiloGeneral: respaldo.general?.estiloGeneral || ESTILO_POR_DEFECTO,
+    descripcionModelo: respaldo.general?.descripcionModelo || DESCRIPCION_MODELO_POR_DEFECTO,
+  });
 }

@@ -18,6 +18,27 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Síntoma:** los `<input type=file>` ocultos (Galería/Cámara en el alta, subir plantilla, importar respaldo) quedaban en el orden de tabulación como paradas "fantasma" (invisibles al enfocarse); los mensajes de error de nombre/precio no se anunciaban a lectores de pantalla.
 - **Arreglo:** `tabindex="-1"` en los 4 inputs ocultos (`js/vistas/detalle.js`, `js/vistas/plantilla.js`, `js/vistas/respaldo.js`) — se disparan solo desde el botón visible; `role="alert"` en los `div.campo__error` (`js/vistas/detalle.js`, función `campoTexto`); regla `:focus-visible` explícita agregada para `.tarjeta__nombre` y un fallback genérico en `css/estilos.css`.
 
+### 12. `test/e2e/revision.spec.js` "la selección persiste tras recargar" — carrera test/app
+- **Error exacto:**
+  ```
+  Error: expect(locator).not.toBeChecked() failed
+  Locator: locator('[data-accion="seleccionar"]').first()
+  Expected: not checked
+  Received: checked
+  ```
+- **Causa:** el test hacía `await checks.nth(0).uncheck(); await page.reload();` uno después del otro. `uncheck()` de Playwright resuelve en cuanto se despacha el evento, pero el handler `change` de la app guarda en IndexedDB de forma asíncrona (`await repo.actualizarSeleccion(...)`) — el `reload()` podía llegar ANTES de que esa escritura terminara, y la página recién cargada leía el valor viejo. No es un bug de la app (la escritura sí se hace y sí persiste, solo que el test no esperaba la confirmación visible de que había terminado).
+- **Arreglo:** el test ahora espera `[data-accion="publicar-seleccionados"]` con el texto "Publicar 1" (que solo aparece después de que `recargar()` — y por lo tanto la escritura previa — terminó) antes de recargar la página.
+- **Resuelto:** sí — 28/28 E2E verdes.
+
+### 11. Feature "estilos + selección + hoja de revisión" (2026-09-27): 4 fallos al correr la suite completa
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js` después de agregar selección múltiple, barra "Publicar N" y la hoja de revisión.
+- **Síntomas y causas:**
+  1. **La barra fija "Publicar N" tapaba el FAB "+"** (ambos `position:fixed` cerca de la esquina inferior derecha) — `locator.click` en `[data-accion="agregar"]` fallaba con "subtree intercepts pointer events". Arreglo: `css/estilos.css` — `.barra-publicar` ahora deja un hueco (`padding-right`) del ancho del FAB y el FAB sube su `z-index` por encima de la barra.
+  2. **`test/e2e/botones.spec.js` "publicar arma la imagen..."** seguía asumiendo que Publicar comparte directo; ahora abre la hoja de revisión primero. Arreglo: el test entra a la hoja y clickea `[data-accion="revision-compartir"]` antes de leer el toast.
+  3. **`test/e2e/revision.spec.js` "Publicar de una tarjeta..."** leía `window.__compartir.llamadas` con `page.evaluate` inmediatamente después del `.click()` en compartir, sin esperar a que la cadena async (`copiarDescripcion` → `compartirArchivos` → `navigator.share`) terminara — carrera clásica. Arreglo: esperar `#toast` con el texto final antes de leer `llamadas` (mismo patrón que ya usaban los otros specs).
+  4. **`test/e2e/ajustes.spec.js`**: en la pantalla Plantilla hay DOS elementos con `data-accion="ir-ajustes"` (el botón "← Volver a Ajustes" y el ítem de la nav inferior) — mismo valor, incidental, no un choque real de significado (los dos hacen "ir a Ajustes"). `locator(...).click()` sin `.first()` da "strict mode violation". Arreglo: `.first()` en el test.
+- **Resuelto:** sí — 27/27 E2E verdes tras los 4 arreglos.
+
 ### 10. `test/e2e/sw.spec.js` intermitente dentro de la suite completa
 - **Paso:** `npx playwright test -c test/e2e/playwright.config.js` (suite completa, 21 specs).
 - **Error exacto:** `Error: page.goto: net::ERR_FAILED at http://127.0.0.1:8991/` — pero pasa siempre en aislado (`npx playwright test test/e2e/sw.spec.js`).

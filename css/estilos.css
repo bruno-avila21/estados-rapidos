@@ -231,7 +231,7 @@ h3 {
   line-height: 1;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   cursor: pointer;
-  z-index: 15;
+  z-index: 19; /* por encima de .barra-publicar (BUGS.md #11): nunca queda tapado */
   transition: transform var(--duracion) var(--ease), background var(--duracion) var(--ease);
 }
 .fab:hover {
@@ -253,17 +253,36 @@ h3 {
   padding-top: 12px;
 }
 .tarjeta {
-  display: grid;
-  grid-template-columns: 64px 1fr;
-  grid-template-rows: auto auto;
-  gap: 4px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   border-radius: var(--radio);
   padding: 10px;
 }
+.tarjeta__fila-superior {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.tarjeta__seleccion {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-top: 20px; /* centrado respecto a la foto de 64px */
+  accent-color: var(--color-acento);
+  cursor: pointer;
+}
+.tarjeta__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .tarjeta__foto {
-  grid-row: 1 / 3;
+  flex-shrink: 0;
   width: 64px;
   height: 64px;
   border-radius: var(--radio-chico);
@@ -320,13 +339,95 @@ h3 {
   border-color: var(--color-acento);
 }
 .tarjeta__acciones {
-  grid-column: 1 / 3;
   display: flex;
   gap: 8px;
   margin-top: 4px;
 }
 .tarjeta__acciones .boton {
   flex: 1;
+}
+
+/* ---------- Selección múltiple: barra de acciones rápidas + barra fija de Publicar ---------- */
+.barra-seleccion {
+  padding: 4px 0 8px;
+}
+.barra-publicar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--espacio-nav) + var(--safe-bottom));
+  padding: 10px 16px;
+  /* hueco del ancho del FAB (56px + 20px de margen + 16px de aire) para que nunca lo tape,
+     ni siquiera visualmente: el botón "Publicar N" no se extiende debajo suyo (BUGS.md #11) */
+  padding-right: 92px;
+  background: var(--color-superficie);
+  border-top: 1px solid var(--color-borde);
+  z-index: 18;
+}
+@media (min-width: 720px) {
+  .barra-publicar {
+    max-width: 640px;
+    margin: 0 auto;
+    left: 0;
+    right: 0;
+  }
+}
+
+/* ---------- Hoja de revisión (antes de publicar 1 o N) ---------- */
+.hoja-revision {
+  max-width: 480px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.hoja-revision__carrusel {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 12px;
+}
+.hoja-revision__miniatura {
+  flex-shrink: 0;
+  width: 108px;
+  aspect-ratio: 1080 / 1920;
+  object-fit: cover;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--color-borde);
+  background: var(--color-superficie-alta);
+}
+
+/* ---------- <select>, opciones avanzadas (<details>/<summary>) ---------- */
+.campo select {
+  min-height: var(--toque-min);
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--color-borde);
+  background: var(--color-superficie);
+  color: var(--color-texto);
+  padding: 8px 12px;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-16);
+}
+details.grupo {
+  padding: 0;
+}
+details.grupo > summary.grupo__titulo {
+  padding: 14px;
+  margin-bottom: 0;
+  cursor: pointer;
+  min-height: var(--toque-min);
+  display: flex;
+  align-items: center;
+  list-style: none;
+}
+details.grupo > summary::-webkit-details-marker {
+  display: none;
+}
+details.grupo[open] > summary.grupo__titulo {
+  border-bottom: 1px solid var(--color-borde);
+  margin-bottom: 10px;
+}
+details.grupo > .campo {
+  padding: 0 14px 14px;
 }
 
 /* ---------- Estados vacío / carga / error ---------- */

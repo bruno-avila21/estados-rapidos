@@ -1,10 +1,10 @@
-// Pantalla "Productos": tarjetas con foto, nombre, precio editable en línea y Publicar.
+// Pantalla "Productos": tarjetas con foto, nombre, precio editable en línea, selección múltiple
+// persistente y Publicar (abre la hoja de revisión, 1 o N productos).
 import * as repo from '../repositorio.js';
 import { formatearPrecio, parsearPrecio } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
-import { componerImagen } from '../componer.js';
-import { publicarImagen, descargarImagen } from '../utils/compartir.js';
+import { abrirHojaRevision } from './revision.js';
 
 let urlsActuales = [];
 
@@ -39,16 +39,24 @@ export async function render(contenedor, { navegar }) {
   }
 
   contenedor.textContent = '';
+  const recargar = () => render(contenedor, { navegar });
 
   if (productos.length === 0) {
     contenedor.append(estadoVacio());
   } else {
+    contenedor.append(barraSeleccion(productos, recargar));
+
     const lista = document.createElement('div');
     lista.className = 'lista-productos';
     for (const producto of productos) {
-      lista.append(await tarjeta(producto, { navegar, recargar: () => render(contenedor, { navegar }) }));
+      lista.append(await tarjeta(producto, { navegar, recargar }));
     }
     contenedor.append(lista);
+
+    const seleccionados = productos.filter((p) => p.seleccionado);
+    if (seleccionados.length > 0) {
+      contenedor.append(barraPublicarFija(seleccionados));
+    }
   }
 
   const fab = document.createElement('button');
@@ -78,10 +86,66 @@ function estadoVacio() {
   return div;
 }
 
+function barraSeleccion(productos, recargar) {
+  const div = document.createElement('div');
+  div.className = 'fila barra-seleccion';
+
+  const btnMarcarTodos = document.createElement('button');
+  btnMarcarTodos.type = 'button';
+  btnMarcarTodos.className = 'boton boton--chico boton--fantasma';
+  btnMarcarTodos.setAttribute('data-accion', 'marcar-todos');
+  btnMarcarTodos.textContent = 'Marcar todos';
+  btnMarcarTodos.addEventListener('click', async () => {
+    await repo.marcarTodos(true);
+    recargar();
+  });
+
+  const btnDesmarcar = document.createElement('button');
+  btnDesmarcar.type = 'button';
+  btnDesmarcar.className = 'boton boton--chico boton--fantasma';
+  btnDesmarcar.setAttribute('data-accion', 'desmarcar-todos');
+  btnDesmarcar.textContent = 'Desmarcar';
+  btnDesmarcar.addEventListener('click', async () => {
+    await repo.marcarTodos(false);
+    recargar();
+  });
+
+  div.append(btnMarcarTodos, btnDesmarcar);
+  return div;
+}
+
+function barraPublicarFija(seleccionados) {
+  const div = document.createElement('div');
+  div.className = 'barra-publicar';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'boton boton--primario boton--ancho';
+  btn.setAttribute('data-accion', 'publicar-seleccionados');
+  btn.textContent = `Publicar ${seleccionados.length}`;
+  btn.addEventListener('click', () => abrirHojaRevision({ ids: seleccionados.map((p) => p.id) }));
+  div.append(btn);
+  return div;
+}
+
 async function tarjeta(producto, { navegar, recargar }) {
   const div = document.createElement('div');
   div.className = 'tarjeta';
   div.setAttribute('data-id', producto.id);
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'tarjeta__seleccion';
+  checkbox.checked = !!producto.seleccionado;
+  checkbox.setAttribute('data-accion', 'seleccionar');
+  checkbox.setAttribute('aria-label', `Seleccionar ${producto.nombre} para publicar`);
+  checkbox.addEventListener('change', async () => {
+    await repo.actualizarSeleccion(producto.id, checkbox.checked);
+    recargar();
+  });
+
+  const filaSuperior = document.createElement('div');
+  filaSuperior.className = 'tarjeta__fila-superior';
+  filaSuperior.append(checkbox);
 
   const fotoBlob = await repo.obtenerFotoBlob(producto.fotoId).catch(() => null);
   if (fotoBlob) {
@@ -91,14 +155,17 @@ async function tarjeta(producto, { navegar, recargar }) {
     img.className = 'tarjeta__foto';
     img.src = url;
     img.alt = '';
-    div.append(img);
+    filaSuperior.append(img);
   } else {
     const placeholder = document.createElement('div');
     placeholder.className = 'tarjeta__foto tarjeta__foto--vacia';
     placeholder.setAttribute('aria-hidden', 'true');
     placeholder.textContent = '📷';
-    div.append(placeholder);
+    filaSuperior.append(placeholder);
   }
+
+  const info = document.createElement('div');
+  info.className = 'tarjeta__info';
 
   const botonNombre = document.createElement('button');
   botonNombre.type = 'button';
@@ -134,6 +201,8 @@ async function tarjeta(producto, { navegar, recargar }) {
     if (ev.key === 'Enter') inputPrecio.blur();
   });
   filaPrecio.append(inputPrecio);
+  info.append(botonNombre, filaPrecio);
+  filaSuperior.append(info);
 
   const acciones = document.createElement('div');
   acciones.className = 'tarjeta__acciones';
@@ -143,7 +212,7 @@ async function tarjeta(producto, { navegar, recargar }) {
   btnPublicar.className = 'boton boton--primario';
   btnPublicar.setAttribute('data-accion', 'publicar');
   btnPublicar.textContent = 'Publicar';
-  btnPublicar.addEventListener('click', () => publicar(producto, btnPublicar));
+  btnPublicar.addEventListener('click', () => abrirHojaRevision({ ids: [producto.id] }));
 
   const btnBorrar = document.createElement('button');
   btnBorrar.type = 'button';
@@ -162,52 +231,11 @@ async function tarjeta(producto, { navegar, recargar }) {
   });
 
   acciones.append(btnPublicar, btnBorrar);
-  div.append(botonNombre, filaPrecio, acciones);
+  div.append(filaSuperior, acciones);
   return div;
 }
 
 async function formatoActual() {
   const config = await repo.obtenerPlantillaConfig();
   return config.formatoPrecio;
-}
-
-async function publicar(producto, boton) {
-  boton.disabled = true;
-  const textoOriginal = boton.textContent;
-  boton.textContent = 'Armando...';
-  try {
-    const [plantillaBlob, fotoBlob, config] = await Promise.all([
-      repo.obtenerImagenPlantillaBlob(),
-      repo.obtenerFotoBlob(producto.fotoId),
-      repo.obtenerPlantillaConfig(),
-    ]);
-    const [plantillaImagen, fotoImagen] = await Promise.all([
-      createImageBitmap(plantillaBlob),
-      fotoBlob ? createImageBitmap(fotoBlob) : Promise.resolve(null),
-    ]);
-    const blob = await componerImagen({
-      plantillaImagen,
-      fotoImagen,
-      producto,
-      ajustes: config.ajustes,
-      formatoPrecio: config.formatoPrecio,
-    });
-    const texto = producto.descripcion || producto.nombre;
-    // el resultado ya se avisa por toast dentro de compartirArchivos/publicarImagen para
-    // 'cancelado' y 'tardando' (timeout de seguridad, QA.md #6); acá solo faltan sin-soporte y compartido.
-    const resultado = await publicarImagen({ blob, texto });
-    if (resultado === 'sin-soporte') {
-      descargarImagen(blob, `${producto.nombre || 'estado'}.png`);
-      mostrarToast('Tu navegador no comparte archivos: se descargó la imagen');
-    } else if (resultado === 'compartido') {
-      mostrarToast('¡Listo! Elegí "Mi estado" en WhatsApp');
-    }
-  } catch (error) {
-    mostrarToast('No se pudo armar la imagen: ' + error.message);
-  } finally {
-    // se libera el botón apenas resuelve/rechaza share (o vence el timeout de seguridad),
-    // nunca se queda colgado en "Armando..." (QA.md #6).
-    boton.disabled = false;
-    boton.textContent = textoOriginal;
-  }
 }

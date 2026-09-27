@@ -37,6 +37,95 @@ export async function componerImagen({ plantillaImagen, fotoImagen, producto, aj
   });
 }
 
+/**
+ * Elige la función de composición según el estilo resuelto (ver `resolverEstilo` en modelo.js).
+ * @param {{estilo:string, plantillaImagen, fotoImagen, producto, ajustes, ajustesFranja, formatoPrecio}} datos
+ * @returns {Promise<Blob>}
+ */
+export async function componerSegunEstilo({
+  estilo,
+  plantillaImagen,
+  fotoImagen,
+  producto,
+  ajustes,
+  ajustesFranja,
+  formatoPrecio,
+}) {
+  if (estilo === 'foto-precio') return componerFotoConPrecio({ fotoImagen, producto, ajustesFranja, formatoPrecio });
+  if (estilo === 'mi-plantilla') return componerImagen({ plantillaImagen, fotoImagen, producto, ajustes, formatoPrecio });
+  return componerSoloFoto({ fotoImagen });
+}
+
+/**
+ * Estilo "Solo la foto" (por defecto): la foto del producto tal cual, sin textos, llevada a
+ * 1080×1920 con un fondo difuminado de la misma foto (evita el letterboxing negro cuando la
+ * relación de aspecto de la foto no coincide con la del estado).
+ */
+export async function componerSoloFoto({ fotoImagen }) {
+  const canvas = document.createElement('canvas');
+  canvas.width = ANCHO;
+  canvas.height = ALTO;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#12161c';
+  ctx.fillRect(0, 0, ANCHO, ALTO);
+
+  if (fotoImagen) {
+    // Fondo: la misma foto, cover-fit y difuminada, para llenar los márgenes sin barras negras.
+    ctx.save();
+    ctx.filter = 'blur(40px) brightness(0.6)';
+    dibujarFotoCover(ctx, fotoImagen, { x: -40, y: -40, w: ANCHO + 80, h: ALTO + 80 });
+    ctx.restore();
+
+    // Primer plano: la foto entera, sin recortar (contain), nítida y centrada.
+    dibujarFotoContain(ctx, fotoImagen, { x: 0, y: 0, w: ANCHO, h: ALTO });
+  }
+
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No se pudo generar la imagen.'))), 'image/png');
+  });
+}
+
+/**
+ * Estilo "Foto con precio": la foto de fondo (cover, nítida, sin difuminar) + una franja
+ * translúcida abajo con el nombre y el precio.
+ */
+export async function componerFotoConPrecio({ fotoImagen, producto, ajustesFranja, formatoPrecio }) {
+  const canvas = document.createElement('canvas');
+  canvas.width = ANCHO;
+  canvas.height = ALTO;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#12161c';
+  ctx.fillRect(0, 0, ANCHO, ALTO);
+
+  if (fotoImagen) dibujarFotoCover(ctx, fotoImagen, { x: 0, y: 0, w: ANCHO, h: ALTO });
+
+  const franja = ajustesFranja?.franja;
+  if (franja) {
+    ctx.fillStyle = franja.color || 'rgba(10,12,16,0.72)';
+    ctx.fillRect(franja.x, franja.y, franja.w, franja.h);
+  }
+  if (ajustesFranja?.nombre) dibujarTextoEnCaja(ctx, producto.nombre ?? '', ajustesFranja.nombre);
+  if (ajustesFranja?.precio) {
+    dibujarTextoEnCaja(ctx, formatearPrecio(producto.precio, formatoPrecio), ajustesFranja.precio);
+  }
+
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No se pudo generar la imagen.'))), 'image/png');
+  });
+}
+
+function dibujarFotoContain(ctx, imagen, caja) {
+  const anchoOrigen = imagen.naturalWidth || imagen.width;
+  const altoOrigen = imagen.naturalHeight || imagen.height;
+  if (!anchoOrigen || !altoOrigen) return;
+  const escala = Math.min(caja.w / anchoOrigen, caja.h / altoOrigen);
+  const w = anchoOrigen * escala;
+  const h = altoOrigen * escala;
+  const x = caja.x + (caja.w - w) / 2;
+  const y = caja.y + (caja.h - h) / 2;
+  ctx.drawImage(imagen, x, y, w, h);
+}
+
 function dibujarFotoCover(ctx, imagen, caja) {
   const anchoOrigen = imagen.naturalWidth || imagen.width;
   const altoOrigen = imagen.naturalHeight || imagen.height;

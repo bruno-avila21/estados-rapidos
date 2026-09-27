@@ -1,6 +1,6 @@
 // Alta / edición de producto: foto (galería o cámara), nombre, precio, descripción.
 import * as repo from '../repositorio.js';
-import { validarProducto, parsearPrecio, formatearPrecio } from '../modelo.js';
+import { validarProducto, parsearPrecio, formatearPrecio, ESTILOS_IMAGEN } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 
@@ -116,6 +116,37 @@ export async function render(contenedor, { navegar, params }) {
   campoDescripcion.append(textareaDescripcion);
   grupoDescripcion.append(tituloDescripcion, campoDescripcion);
 
+  // --- Capa 3: opciones avanzadas, detrás de un gesto explícito (patrones.md, regla 9) ---
+  const ETIQUETA_ESTILO = { 'solo-foto': 'Solo la foto', 'foto-precio': 'Foto con precio', 'mi-plantilla': 'Mi plantilla' };
+  const detallesAvanzado = document.createElement('details');
+  detallesAvanzado.className = 'grupo';
+  const resumenAvanzado = document.createElement('summary');
+  resumenAvanzado.className = 'grupo__titulo';
+  resumenAvanzado.textContent = producto?.estilo
+    ? `Opciones avanzadas · estilo: ${ETIQUETA_ESTILO[producto.estilo]}`
+    : 'Opciones avanzadas';
+  const campoEstiloOverride = document.createElement('div');
+  campoEstiloOverride.className = 'campo';
+  const labelEstiloOverride = document.createElement('label');
+  labelEstiloOverride.className = 'campo__etiqueta';
+  labelEstiloOverride.htmlFor = 'campo-estilo-override';
+  labelEstiloOverride.textContent = 'Estilo de imagen para este producto';
+  const selectEstiloOverride = document.createElement('select');
+  selectEstiloOverride.id = 'campo-estilo-override';
+  const opcionGeneral = document.createElement('option');
+  opcionGeneral.value = '';
+  opcionGeneral.textContent = 'Usar el estilo general (Ajustes)';
+  selectEstiloOverride.append(opcionGeneral);
+  for (const valor of ESTILOS_IMAGEN) {
+    const opcion = document.createElement('option');
+    opcion.value = valor;
+    opcion.textContent = ETIQUETA_ESTILO[valor];
+    selectEstiloOverride.append(opcion);
+  }
+  selectEstiloOverride.value = producto?.estilo || '';
+  campoEstiloOverride.append(labelEstiloOverride, selectEstiloOverride);
+  detallesAvanzado.append(resumenAvanzado, campoEstiloOverride);
+
   const errorGeneral = document.createElement('div');
   errorGeneral.setAttribute('role', 'alert');
   errorGeneral.hidden = true;
@@ -137,7 +168,7 @@ export async function render(contenedor, { navegar, params }) {
 
   filaAcciones.append(btnCancelar, btnGuardar);
 
-  form.append(grupoFoto, campoNombre.contenedor, campoPrecio.contenedor, grupoDescripcion, errorGeneral, filaAcciones);
+  form.append(grupoFoto, campoNombre.contenedor, campoPrecio.contenedor, grupoDescripcion, detallesAvanzado, errorGeneral, filaAcciones);
 
   if (!esNuevo) {
     const separador = document.createElement('div');
@@ -168,6 +199,7 @@ export async function render(contenedor, { navegar, params }) {
       nombre: campoNombre.input.value,
       precio: parsearPrecio(campoPrecio.input.value),
       descripcion: textareaDescripcion.value,
+      estilo: selectEstiloOverride.value || null,
     };
     const { ok, errores } = validarProducto(datos);
     limpiarErrores();

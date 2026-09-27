@@ -12,11 +12,11 @@ async function crearProducto(page, { nombre = 'Producto de prueba', precio = '10
   await expect(page.locator('[data-accion="editar"]', { hasText: nombre })).toBeVisible();
 }
 
-test('ir-plantilla / ir-respaldo / ir-lista cambian de pantalla', async ({ page }) => {
+test('ir-ajustes / ir-respaldo / ir-lista cambian de pantalla', async ({ page }) => {
   await page.goto('/');
-  await page.locator('[data-accion="ir-plantilla"]').click();
-  await expect(page).toHaveURL(/#\/plantilla$/);
-  await expect(page.locator('#titulo-pantalla')).toHaveText('Plantilla');
+  await page.locator('[data-accion="ir-ajustes"]').first().click();
+  await expect(page).toHaveURL(/#\/ajustes$/);
+  await expect(page.locator('#titulo-pantalla')).toHaveText('Ajustes');
 
   await page.locator('[data-accion="ir-respaldo"]').click();
   await expect(page).toHaveURL(/#\/respaldo$/);
@@ -52,6 +52,8 @@ test('publicar arma la imagen (mock de compartir) y avisa por toast', async ({ p
   });
   await crearProducto(page);
   await page.locator('[data-accion="publicar"]').click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+  await page.locator('[data-accion="revision-compartir"]').click();
   await expect(page.locator('#toast')).toHaveText(/Mi estado/);
 });
 
@@ -124,9 +126,9 @@ test('borrar todos los datos: pide confirmación fuerte y vuelve al vacío sin r
   expect(await page.evaluate(() => window.__marca)).toBe('sigo-vivo'); // no hubo reload
 });
 
-test('formato de precio con decimales (configurado en Plantilla) se refleja en la lista', async ({ page }) => {
+test('formato de precio con decimales (configurado en Ajustes) se refleja en la lista', async ({ page }) => {
   await page.goto('/');
-  await page.locator('[data-accion="ir-plantilla"]').click();
+  await page.locator('[data-accion="ir-ajustes"]').first().click();
   const casillaDecimales = page.locator('text=Mostrar decimales').locator('..').locator('input[type="checkbox"]');
   await casillaDecimales.check();
   await page.waitForTimeout(400); // debounce del guardado

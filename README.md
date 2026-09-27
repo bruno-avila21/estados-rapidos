@@ -1,8 +1,9 @@
 # Estados rápidos
 
 Estados de WhatsApp de tus productos en 3 segundos. Una PWA instalable: cargás foto, nombre y
-precio de cada producto, tocás **Publicar** y se abre la hoja de compartir de Android con la
-imagen ya armada sobre tu plantilla — elegís WhatsApp → Mi estado. Nada se automatiza sobre
+precio de cada producto, marcás los que querés publicar (la marca queda guardada), revisás las
+imágenes y el texto en una última pantalla y tocás **Compartir** — se abre la hoja de compartir de
+Android con una o varias imágenes juntas, elegís WhatsApp → Mi estado. Nada se automatiza sobre
 WhatsApp: el último toque siempre es tuyo.
 
 **Probala:** https://bruno-avila21.github.io/estados-rapidos/
@@ -14,16 +15,24 @@ WhatsApp: el último toque siempre es tuyo.
    la primera vez que la abrís.
 
 ## Cómo se usa
-1. **Productos**: tocá **+** para cargar una foto (galería o cámara), nombre, precio y una
-   descripción corta (es la leyenda que se copia al portapapeles al publicar).
-2. En la lista podés cambiar el precio de un toque, sin entrar al detalle.
-3. **Plantilla**: subí tu imagen de fondo (PNG 1080×1920) y ajustá una sola vez dónde va la foto,
-   el nombre y el precio, con vista previa en vivo. Si no subís nada, usa una plantilla sobria por
-   defecto.
-4. **Publicar**: arma la imagen final, copia la descripción al portapapeles y abre la hoja de
-   compartir. Si tu navegador no puede compartir archivos, descarga la imagen directamente.
-5. **Respaldo**: antes de cambiar de celular o borrar datos del navegador, exportá un `.json` con
-   todo (productos, fotos y plantilla). Para recuperarlo, importalo desde la misma pestaña.
+1. **Productos**: tocá **+** para cargar una foto (galería o cámara), nombre, precio y, si querés,
+   una descripción propia (si no cargás una, se arma sola con el modelo de Ajustes).
+2. En la lista podés cambiar el precio de un toque, sin entrar al detalle, y marcar/desmarcar cada
+   producto con la casilla (queda guardado: la próxima vez que entrás siguen marcados los mismos).
+   "Marcar todos" / "Desmarcar" para hacerlo de una.
+3. **Publicar** (de una tarjeta) o **Publicar N** (barra de abajo, con los marcados) abre la
+   **hoja de revisión**: se arman las imágenes en secuencia, podés editar el texto y cambiar el
+   estilo antes de compartir.
+4. **Compartir**: copia el texto al portapapeles y abre la hoja de compartir con todas las
+   imágenes juntas (hasta 30, el límite de WhatsApp). Si tu navegador no soporta compartir varios
+   archivos, las comparte de a una con un botón "Siguiente"; si no soporta compartir, las descarga.
+5. **Ajustes**: elegís el estilo de imagen general (**Solo la foto**, **Foto con precio** o
+   **Mi plantilla** — este último abre una pantalla para subir tu PNG 1080×1920 y ajustar dónde va
+   la foto, el nombre y el precio), el modelo de descripción y el formato del precio. Cada
+   producto puede tener su propio estilo (en "Opciones avanzadas" del alta/edición).
+6. **Respaldo**: antes de cambiar de celular o borrar datos del navegador, exportá un `.json` con
+   todo. Para recuperarlo, importalo desde la misma pestaña. "Borrar todos los datos" vacía la app
+   (con confirmación) si necesitás empezar de cero.
 
 ## Para desarrollar
 Ver `CLAUDE.md` (cómo correr el servidor local, los tests, y cómo se publica).

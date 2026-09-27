@@ -68,14 +68,18 @@ test('mínimo del día 1: cargar producto, precio en línea, plantilla y publica
   await page.reload();
   await expect(page.locator('[data-accion="precio"]').first()).toHaveValue('$ 39.990');
 
-  // pantalla Plantilla: vista previa en vivo
+  // Ajustes → "Mi plantilla": pantalla Plantilla con vista previa en vivo
+  await page.locator('[data-accion="ir-ajustes"]').first().click();
+  await page.locator('input[name="estilo-general"][value="mi-plantilla"]').check();
   await page.locator('[data-accion="ir-plantilla"]').click();
   await expect(page.locator('.previa-plantilla')).toBeVisible();
   await expect(page.locator('.previa-plantilla')).toHaveAttribute('src', /^blob:/);
 
-  // volver y Publicar
+  // volver a la lista y Publicar: abre la hoja de revisión con la imagen ya armada
   await page.locator('[data-accion="ir-lista"]').click();
   await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+  await page.locator('[data-accion="revision-compartir"]').click();
   await expect(page.locator('#toast')).toHaveText(/Mi estado/);
 
   const llamadas = await page.evaluate(() => window.__compartir.llamadas);
@@ -100,8 +104,11 @@ test('publicar sin soporte de compartir archivos cae a descargar', async ({ page
   await page.locator('#campo-precio').fill('20000');
   await page.locator('[data-accion="guardar"]').click();
 
-  const descargaPromesa = page.waitForEvent('download');
   await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+
+  const descargaPromesa = page.waitForEvent('download');
+  await page.locator('[data-accion="revision-compartir"]').click();
   const descarga = await descargaPromesa;
   expect(descarga.suggestedFilename()).toMatch(/\.png$/);
   await expect(page.locator('#toast')).toHaveText(/se descargó la imagen/);

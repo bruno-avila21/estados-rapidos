@@ -15,6 +15,53 @@ export const FORMATO_PRECIO_POR_DEFECTO = Object.freeze({
   decimales: false,
 });
 
+// --- Estilo de imagen (cambio de producto 2026-09-27: 3 modos, ver CREAR-BRIEF.md) ---
+export const ESTILOS_IMAGEN = Object.freeze(['solo-foto', 'foto-precio', 'mi-plantilla']);
+export const ESTILO_POR_DEFECTO = 'solo-foto';
+
+// Franja de "Foto con precio": posiciones fijas (no configurables por ahora, a diferencia de
+// "Mi plantilla"). Banda inferior semitransparente con nombre y precio sobre la foto.
+export const AJUSTES_FRANJA_POR_DEFECTO = Object.freeze({
+  franja: { x: 0, y: 1500, w: 1080, h: 420, color: 'rgba(10,12,16,0.72)' },
+  nombre: { x: 60, y: 1560, w: 960, h: 140, tamano: 64, color: '#ffffff', peso: 700, alineacion: 'center' },
+  precio: { x: 60, y: 1710, w: 960, h: 180, tamano: 92, color: '#f5a623', peso: 800, alineacion: 'center' },
+});
+
+export const DESCRIPCION_MODELO_POR_DEFECTO = '{nombre} a {precio} 🔥 Pedilo por privado';
+
+/** Resuelve qué estilo de imagen usa un producto: su override si es válido, si no el general. */
+export function resolverEstilo(producto, config) {
+  const override = producto?.estilo;
+  if (override && ESTILOS_IMAGEN.includes(override)) return override;
+  const general = config?.estiloGeneral;
+  return general && ESTILOS_IMAGEN.includes(general) ? general : ESTILO_POR_DEFECTO;
+}
+
+/** Reemplaza {nombre} {precio} {descripcion} en el texto modelo. Pura: recibe el precio ya formateado. */
+export function aplicarPlantillaDescripcion(plantillaTexto, { nombre = '', precio = '', descripcion = '' } = {}) {
+  const texto = plantillaTexto ?? DESCRIPCION_MODELO_POR_DEFECTO;
+  return texto
+    .replaceAll('{nombre}', nombre)
+    .replaceAll('{precio}', precio)
+    .replaceAll('{descripcion}', descripcion);
+}
+
+/**
+ * Descripción efectiva de un producto: la propia si tiene una cargada, si no la que sale de
+ * aplicar el modelo de Ajustes con los datos del producto (nombre, precio ya formateado).
+ */
+export function resolverDescripcion(producto, config) {
+  const propia = String(producto?.descripcion ?? '').trim();
+  if (propia) return propia;
+  const modelo = config?.descripcionModelo || DESCRIPCION_MODELO_POR_DEFECTO;
+  const precioFormateado = formatearPrecio(producto?.precio, config?.formatoPrecio);
+  return aplicarPlantillaDescripcion(modelo, {
+    nombre: producto?.nombre ?? '',
+    precio: precioFormateado,
+    descripcion: '',
+  });
+}
+
 const FORMATEADORES = new Map();
 
 function obtenerFormateador(decimales) {
@@ -97,6 +144,19 @@ export function validarRespaldo(objeto) {
       return { ok: false, error: `Producto #${i + 1} con foto inválida.` };
     if (typeof p.fotoBase64 === 'string' && p.fotoBase64.length > 4_000_000)
       return { ok: false, error: `Producto #${i + 1}: la foto es demasiado grande.` };
+    // Campos agregados 2026-09-27, opcionales por compatibilidad con respaldos viejos.
+    if (p.estilo != null && !ESTILOS_IMAGEN.includes(p.estilo))
+      return { ok: false, error: `Producto #${i + 1} con estilo de imagen inválido.` };
+    if (p.seleccionado != null && typeof p.seleccionado !== 'boolean')
+      return { ok: false, error: `Producto #${i + 1} con selección inválida.` };
+  }
+
+  if (objeto.general != null) {
+    if (typeof objeto.general !== 'object') return { ok: false, error: 'La sección "general" del respaldo es inválida.' };
+    if (objeto.general.estiloGeneral != null && !ESTILOS_IMAGEN.includes(objeto.general.estiloGeneral))
+      return { ok: false, error: 'Estilo general inválido en el respaldo.' };
+    if (objeto.general.descripcionModelo != null && typeof objeto.general.descripcionModelo !== 'string')
+      return { ok: false, error: 'Descripción modelo inválida en el respaldo.' };
   }
 
   if (objeto.plantilla != null) {
@@ -114,7 +174,7 @@ export function validarRespaldo(objeto) {
 }
 
 /** Arma el objeto de respaldo (puro: recibe los datos ya leídos, no toca IndexedDB). */
-export function construirRespaldo({ productos, plantilla }) {
+export function construirRespaldo({ productos, plantilla, general }) {
   return {
     version: VERSION_RESPALDO,
     exportadoEn: new Date().toISOString(),
@@ -124,6 +184,8 @@ export function construirRespaldo({ productos, plantilla }) {
       precio: p.precio,
       descripcion: p.descripcion ?? '',
       fotoBase64: p.fotoBase64 ?? null,
+      estilo: p.estilo ?? null,
+      seleccionado: p.seleccionado ?? true,
       creado: p.creado,
       actualizado: p.actualizado,
     })),
@@ -132,6 +194,12 @@ export function construirRespaldo({ productos, plantilla }) {
           imagenBase64: plantilla.imagenBase64 ?? null,
           ajustes: plantilla.ajustes ?? AJUSTES_POR_DEFECTO,
           formatoPrecio: plantilla.formatoPrecio ?? FORMATO_PRECIO_POR_DEFECTO,
+        }
+      : null,
+    general: general
+      ? {
+          estiloGeneral: general.estiloGeneral ?? ESTILO_POR_DEFECTO,
+          descripcionModelo: general.descripcionModelo ?? DESCRIPCION_MODELO_POR_DEFECTO,
         }
       : null,
   };

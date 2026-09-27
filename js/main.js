@@ -1,6 +1,7 @@
 // Bootstrap de la app: router por hash + registro del service worker + aviso de versión nueva.
 import * as lista from './vistas/lista.js';
 import * as detalle from './vistas/detalle.js';
+import * as ajustes from './vistas/ajustes.js';
 import * as plantilla from './vistas/plantilla.js';
 import * as respaldo from './vistas/respaldo.js';
 import { pedirAlmacenamientoPersistente } from './db.js';
@@ -12,7 +13,10 @@ const navBotones = Array.from(document.querySelectorAll('.nav-inferior__item'));
 const RUTAS = [
   { patron: /^#\/$/, modulo: lista, titulo: 'Productos', ruta: '#/' },
   { patron: /^#\/producto\/(.+)$/, modulo: detalle, titulo: 'Producto', ruta: null },
-  { patron: /^#\/plantilla$/, modulo: plantilla, titulo: 'Plantilla', ruta: '#/plantilla' },
+  { patron: /^#\/ajustes$/, modulo: ajustes, titulo: 'Ajustes', ruta: '#/ajustes' },
+  // "Plantilla" ya no está en la navegación principal: solo se llega desde Ajustes cuando el
+  // estilo elegido es "Mi plantilla" (CREAR-BRIEF.md, cambio 2026-09-27).
+  { patron: /^#\/plantilla$/, modulo: plantilla, titulo: 'Plantilla', ruta: null },
   { patron: /^#\/respaldo$/, modulo: respaldo, titulo: 'Respaldo', ruta: '#/respaldo' },
 ];
 

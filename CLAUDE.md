@@ -1,11 +1,18 @@
 # CLAUDE.md — estados-rapidos
 
 ## Qué es
-PWA para armar en 3 segundos el estado de WhatsApp de un producto: foto + nombre + precio montados
-sobre una plantilla propia (1080×1920), y un botón **Publicar** que copia la descripción al
-portapapeles y abre la hoja de compartir de Android (`navigator.share`) para elegir WhatsApp → Mi
-estado. Sin backend, sin build, sin dependencias de runtime. Todo el dato vive en el IndexedDB del
-celular de quien la usa — el repo es público pero solo tiene código, nunca datos de producto.
+PWA para armar en 3 segundos el estado de WhatsApp de uno o varios productos: foto (+ opcionalmente
+nombre y precio, según el estilo elegido) en 1080×1920, con **selección múltiple persistente** y una
+**hoja de revisión** antes de compartir (carrusel de imágenes, descripción editable, selector de
+estilo) que copia el texto al portapapeles y abre la hoja de compartir de Android (`navigator.share`,
+uno o varios archivos juntos) para elegir WhatsApp → Mi estado. Sin backend, sin build, sin
+dependencias de runtime. Todo el dato vive en el IndexedDB del celular de quien la usa — el repo es
+público pero solo tiene código, nunca datos de producto.
+
+Tres estilos de imagen (Ajustes → estilo general, con override opcional por producto):
+**Solo la foto** (por defecto, sin textos), **Foto con precio** (franja con nombre y precio) y
+**Mi plantilla** (plantilla PNG propia con posiciones ajustables — pantalla "Plantilla", solo
+accesible desde Ajustes cuando ese es el estilo elegido).
 
 Fuente de verdad del alcance: `CREAR-BRIEF.md`.
 
@@ -47,7 +54,8 @@ Para regenerar los íconos PNG (192/512, maskable) sin dependencias: `npm run ic
 6. Móvil primero: acciones principales (Publicar, Guardar) abajo, pulgar-friendly; targets ≥ 48px.
 7. `prefers-reduced-motion` respetado (`css/estilos.css`, media query al final).
 8. Divulgación progresiva: foto+nombre+precio siempre a la vista; descripción agrupada bajo un
-   título; ajustes finos de la plantilla detrás de la pestaña "Plantilla" (no en la lista).
+   título; el estilo de imagen por producto y demás ajustes finos viven detrás de "Opciones
+   avanzadas" (`<details>`) en el alta/edición, no en la lista.
 
 ## Antes de un release
 `/mejorar ciberseguridad performance`
@@ -59,10 +67,18 @@ propósito desde la pestaña "Respaldo" — y ese archivo tampoco se commitea (v
 `.tmp-respaldo-*.json` que generan los tests E2E están explícitamente ignorados).
 
 ## Mapa del código
-- `js/modelo.js` — reglas puras: formato de precio (es-AR), validación de producto y de respaldo.
+- `js/modelo.js` — reglas puras: formato de precio (es-AR), validación de producto y de respaldo,
+  resolución de estilo (`resolverEstilo`, override por producto vs. general) y de descripción
+  (`resolverDescripcion`/`aplicarPlantillaDescripcion`, marcadores `{nombre} {precio} {descripcion}`).
 - `js/layout.js` — cálculo puro de wrap de texto y cover-fit (sin canvas; recibe un medidor inyectado).
-- `js/componer.js` — dibuja plantilla + foto + textos en un canvas 1080×1920 → Blob PNG.
-- `js/db.js` / `js/repositorio.js` — IndexedDB y las operaciones de dominio sobre ella.
-- `js/vistas/*.js` — las 4 pantallas (lista, detalle, plantilla, respaldo).
-- `js/utils/*.js` — toast, confirmación propia (nunca `confirm()` nativo), compartir/descargar, achicar fotos.
+- `js/componer.js` — dibuja en un canvas 1080×1920 → Blob PNG; `componerSegunEstilo` elige entre
+  `componerSoloFoto`, `componerFotoConPrecio` y `componerImagen` (estilo "Mi plantilla").
+- `js/db.js` / `js/repositorio.js` — IndexedDB y las operaciones de dominio (incluida selección
+  persistente y ajustes generales).
+- `js/vistas/*.js` — pantallas: `lista` (productos + selección + barra "Publicar N"), `detalle`
+  (alta/edición, con override de estilo en "Opciones avanzadas"), `ajustes` (estilo general,
+  descripción modelo, formato de precio), `plantilla` (solo si el estilo es "Mi plantilla"),
+  `respaldo` (exportar/importar/borrar todo), `revision` (hoja de revisión antes de publicar).
+- `js/utils/*.js` — toast, confirmación propia (nunca `confirm()` nativo), compartir (con timeout
+  de seguridad y soporte multi-archivo), achicar fotos.
 - `sw.js` + `js/sw-estrategia.js` — Service Worker network-first, con la decisión de cacheo separada como función pura y testeada.

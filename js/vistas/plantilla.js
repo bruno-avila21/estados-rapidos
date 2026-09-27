@@ -6,11 +6,12 @@ import { mostrarToast } from '../utils/toast.js';
 
 let debounce = null;
 
-export async function render(contenedor) {
+export async function render(contenedor, { navegar } = {}) {
   contenedor.textContent = '';
 
   const config = await repo.obtenerPlantillaConfig();
   const ajustes = estructuraClonada(config.ajustes);
+  // el formato del precio se configura en Ajustes; acá solo se lee para la vista previa fiel.
   const formatoPrecio = { ...config.formatoPrecio };
 
   const productos = await repo.listarProductos();
@@ -19,6 +20,14 @@ export async function render(contenedor) {
 
   const wrap = document.createElement('div');
   wrap.className = 'pila';
+
+  const btnVolver = document.createElement('button');
+  btnVolver.type = 'button';
+  btnVolver.className = 'boton boton--fantasma boton--chico';
+  btnVolver.setAttribute('data-accion', 'ir-ajustes');
+  btnVolver.textContent = '← Volver a Ajustes';
+  btnVolver.addEventListener('click', () => navegar?.('#/ajustes'));
+  wrap.append(btnVolver);
 
   // --- Capa 1: la imagen y qué se ve ---
   const previa = document.createElement('img');
@@ -65,7 +74,6 @@ export async function render(contenedor) {
 
   wrap.append(grupoTexto('Nombre', ajustes.nombre));
   wrap.append(grupoTexto('Precio', ajustes.precio));
-  wrap.append(grupoFormatoPrecio(formatoPrecio));
 
   contenedor.append(wrap);
   actualizarPrevia();
@@ -117,50 +125,6 @@ export async function render(contenedor) {
     return grupo;
   }
 
-  function grupoFormatoPrecio() {
-    const grupo = document.createElement('div');
-    grupo.className = 'grupo';
-    const h = document.createElement('div');
-    h.className = 'grupo__titulo';
-    h.textContent = 'Formato del precio';
-    grupo.append(h);
-
-    const campoPrefijo = document.createElement('div');
-    campoPrefijo.className = 'campo';
-    const labelPrefijo = document.createElement('label');
-    labelPrefijo.className = 'campo__etiqueta';
-    labelPrefijo.textContent = 'Prefijo';
-    const inputPrefijo = document.createElement('input');
-    inputPrefijo.type = 'text';
-    inputPrefijo.maxLength = 6;
-    inputPrefijo.value = formatoPrecio.prefijo;
-    inputPrefijo.addEventListener('input', () => {
-      formatoPrecio.prefijo = inputPrefijo.value;
-      guardarFormatoDebounced();
-    });
-    campoPrefijo.append(labelPrefijo, inputPrefijo);
-
-    const casilla = (etiqueta, clave) => {
-      const div = document.createElement('label');
-      div.className = 'fila';
-      div.style.alignItems = 'center';
-      const check = document.createElement('input');
-      check.type = 'checkbox';
-      check.checked = !!formatoPrecio[clave];
-      check.addEventListener('change', () => {
-        formatoPrecio[clave] = check.checked;
-        guardarFormatoDebounced();
-      });
-      const span = document.createElement('span');
-      span.textContent = etiqueta;
-      div.append(check, span);
-      return div;
-    };
-
-    grupo.append(campoPrefijo, casilla('Separador de miles (es-AR)', 'separadorMiles'), casilla('Mostrar decimales', 'decimales'));
-    return grupo;
-  }
-
   function deslizador({ etiqueta, valor, min, max, onCambio }) {
     const div = document.createElement('div');
     div.className = 'campo';
@@ -191,13 +155,6 @@ export async function render(contenedor) {
   function guardarAjustesDebounced() {
     clearTimeout(debounce);
     debounce = setTimeout(() => repo.guardarAjustesPlantilla(ajustes), 300);
-  }
-  function guardarFormatoDebounced() {
-    clearTimeout(debounce);
-    debounce = setTimeout(async () => {
-      await repo.guardarFormatoPrecio(formatoPrecio);
-      actualizarPrevia();
-    }, 300);
   }
 
   async function actualizarPrevia() {
