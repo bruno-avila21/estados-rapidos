@@ -82,6 +82,48 @@ test('exportar dispara la descarga del respaldo', async ({ page }) => {
   expect(descarga.suggestedFilename()).toMatch(/\.json$/);
 });
 
+test('precio vacío o negativo en el alta muestra error y no guarda (QA.md #8)', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-accion="agregar"]').click();
+  await page.locator('#campo-nombre').fill('Sin precio');
+  await page.locator('#campo-precio').fill('');
+  await page.locator('[data-accion="guardar"]').click();
+  await expect(page.locator('#campo-precio').locator('..').locator('.campo__error')).toHaveText(/mayor a cero/i);
+  await expect(page).toHaveURL(/#\/producto\/nuevo$/); // no navegó: no se guardó
+
+  await page.locator('#campo-precio').fill('-500');
+  await page.locator('[data-accion="guardar"]').click();
+  await expect(page.locator('#campo-precio').locator('..').locator('.campo__error')).toHaveText(/mayor a cero/i);
+  await expect(page).toHaveURL(/#\/producto\/nuevo$/);
+});
+
+test('precio vacío o negativo editado en línea desde la lista se revierte (QA.md #8)', async ({ page }) => {
+  await crearProducto(page, { nombre: 'Con precio', precio: '10000' });
+  const inputPrecio = page.locator('[data-accion="precio"]').first();
+  await inputPrecio.fill('');
+  await inputPrecio.blur();
+  await expect(page.locator('#toast')).toHaveText(/mayor a cero/i);
+  await expect(inputPrecio).toHaveValue('$ 10.000');
+});
+
+test('borrar todos los datos: pide confirmación fuerte y vuelve al vacío sin recargar (QA.md #5)', async ({ page }) => {
+  await crearProducto(page, { nombre: 'Para borrar todo' });
+  await page.evaluate(() => { window.__marca = 'sigo-vivo'; }); // si hubiera reload, se pierde
+  await page.locator('[data-accion="ir-respaldo"]').click();
+
+  await page.locator('[data-accion="borrar-todo"]').click();
+  await expect(page.locator('.dialogo__mensaje')).toHaveText(/exportaste un respaldo/i);
+  await page.locator('[data-accion="cancelar"]').click();
+  await expect(page.locator('[data-accion="borrar-todo"]')).toBeVisible(); // no borró al cancelar
+
+  await page.locator('[data-accion="borrar-todo"]').click();
+  await page.locator('[data-accion="confirmar-borrar"]').click();
+  await expect(page.locator('#toast')).toHaveText(/borrados/i);
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.getByText('Todavía no cargaste productos')).toBeVisible();
+  expect(await page.evaluate(() => window.__marca)).toBe('sigo-vivo'); // no hubo reload
+});
+
 test('formato de precio con decimales (configurado en Plantilla) se refleja en la lista', async ({ page }) => {
   await page.goto('/');
   await page.locator('[data-accion="ir-plantilla"]').click();

@@ -45,17 +45,21 @@ export function formatearPrecio(valor, opciones = {}) {
   return `${prefijo}${obtenerFormateador(decimales).format(positivo)}`;
 }
 
-/** Parsea lo que el usuario tipeó en el input de precio (admite "12.500", "12500", "12500,50"). */
+/**
+ * Parsea lo que el usuario tipeó en el input de precio (admite "12.500", "12500", "12500,50").
+ * A propósito NO clampea a 0: un vacío o un negativo tienen que llegar como `NaN`/negativo a
+ * `validarProducto` para que se muestre un error, en vez de guardarse en silencio como "$ 0"
+ * (QA.md 2026-09-27). `formatearPrecio` es quien clampea para mostrar, nunca este parseo.
+ */
 export function parsearPrecio(texto) {
-  if (typeof texto === 'number') return Number.isFinite(texto) ? texto : 0;
+  if (typeof texto === 'number') return texto;
   const limpio = String(texto ?? '')
     .trim()
     .replace(/[^\d,.-]/g, '');
-  if (!limpio) return 0;
+  if (!limpio) return NaN;
   // último separador presente antes de 1-2 dígitos finales se interpreta como decimal
   const normalizado = limpio.replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
-  const numero = parseFloat(normalizado);
-  return Number.isFinite(numero) ? Math.max(0, numero) : 0;
+  return parseFloat(normalizado);
 }
 
 /** Valida los campos de un producto antes de guardar. Devuelve {ok, errores:{campo:mensaje}}. */
@@ -66,7 +70,8 @@ export function validarProducto(producto) {
   else if (nombre.length > 80) errores.nombre = 'Máximo 80 caracteres.';
 
   const precio = Number(producto?.precio);
-  if (!Number.isFinite(precio) || precio < 0) errores.precio = 'El precio tiene que ser un número positivo.';
+  // vacío (NaN) o negativo/cero nunca se guarda en silencio como "$ 0" (QA.md 2026-09-27, hallazgo bajo).
+  if (!Number.isFinite(precio) || precio <= 0) errores.precio = 'Poné un precio mayor a cero.';
 
   const descripcion = String(producto?.descripcion ?? '');
   if (descripcion.length > 300) errores.descripcion = 'Máximo 300 caracteres.';

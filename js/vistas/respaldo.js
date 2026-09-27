@@ -60,6 +60,7 @@ export async function render(contenedor) {
   inputArchivo.type = 'file';
   inputArchivo.accept = 'application/json';
   inputArchivo.className = 'campo-oculto';
+  inputArchivo.tabIndex = -1; // el disparo lo hace el botón visible (QA.md #7)
   inputArchivo.setAttribute('data-accion-input', 'importar');
   const btnImportar = document.createElement('button');
   btnImportar.type = 'button';
@@ -118,6 +119,41 @@ export async function render(contenedor) {
 
   grupoImportar.append(tituloImportar, avisoImportar, btnImportar, inputArchivo, errorImportar);
 
-  wrap.append(grupoExportar, grupoImportar);
+  // --- Zona de peligro: borrar todo (capa 3, detrás de un rótulo explícito) ---
+  const grupoPeligro = document.createElement('div');
+  grupoPeligro.className = 'grupo';
+  const tituloPeligro = document.createElement('div');
+  tituloPeligro.className = 'grupo__titulo';
+  tituloPeligro.textContent = 'Zona de peligro';
+  const avisoPeligro = document.createElement('p');
+  avisoPeligro.className = 'texto-tenue';
+  avisoPeligro.textContent = 'Borra productos, fotos y la plantilla de este celular. No se puede deshacer.';
+  const btnBorrarTodo = document.createElement('button');
+  btnBorrarTodo.type = 'button';
+  btnBorrarTodo.className = 'boton boton--peligro boton--ancho';
+  btnBorrarTodo.setAttribute('data-accion', 'borrar-todo');
+  btnBorrarTodo.textContent = 'Borrar todos los datos';
+  btnBorrarTodo.addEventListener('click', async () => {
+    const confirmado = await pedirConfirmacion({
+      titulo: 'Borrar todos los datos',
+      mensaje:
+        'Esto borra TODOS los productos, sus fotos y la plantilla de este celular. Si no exportaste un respaldo antes, se pierde todo para siempre. ¿Seguro que querés continuar?',
+      textoConfirmar: 'Borrar todo',
+    });
+    if (!confirmado) return;
+    btnBorrarTodo.disabled = true;
+    try {
+      await repo.borrarTodo();
+      mostrarToast('Todos los datos fueron borrados');
+      location.hash = '#/'; // vuelve al estado vacío sin recargar la página
+    } catch (error) {
+      mostrarToast('No se pudo borrar: ' + error.message);
+    } finally {
+      btnBorrarTodo.disabled = false;
+    }
+  });
+  grupoPeligro.append(tituloPeligro, avisoPeligro, btnBorrarTodo);
+
+  wrap.append(grupoExportar, grupoImportar, grupoPeligro);
   contenedor.append(wrap);
 }

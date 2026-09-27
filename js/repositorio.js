@@ -44,6 +44,13 @@ async function siguienteOrden() {
   return productos.length ? Math.max(...productos.map((p) => p.orden ?? 0)) + 1 : 0;
 }
 
+/** Borra TODO (productos, fotos y plantilla). Irreversible: quien llama ya pidió confirmación. */
+export async function borrarTodo() {
+  await db.vaciar('productos');
+  await db.vaciar('blobs');
+  await db.vaciar('config');
+}
+
 export async function actualizarPrecio(id, precio) {
   const producto = await db.obtener('productos', id);
   if (!producto) return null;

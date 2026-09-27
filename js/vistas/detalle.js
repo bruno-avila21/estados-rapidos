@@ -43,6 +43,7 @@ export async function render(contenedor, { navegar, params }) {
   inputGaleria.type = 'file';
   inputGaleria.accept = 'image/*';
   inputGaleria.className = 'campo-oculto';
+  inputGaleria.tabIndex = -1; // el disparo lo hace el botón visible (QA.md #7)
   inputGaleria.setAttribute('data-accion-input', 'elegir-galeria');
 
   const inputCamara = document.createElement('input');
@@ -50,6 +51,7 @@ export async function render(contenedor, { navegar, params }) {
   inputCamara.accept = 'image/*';
   inputCamara.capture = 'environment';
   inputCamara.className = 'campo-oculto';
+  inputCamara.tabIndex = -1; // el disparo lo hace el botón visible (QA.md #7)
   inputCamara.setAttribute('data-accion-input', 'elegir-camara');
 
   const alElegirFoto = (input) => (ev) => {
@@ -218,6 +220,7 @@ function campoTexto({ id, etiqueta, valor, tipo, inputMode, ariaDescripcion }) {
   if (inputMode) input.inputMode = inputMode;
   const error = document.createElement('div');
   error.className = 'campo__error';
+  error.setAttribute('role', 'alert'); // se anuncia a lectores de pantalla (QA.md #7)
   error.hidden = true;
   if (ariaDescripcion) {
     const ayuda = document.createElement('div');

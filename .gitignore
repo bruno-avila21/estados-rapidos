@@ -3,6 +3,10 @@ node_modules/
 .env.*
 !.env.example
 
+# QA del agente qa-e2e: evidencia y veredicto, no es parte del producto
+QA.md
+qa/
+
 # Playwright
 test-results/
 playwright-report/

@@ -35,6 +35,7 @@ export async function render(contenedor) {
   inputPlantilla.type = 'file';
   inputPlantilla.accept = 'image/png';
   inputPlantilla.className = 'campo-oculto';
+  inputPlantilla.tabIndex = -1; // el disparo lo hace el botón visible (QA.md #7)
   inputPlantilla.setAttribute('data-accion-input', 'subir-plantilla');
   const btnSubir = document.createElement('button');
   btnSubir.type = 'button';

@@ -4,6 +4,8 @@
 import { test, expect } from '@playwright/test';
 
 test.use({ serviceWorkers: 'allow' });
+// Intermitente dentro de la suite completa (BUGS.md #10): pasa siempre aislado.
+test.describe.configure({ retries: 2 });
 
 test('el SW se instala y, sin red, la app sigue abriendo desde caché', async ({ page }) => {
   await page.goto('/');

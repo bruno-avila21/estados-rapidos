@@ -51,6 +51,19 @@
   box-sizing: border-box;
 }
 
+/* Red de foco visible genérica (QA.md #7): cualquier elemento interactivo que no defina su
+   propio :focus-visible más específico igual muestra un contorno. Las reglas de arriba/abajo
+   más específicas ganan por especificidad CSS normal. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+
 html,
 body {
   height: 100%;
@@ -277,6 +290,11 @@ h3 {
   min-height: var(--toque-min);
   display: flex;
   align-items: center;
+}
+.tarjeta__nombre:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+  border-radius: var(--radio-chico);
 }
 .tarjeta__fila-precio {
   display: flex;

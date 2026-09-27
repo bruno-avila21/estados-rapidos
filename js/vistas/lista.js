@@ -4,7 +4,7 @@ import { formatearPrecio, parsearPrecio } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 import { componerImagen } from '../componer.js';
-import { publicarImagen, descargarImagen, puedeCompartirArchivos } from '../utils/compartir.js';
+import { publicarImagen, descargarImagen } from '../utils/compartir.js';
 
 let urlsActuales = [];
 
@@ -118,6 +118,13 @@ async function tarjeta(producto, { navegar, recargar }) {
   inputPrecio.value = formatearPrecio(producto.precio, await formatoActual());
   const guardarPrecio = async () => {
     const nuevo = parsearPrecio(inputPrecio.value);
+    if (!Number.isFinite(nuevo) || nuevo <= 0) {
+      // vacío o negativo: se revierte, nunca se guarda un "$ 0" en silencio (QA.md #8).
+      inputPrecio.value = formatearPrecio(producto.precio, await formatoActual());
+      mostrarToast('El precio tiene que ser mayor a cero: no se guardó.');
+      return;
+    }
+    producto.precio = nuevo;
     await repo.actualizarPrecio(producto.id, nuevo);
     inputPrecio.value = formatearPrecio(nuevo, await formatoActual());
     mostrarToast('Precio actualizado');
@@ -186,23 +193,21 @@ async function publicar(producto, boton) {
       formatoPrecio: config.formatoPrecio,
     });
     const texto = producto.descripcion || producto.nombre;
+    // el resultado ya se avisa por toast dentro de compartirArchivos/publicarImagen para
+    // 'cancelado' y 'tardando' (timeout de seguridad, QA.md #6); acá solo faltan sin-soporte y compartido.
     const resultado = await publicarImagen({ blob, texto });
     if (resultado === 'sin-soporte') {
       descargarImagen(blob, `${producto.nombre || 'estado'}.png`);
       mostrarToast('Tu navegador no comparte archivos: se descargó la imagen');
     } else if (resultado === 'compartido') {
       mostrarToast('¡Listo! Elegí "Mi estado" en WhatsApp');
-    } else if (resultado === 'cancelado') {
-      // el usuario canceló: no es un error, no se muestra nada
     }
   } catch (error) {
     mostrarToast('No se pudo armar la imagen: ' + error.message);
   } finally {
+    // se libera el botón apenas resuelve/rechaza share (o vence el timeout de seguridad),
+    // nunca se queda colgado en "Armando..." (QA.md #6).
     boton.disabled = false;
     boton.textContent = textoOriginal;
   }
-}
-
-export function soportaCompartirArchivos() {
-  return typeof navigator.canShare === 'function' && puedeCompartirArchivos(new File([], 'x.png', { type: 'image/png' }));
 }

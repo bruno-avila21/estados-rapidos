@@ -33,8 +33,14 @@ test('parsearPrecio: admite formatos con y sin separadores', () => {
   assert.equal(parsearPrecio('12500'), 12500);
   assert.equal(parsearPrecio('$ 12.500'), 12500);
   assert.equal(parsearPrecio('1250,50'), 1250.5);
-  assert.equal(parsearPrecio(''), 0);
-  assert.equal(parsearPrecio('abc'), 0);
+});
+
+test('parsearPrecio: vacío o no numérico da NaN, negativo preserva el signo (QA.md #8)', () => {
+  // a propósito NO clampea: la validación es responsabilidad de validarProducto, para no
+  // guardar un precio inválido en silencio como "$ 0".
+  assert.ok(Number.isNaN(parsearPrecio('')));
+  assert.ok(Number.isNaN(parsearPrecio('abc')));
+  assert.equal(parsearPrecio('-500'), -500);
 });
 
 test('validarProducto: nombre y precio obligatorios', () => {
@@ -42,6 +48,12 @@ test('validarProducto: nombre y precio obligatorios', () => {
   assert.equal(ok, false);
   assert.ok(errores.nombre);
   assert.ok(errores.precio);
+});
+
+test('validarProducto: precio vacío (NaN) o cero también son inválidos (QA.md #8)', () => {
+  assert.equal(validarProducto({ nombre: 'x', precio: NaN }).ok, false);
+  assert.equal(validarProducto({ nombre: 'x', precio: 0 }).ok, false);
+  assert.equal(validarProducto({ nombre: 'x', precio: 1 }).ok, true);
 });
 
 test('validarProducto: producto válido', () => {
