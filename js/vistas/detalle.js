@@ -1,6 +1,6 @@
 // Alta / edición de producto: foto (galería o cámara), nombre, precio, descripción.
 import * as repo from '../repositorio.js';
-import { validarProducto, parsearPrecio, formatearPrecio, ESTILOS_IMAGEN, ETIQUETA_ESTILO } from '../modelo.js';
+import { validarProducto, parsearPrecio, formatearPrecio, ESTILOS_IMAGEN, ETIQUETA_ESTILO, validarNombreSeccion } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 
@@ -8,6 +8,8 @@ export async function render(contenedor, { navegar, params }) {
   contenedor.textContent = '';
   const esNuevo = !params.id || params.id === 'nuevo';
   const producto = esNuevo ? null : await repo.obtenerProducto(params.id);
+  let seccionesDisponibles = await repo.listarSecciones();
+  const seccionesSeleccionadas = new Set(producto?.secciones ?? []);
 
   if (!esNuevo && !producto) {
     const alerta = document.createElement('div');
@@ -116,6 +118,73 @@ export async function render(contenedor, { navegar, params }) {
   campoDescripcion.append(textareaDescripcion);
   grupoDescripcion.append(tituloDescripcion, campoDescripcion);
 
+  // --- Secciones (etiquetas): un producto puede estar en varias a la vez (ronda "secciones",
+  // CREAR-BRIEF.md) — chips seleccionables + alta inline sin salir del formulario. ---
+  const grupoSecciones = document.createElement('div');
+  grupoSecciones.className = 'grupo';
+  const tituloSecciones = document.createElement('div');
+  tituloSecciones.className = 'grupo__titulo';
+  tituloSecciones.textContent = 'Secciones';
+  const chipsSecciones = document.createElement('div');
+  chipsSecciones.className = 'chips-secciones';
+
+  function pintarChipsSecciones() {
+    chipsSecciones.textContent = '';
+    if (seccionesDisponibles.length === 0) {
+      const vacio = document.createElement('p');
+      vacio.className = 'texto-tenue';
+      vacio.textContent = 'Todavía no creaste ninguna: agregá una acá abajo.';
+      chipsSecciones.append(vacio);
+      return;
+    }
+    for (const seccion of seccionesDisponibles) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      const activa = seccionesSeleccionadas.has(seccion.id);
+      chip.className = 'chip' + (activa ? ' chip--activo' : '');
+      chip.setAttribute('data-accion', 'toggle-seccion');
+      chip.setAttribute('data-id', seccion.id);
+      chip.setAttribute('aria-pressed', String(activa));
+      chip.textContent = seccion.nombre;
+      chip.addEventListener('click', () => {
+        if (seccionesSeleccionadas.has(seccion.id)) seccionesSeleccionadas.delete(seccion.id);
+        else seccionesSeleccionadas.add(seccion.id);
+        pintarChipsSecciones();
+      });
+      chipsSecciones.append(chip);
+    }
+  }
+  pintarChipsSecciones();
+
+  const formNuevaSeccion = document.createElement('form');
+  formNuevaSeccion.className = 'fila';
+  const inputNuevaSeccion = document.createElement('input');
+  inputNuevaSeccion.type = 'text';
+  inputNuevaSeccion.maxLength = 40;
+  inputNuevaSeccion.placeholder = 'Nueva sección';
+  inputNuevaSeccion.setAttribute('aria-label', 'Nombre de la nueva sección');
+  const btnNuevaSeccion = document.createElement('button');
+  btnNuevaSeccion.type = 'submit';
+  btnNuevaSeccion.className = 'boton boton--chico';
+  btnNuevaSeccion.setAttribute('data-accion', 'nueva-seccion');
+  btnNuevaSeccion.textContent = '+ Nueva sección';
+  formNuevaSeccion.append(inputNuevaSeccion, btnNuevaSeccion);
+  formNuevaSeccion.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const { ok, error } = validarNombreSeccion(inputNuevaSeccion.value);
+    if (!ok) {
+      mostrarToast(error);
+      return;
+    }
+    const nueva = await repo.crearSeccion(inputNuevaSeccion.value);
+    seccionesDisponibles = await repo.listarSecciones();
+    seccionesSeleccionadas.add(nueva.id);
+    inputNuevaSeccion.value = '';
+    pintarChipsSecciones();
+  });
+
+  grupoSecciones.append(tituloSecciones, chipsSecciones, formNuevaSeccion);
+
   // --- Capa 3: opciones avanzadas, detrás de un gesto explícito (patrones.md, regla 9) ---
   const detallesAvanzado = document.createElement('details');
   detallesAvanzado.className = 'grupo';
@@ -167,7 +236,7 @@ export async function render(contenedor, { navegar, params }) {
 
   filaAcciones.append(btnCancelar, btnGuardar);
 
-  form.append(grupoFoto, campoNombre.contenedor, campoPrecio.contenedor, grupoDescripcion, detallesAvanzado, errorGeneral, filaAcciones);
+  form.append(grupoFoto, campoNombre.contenedor, campoPrecio.contenedor, grupoDescripcion, grupoSecciones, detallesAvanzado, errorGeneral, filaAcciones);
 
   if (!esNuevo) {
     const separador = document.createElement('div');
@@ -201,6 +270,7 @@ export async function render(contenedor, { navegar, params }) {
       precio: textoPrecio ? parsearPrecio(textoPrecio) : null,
       descripcion: textareaDescripcion.value,
       estilo: selectEstiloOverride.value || null,
+      secciones: [...seccionesSeleccionadas],
     };
     const { ok, errores } = validarProducto(datos);
     limpiarErrores();

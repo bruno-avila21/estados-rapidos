@@ -63,7 +63,7 @@ export async function render(contenedor) {
   tituloImportar.textContent = 'Importar';
   const avisoImportar = document.createElement('p');
   avisoImportar.className = 'texto-tenue';
-  avisoImportar.textContent = 'Reemplaza TODOS los productos y la plantilla actuales.';
+  avisoImportar.textContent = 'Reemplaza TODOS los productos, secciones y la plantilla actuales.';
   const inputArchivo = document.createElement('input');
   inputArchivo.type = 'file';
   inputArchivo.accept = 'application/json';
@@ -135,7 +135,7 @@ export async function render(contenedor) {
   tituloPeligro.textContent = 'Zona de peligro';
   const avisoPeligro = document.createElement('p');
   avisoPeligro.className = 'texto-tenue';
-  avisoPeligro.textContent = 'Borra productos, fotos y la plantilla de este celular. No se puede deshacer.';
+  avisoPeligro.textContent = 'Borra productos, fotos, secciones y la plantilla de este celular. No se puede deshacer.';
   const btnBorrarTodo = document.createElement('button');
   btnBorrarTodo.type = 'button';
   btnBorrarTodo.className = 'boton boton--peligro boton--ancho';
@@ -145,7 +145,7 @@ export async function render(contenedor) {
     const confirmado = await pedirConfirmacion({
       titulo: 'Borrar todos los datos',
       mensaje:
-        'Esto borra TODOS los productos, sus fotos y la plantilla de este celular. Si no exportaste un respaldo antes, se pierde todo para siempre. ¿Seguro que querés continuar?',
+        'Esto borra TODOS los productos, sus fotos, las secciones y la plantilla de este celular. Si no exportaste un respaldo antes, se pierde todo para siempre. ¿Seguro que querés continuar?',
       textoConfirmar: 'Borrar todo',
     });
     if (!confirmado) return;

@@ -1,7 +1,9 @@
-// Pantalla "Productos": tarjetas con foto, nombre, precio editable en línea, selección múltiple
-// persistente y Publicar (abre la hoja de revisión, 1 o N productos).
+// Pantalla "Productos": filtro por sección (chips con scroll propio), agrupado "Todas" con
+// encabezados plegables, dos vistas (lista compacta / grilla 3 columnas) y selección múltiple
+// persistente con la barra "Publicar N". Ronda "secciones" (CREAR-BRIEF.md): un producto puede
+// estar en varias secciones a la vez (etiquetas, no carpetas).
 import * as repo from '../repositorio.js';
-import { formatearPrecio, parsearPrecio } from '../modelo.js';
+import { formatearPrecio, parsearPrecio, agruparProductosPorSeccion, contarProductosPorSeccion, filtrarProductosPorSeccion, ID_SIN_SECCION } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 import { abrirHojaRevision } from './revision.js';
@@ -21,12 +23,18 @@ function esVigente() {
   return !location.hash || location.hash === '#/';
 }
 
+let formatoPrecioCache = null;
+async function formatoActual() {
+  if (!formatoPrecioCache) formatoPrecioCache = (await repo.obtenerPlantillaConfig()).formatoPrecio;
+  return formatoPrecioCache;
+}
+
 export async function render(contenedor, { navegar }) {
   // `recargar()` (checkbox/marcar todos/borrar) espera su propio `await` (escribir en IndexedDB)
   // ANTES de llamar acá — tiempo de sobra para que el usuario ya haya navegado a otra pantalla.
-  // Si ya no estamos en Productos, ni arrancar: ni el skeleton se llega a mostrar (bug real, ver
-  // el comentario largo más abajo, cerca del guardado final).
+  // Si ya no estamos en Productos, ni arrancar: ni el skeleton se llega a mostrar.
   if (!esVigente()) return;
+  formatoPrecioCache = null;
   limpiarUrls();
   contenedor.textContent = '';
 
@@ -39,11 +47,17 @@ export async function render(contenedor, { navegar }) {
   }
   contenedor.append(skeleton);
 
-  let productos;
+  // Performance (CREAR-BRIEF.md, 150 productos < 300ms): las 3 lecturas de IndexedDB en paralelo,
+  // no encadenadas.
+  let productos, secciones, prefs;
   try {
-    productos = await repo.listarProductos();
+    [productos, secciones, prefs] = await Promise.all([
+      repo.listarProductos(),
+      repo.listarSecciones(),
+      repo.obtenerPreferenciasLista(),
+    ]);
   } catch (error) {
-    if (!esVigente()) return; // ya se navegó a otro lado mientras esto cargaba (ver abajo)
+    if (!esVigente()) return; // ya se navegó a otro lado mientras esto cargaba
     contenedor.textContent = '';
     const alerta = document.createElement('div');
     alerta.setAttribute('role', 'alert');
@@ -51,23 +65,67 @@ export async function render(contenedor, { navegar }) {
     contenedor.append(alerta);
     return;
   }
+  if (!esVigente()) return;
 
   const recargar = () => render(contenedor, { navegar });
+  await formatoActual();
 
-  // Arma TODO fuera del DOM primero (el `await tarjeta()` de cada producto trae su foto —
-  // más awaits, más ventana para la carrera de abajo) y recién al final, en un solo golpe,
-  // reemplaza `contenedor`. Nada de ir mutando `contenedor` a medida que cada pieza está lista.
+  // Arma TODO fuera del DOM primero y recién al final, en un solo golpe, reemplaza `contenedor`.
+  // Nada de ir mutando `contenedor` a medida que cada pieza está lista (BUGS.md #34).
   const piezas = [];
+
   if (productos.length === 0) {
     piezas.push(estadoVacio());
   } else {
-    piezas.push(barraSeleccion(productos, recargar));
-    const lista = document.createElement('div');
-    lista.className = 'lista-productos';
-    for (const producto of productos) {
-      lista.append(await tarjeta(producto, { navegar, recargar }));
+    // Fotos: TODAS en paralelo (Promise.all), no un `await` por producto en un for secuencial —
+    // con 150 productos eso era el cuello de botella real (150 viajes a IndexedDB en serie).
+    const fotoUrlPorId = new Map();
+    await Promise.all(
+      productos.map(async (producto) => {
+        if (!producto.fotoId) return;
+        const blob = await repo.obtenerFotoBlob(producto.fotoId).catch(() => null);
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        urlsActuales.push(url);
+        fotoUrlPorId.set(producto.id, url);
+      })
+    );
+    if (!esVigente()) return;
+
+    const conteos = contarProductosPorSeccion(productos, secciones);
+    piezas.push(filaFiltro(secciones, conteos, prefs, { navegar, recargar }));
+    piezas.push(conmutadorVista(prefs, recargar));
+
+    const visibles = filtrarProductosPorSeccion(productos, prefs.filtroSeccion);
+    piezas.push(barraSeleccion(visibles, recargar));
+
+    const ctx = {
+      navegar,
+      recargar,
+      fotoUrlPorId,
+      vista: prefs.vista,
+      onToggle: async (producto, checked) => {
+        producto.seleccionado = checked;
+        await repo.actualizarSeleccion(producto.id, checked);
+        // Sin recomponer todo: solo se sincronizan las casillas del mismo producto (puede
+        // aparecer en 2 grupos a la vez) y la barra fija "Publicar N" (CREAR-BRIEF.md, rendimiento).
+        sincronizarSeleccion(contenedor, producto.id, checked);
+        actualizarBarraPublicarFija(contenedor, productos);
+      },
+    };
+
+    if (prefs.filtroSeccion === 'todas') {
+      if (visibles.length === 0) piezas.push(estadoVacio());
+      else piezas.push(vistaAgrupada(productos, secciones, prefs, recargar, ctx));
+    } else {
+      if (visibles.length === 0) {
+        piezas.push(estadoVacioFiltro());
+      } else {
+        piezas.push(prefs.vista === 'grilla' ? grilla(visibles, ctx) : listaCompacta(visibles, ctx));
+      }
+      piezas.push(botonPublicarSeccion(visibles));
     }
-    piezas.push(lista);
+
     const seleccionados = productos.filter((p) => p.seleccionado);
     if (seleccionados.length > 0) piezas.push(barraPublicarFija(seleccionados));
   }
@@ -81,16 +139,39 @@ export async function render(contenedor, { navegar }) {
   fab.addEventListener('click', () => navegar('#/producto/nuevo'));
   piezas.push(fab);
 
-  // Guarda contra una carrera real: `recargar()` (checkbox, marcar/desmarcar todos, borrar) llama
-  // a este mismo `render()` de nuevo sin esperar a que termine. Si mientras tanto el usuario ya
-  // navegó a OTRA pantalla (`hashchange` → detalle.js/ajustes.js ya dibujaron la suya en este
-  // mismo `contenedor`), este render que recién termina de juntar sus datos no puede pisarla con
-  // la lista vieja. Confirmado con un E2E real: click en el checkbox + ir a "nuevo producto" de
-  // inmediato dejaba el hash en `#/producto/nuevo` pero el DOM con la lista, porque este render
-  // tardaba más (fotos) que el del formulario vacío y llegaba último.
+  // Guarda contra una carrera real (BUGS.md #34): si mientras se armaban las piezas el usuario ya
+  // navegó a OTRA pantalla, este render que recién termina no puede pisarla con la lista vieja.
   if (!esVigente()) return;
   contenedor.textContent = '';
   contenedor.append(...piezas);
+}
+
+/** Actualiza SOLO las casillas del producto `id` (puede haber más de una si está en 2 secciones y
+ * la vista "Todas" las muestra en 2 grupos) sin recomponer el resto de la lista. */
+function sincronizarSeleccion(contenedor, id, checked) {
+  let selector;
+  try {
+    selector = `[data-id="${CSS.escape(id)}"] [data-accion="seleccionar"]`;
+  } catch {
+    return;
+  }
+  contenedor.querySelectorAll(selector).forEach((cb) => {
+    cb.checked = checked;
+  });
+}
+
+/** Recalcula la barra fija "Publicar N" (marcados) a partir de `productos` ya actualizado en
+ * memoria, y la reemplaza/crea/saca sin tocar el resto del DOM. */
+function actualizarBarraPublicarFija(contenedor, productos) {
+  const seleccionados = productos.filter((p) => p.seleccionado);
+  const actual = contenedor.querySelector('.barra-publicar');
+  if (seleccionados.length === 0) {
+    actual?.remove();
+    return;
+  }
+  const nueva = barraPublicarFija(seleccionados);
+  if (actual) actual.replaceWith(nueva);
+  else contenedor.append(nueva);
 }
 
 function estadoVacio() {
@@ -110,7 +191,86 @@ function estadoVacio() {
   return div;
 }
 
-function barraSeleccion(productos, recargar) {
+function estadoVacioFiltro() {
+  const div = document.createElement('div');
+  div.className = 'estado';
+  const icono = document.createElement('div');
+  icono.className = 'estado__icono';
+  icono.setAttribute('aria-hidden', 'true');
+  icono.textContent = '🔎';
+  const titulo = document.createElement('div');
+  titulo.className = 'estado__titulo';
+  titulo.textContent = 'No hay productos acá todavía';
+  div.append(icono, titulo);
+  return div;
+}
+
+// --- Fila de filtro por sección: chips con scroll horizontal PROPIO ("Todas" + cada sección +
+// "Sin sección", con contador), la elegida se recuerda (CREAR-BRIEF.md). ---
+function filaFiltro(secciones, conteos, prefs, { navegar, recargar }) {
+  const cont = document.createElement('div');
+  cont.className = 'filtro-secciones';
+
+  const definiciones = [
+    { id: 'todas', nombre: 'Todas', cantidad: conteos.todas },
+    ...secciones.map((s) => ({ id: s.id, nombre: s.nombre, cantidad: conteos.porSeccion.get(s.id) || 0 })),
+    { id: ID_SIN_SECCION, nombre: 'Sin sección', cantidad: conteos.sinSeccion },
+  ];
+
+  for (const def of definiciones) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip' + (prefs.filtroSeccion === def.id ? ' chip--activo' : '');
+    chip.setAttribute('data-accion', 'filtro-seccion');
+    chip.setAttribute('data-id', def.id);
+    chip.setAttribute('aria-pressed', String(prefs.filtroSeccion === def.id));
+    chip.textContent = `${def.nombre} (${def.cantidad})`;
+    chip.addEventListener('click', async () => {
+      if (prefs.filtroSeccion === def.id) return;
+      await repo.guardarPreferenciasLista({ filtroSeccion: def.id });
+      recargar();
+    });
+    cont.append(chip);
+  }
+
+  const btnGestionar = document.createElement('button');
+  btnGestionar.type = 'button';
+  btnGestionar.className = 'chip chip--fantasma';
+  btnGestionar.setAttribute('data-accion', 'gestionar-secciones');
+  btnGestionar.textContent = '⚙ Secciones';
+  btnGestionar.addEventListener('click', () => navegar('#/secciones'));
+  cont.append(btnGestionar);
+
+  return cont;
+}
+
+// --- Conmutador de vista: lista compacta / grilla, se recuerda (CREAR-BRIEF.md). ---
+function conmutadorVista(prefs, recargar) {
+  const cont = document.createElement('div');
+  cont.className = 'fila conmutador-vista';
+  const opciones = [
+    { valor: 'compacta', etiqueta: '☰ Lista' },
+    { valor: 'grilla', etiqueta: '▦ Grilla' },
+  ];
+  for (const op of opciones) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const activo = prefs.vista === op.valor;
+    btn.className = 'boton boton--chico ' + (activo ? 'boton--primario' : 'boton--fantasma');
+    btn.setAttribute('data-accion', `vista-${op.valor}`);
+    btn.setAttribute('aria-pressed', String(activo));
+    btn.textContent = op.etiqueta;
+    btn.addEventListener('click', async () => {
+      if (activo) return;
+      await repo.guardarPreferenciasLista({ vista: op.valor });
+      recargar();
+    });
+    cont.append(btn);
+  }
+  return cont;
+}
+
+function barraSeleccion(visibles, recargar) {
   const div = document.createElement('div');
   div.className = 'fila barra-seleccion';
 
@@ -120,7 +280,9 @@ function barraSeleccion(productos, recargar) {
   btnMarcarTodos.setAttribute('data-accion', 'marcar-todos');
   btnMarcarTodos.textContent = 'Marcar todos';
   btnMarcarTodos.addEventListener('click', async () => {
-    await repo.marcarTodos(true);
+    // Solo los VISIBLES (el filtro de sección activo): "Marcar todos" dentro de una sección marca
+    // nada más que esa sección (CREAR-BRIEF.md).
+    await repo.marcarTodos(true, visibles.map((p) => p.id));
     recargar();
   });
 
@@ -130,7 +292,7 @@ function barraSeleccion(productos, recargar) {
   btnDesmarcar.setAttribute('data-accion', 'desmarcar-todos');
   btnDesmarcar.textContent = 'Desmarcar';
   btnDesmarcar.addEventListener('click', async () => {
-    await repo.marcarTodos(false);
+    await repo.marcarTodos(false, visibles.map((p) => p.id));
     recargar();
   });
 
@@ -151,73 +313,107 @@ function barraPublicarFija(seleccionados) {
   return div;
 }
 
-async function tarjeta(producto, { navegar, recargar }) {
-  const div = document.createElement('div');
-  div.className = 'tarjeta';
-  div.setAttribute('data-id', producto.id);
+/** Botón "Publicar esta sección (N)": independiente de las casillas marcadas, publica TODOS los
+ * productos de la sección/filtro elegido (CREAR-BRIEF.md). */
+function botonPublicarSeccion(visibles) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'boton boton--primario boton--ancho boton-publicar-seccion';
+  btn.setAttribute('data-accion', 'publicar-seccion');
+  btn.textContent = `Publicar esta sección (${visibles.length})`;
+  btn.disabled = visibles.length === 0;
+  btn.addEventListener('click', () => abrirHojaRevision({ ids: visibles.map((p) => p.id) }));
+  return btn;
+}
+
+// --- Vista "Todas": agrupada por sección, encabezados plegables (estado recordado); un producto en
+// 2 secciones aparece en ambos grupos con la MISMA casilla (sincronizada); "Sin sección" al final. ---
+function vistaAgrupada(productos, secciones, prefs, recargar, ctx) {
+  const grupos = agruparProductosPorSeccion(productos, secciones).filter((g) => g.productos.length > 0);
+  const raiz = document.createElement('div');
+  raiz.className = 'pila';
+  for (const grupo of grupos) {
+    const clave = grupo.id ?? ID_SIN_SECCION;
+    const detalle = document.createElement('details');
+    detalle.className = 'grupo grupo-seccion';
+    detalle.open = !prefs.gruposPlegados?.[clave];
+    const resumen = document.createElement('summary');
+    resumen.className = 'grupo__titulo';
+    resumen.textContent = `${grupo.nombre} (${grupo.productos.length})`;
+    detalle.append(resumen);
+    detalle.append(ctx.vista === 'grilla' ? grilla(grupo.productos, ctx) : listaCompacta(grupo.productos, ctx));
+    detalle.addEventListener('toggle', () => {
+      repo.guardarPreferenciasLista({
+        gruposPlegados: { ...(prefs.gruposPlegados || {}), [clave]: !detalle.open },
+      });
+    });
+    raiz.append(detalle);
+  }
+  return raiz;
+}
+
+// --- Vista LISTA COMPACTA: una fila por producto (checkbox, miniatura ~56px, nombre 1 línea,
+// precio en línea, publicar como ícono) — objetivo ~8-10 filas por pantalla en 412×915. ---
+function listaCompacta(productos, ctx) {
+  const cont = document.createElement('div');
+  cont.className = 'lista-compacta';
+  for (const producto of productos) cont.append(filaCompacta(producto, ctx));
+  return cont;
+}
+
+function filaCompacta(producto, ctx) {
+  const fila = document.createElement('div');
+  fila.className = 'fila-compacta';
+  fila.setAttribute('data-id', producto.id);
 
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
-  checkbox.className = 'tarjeta__seleccion';
+  checkbox.className = 'fila-compacta__seleccion';
   checkbox.checked = !!producto.seleccionado;
   checkbox.setAttribute('data-accion', 'seleccionar');
   checkbox.setAttribute('aria-label', `Seleccionar ${producto.nombre} para publicar`);
-  checkbox.addEventListener('change', async () => {
-    await repo.actualizarSeleccion(producto.id, checkbox.checked);
-    recargar();
-  });
+  checkbox.addEventListener('change', () => ctx.onToggle(producto, checkbox.checked));
 
-  const filaSuperior = document.createElement('div');
-  filaSuperior.className = 'tarjeta__fila-superior';
-  filaSuperior.append(checkbox);
-
-  const fotoBlob = await repo.obtenerFotoBlob(producto.fotoId).catch(() => null);
-  if (fotoBlob) {
-    const url = URL.createObjectURL(fotoBlob);
-    urlsActuales.push(url);
-    const img = document.createElement('img');
-    img.className = 'tarjeta__foto';
-    img.src = url;
-    img.alt = '';
-    filaSuperior.append(img);
+  const url = ctx.fotoUrlPorId.get(producto.id);
+  let foto;
+  if (url) {
+    foto = document.createElement('img');
+    foto.className = 'fila-compacta__foto';
+    foto.src = url;
+    foto.alt = '';
+    foto.loading = 'lazy'; // 150 productos: no decodificar las que no entran en pantalla todavía
+    foto.decoding = 'async';
   } else {
-    const placeholder = document.createElement('div');
-    placeholder.className = 'tarjeta__foto tarjeta__foto--vacia';
-    placeholder.setAttribute('aria-hidden', 'true');
-    placeholder.textContent = '📷';
-    filaSuperior.append(placeholder);
+    foto = document.createElement('div');
+    foto.className = 'fila-compacta__foto fila-compacta__foto--vacia';
+    foto.setAttribute('aria-hidden', 'true');
+    foto.textContent = '📷';
   }
 
-  const info = document.createElement('div');
-  info.className = 'tarjeta__info';
+  const nombre = document.createElement('button');
+  nombre.type = 'button';
+  nombre.className = 'fila-compacta__nombre';
+  nombre.setAttribute('data-accion', 'editar');
+  nombre.textContent = producto.nombre;
+  nombre.addEventListener('click', () => ctx.navegar(`#/producto/${producto.id}`));
 
-  const botonNombre = document.createElement('button');
-  botonNombre.type = 'button';
-  botonNombre.className = 'tarjeta__nombre';
-  botonNombre.setAttribute('data-accion', 'editar');
-  botonNombre.textContent = producto.nombre;
-  botonNombre.addEventListener('click', () => navegar(`#/producto/${producto.id}`));
-
-  const filaPrecio = document.createElement('div');
-  filaPrecio.className = 'tarjeta__fila-precio';
   const inputPrecio = document.createElement('input');
   inputPrecio.type = 'text';
   inputPrecio.inputMode = 'decimal';
-  inputPrecio.className = 'tarjeta__precio';
+  inputPrecio.className = 'fila-compacta__precio';
   inputPrecio.setAttribute('data-accion', 'precio');
   inputPrecio.setAttribute('aria-label', `Precio de ${producto.nombre}`);
-  inputPrecio.placeholder = 'Sin precio'; // precio opcional (CREAR-BRIEF.md 2026-09-27)
-  inputPrecio.value = producto.precio != null ? formatearPrecio(producto.precio, await formatoActual()) : '';
+  inputPrecio.placeholder = 'Sin precio';
+  inputPrecio.value = producto.precio != null ? formatearPrecio(producto.precio, formatoPrecioCache) : '';
   const guardarPrecio = async () => {
     const texto = inputPrecio.value.trim();
     let nuevo;
     if (!texto) {
-      nuevo = null; // vacío = sin precio, válido
+      nuevo = null;
     } else {
       const parseado = parsearPrecio(texto);
       if (!Number.isFinite(parseado) || parseado <= 0) {
-        // negativo/0/no numérico: se revierte, nunca se guarda en silencio (QA.md #8).
-        inputPrecio.value = producto.precio != null ? formatearPrecio(producto.precio, await formatoActual()) : '';
+        inputPrecio.value = producto.precio != null ? formatearPrecio(producto.precio, formatoPrecioCache) : '';
         mostrarToast('El precio tiene que ser mayor a cero (o dejalo vacío para no mostrarlo).');
         return;
       }
@@ -225,32 +421,28 @@ async function tarjeta(producto, { navegar, recargar }) {
     }
     producto.precio = nuevo;
     await repo.actualizarPrecio(producto.id, nuevo);
-    inputPrecio.value = nuevo != null ? formatearPrecio(nuevo, await formatoActual()) : '';
+    inputPrecio.value = nuevo != null ? formatearPrecio(nuevo, formatoPrecioCache) : '';
     mostrarToast(nuevo != null ? 'Precio actualizado' : 'Precio quitado');
   };
   inputPrecio.addEventListener('blur', guardarPrecio);
   inputPrecio.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') inputPrecio.blur();
   });
-  filaPrecio.append(inputPrecio);
-  info.append(botonNombre, filaPrecio);
-  filaSuperior.append(info);
-
-  const acciones = document.createElement('div');
-  acciones.className = 'tarjeta__acciones';
 
   const btnPublicar = document.createElement('button');
   btnPublicar.type = 'button';
-  btnPublicar.className = 'boton boton--primario';
+  btnPublicar.className = 'boton-icono';
   btnPublicar.setAttribute('data-accion', 'publicar');
-  btnPublicar.textContent = 'Publicar';
+  btnPublicar.setAttribute('aria-label', `Publicar ${producto.nombre}`);
+  btnPublicar.textContent = '📤';
   btnPublicar.addEventListener('click', () => abrirHojaRevision({ ids: [producto.id] }));
 
   const btnBorrar = document.createElement('button');
   btnBorrar.type = 'button';
-  btnBorrar.className = 'boton boton--fantasma';
+  btnBorrar.className = 'boton-icono';
   btnBorrar.setAttribute('data-accion', 'borrar');
-  btnBorrar.textContent = 'Borrar';
+  btnBorrar.setAttribute('aria-label', `Borrar ${producto.nombre}`);
+  btnBorrar.textContent = '🗑';
   btnBorrar.addEventListener('click', async () => {
     const ok = await pedirConfirmacion({
       titulo: 'Borrar producto',
@@ -259,15 +451,71 @@ async function tarjeta(producto, { navegar, recargar }) {
     if (!ok) return;
     await repo.borrarProducto(producto.id);
     mostrarToast('Producto borrado');
-    recargar();
+    ctx.recargar();
   });
 
-  acciones.append(btnPublicar, btnBorrar);
-  div.append(filaSuperior, acciones);
-  return div;
+  fila.append(checkbox, foto, nombre, inputPrecio, btnPublicar, btnBorrar);
+  return fila;
 }
 
-async function formatoActual() {
-  const config = await repo.obtenerPlantillaConfig();
-  return config.formatoPrecio;
+// --- Vista GRILLA: 3 columnas, solo foto cuadrada + nombre corto abajo + casilla superpuesta;
+// tocar abre edición. ---
+function grilla(productos, ctx) {
+  const cont = document.createElement('div');
+  cont.className = 'grilla-productos';
+  for (const producto of productos) cont.append(tarjetaGrilla(producto, ctx));
+  return cont;
+}
+
+function tarjetaGrilla(producto, ctx) {
+  const div = document.createElement('div');
+  div.className = 'grilla-item';
+  div.setAttribute('data-id', producto.id);
+  div.setAttribute('data-accion', 'editar');
+  div.setAttribute('role', 'button');
+  div.tabIndex = 0;
+  div.setAttribute('aria-label', `Editar ${producto.nombre}`);
+  const abrir = () => ctx.navegar(`#/producto/${producto.id}`);
+  div.addEventListener('click', (ev) => {
+    if (ev.target.closest('[data-accion="seleccionar"]')) return;
+    abrir();
+  });
+  div.addEventListener('keydown', (ev) => {
+    if ((ev.key === 'Enter' || ev.key === ' ') && !ev.target.closest('[data-accion="seleccionar"]')) {
+      ev.preventDefault();
+      abrir();
+    }
+  });
+
+  const url = ctx.fotoUrlPorId.get(producto.id);
+  let foto;
+  if (url) {
+    foto = document.createElement('img');
+    foto.className = 'grilla-item__foto';
+    foto.src = url;
+    foto.alt = '';
+    foto.loading = 'lazy';
+    foto.decoding = 'async';
+  } else {
+    foto = document.createElement('div');
+    foto.className = 'grilla-item__foto grilla-item__foto--vacia';
+    foto.setAttribute('aria-hidden', 'true');
+    foto.textContent = '📷';
+  }
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'grilla-item__seleccion';
+  checkbox.checked = !!producto.seleccionado;
+  checkbox.setAttribute('data-accion', 'seleccionar');
+  checkbox.setAttribute('aria-label', `Seleccionar ${producto.nombre} para publicar`);
+  checkbox.addEventListener('click', (ev) => ev.stopPropagation());
+  checkbox.addEventListener('change', () => ctx.onToggle(producto, checkbox.checked));
+
+  const nombre = document.createElement('div');
+  nombre.className = 'grilla-item__nombre';
+  nombre.textContent = producto.nombre;
+
+  div.append(foto, checkbox, nombre);
+  return div;
 }

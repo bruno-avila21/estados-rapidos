@@ -329,6 +329,20 @@ export function validarRespaldo(objeto) {
       return { ok: false, error: `Producto #${i + 1} con estilo de imagen inválido.` };
     if (p.seleccionado != null && typeof p.seleccionado !== 'boolean')
       return { ok: false, error: `Producto #${i + 1} con selección inválida.` };
+    // Campo agregado en la ronda "secciones": opcional, un respaldo viejo no lo trae y queda `[]`
+    // al importar (ver `repositorio.importarRespaldo`).
+    if (p.secciones != null && (!Array.isArray(p.secciones) || p.secciones.some((s) => typeof s !== 'string')))
+      return { ok: false, error: `Producto #${i + 1} con secciones inválidas.` };
+  }
+
+  // `secciones` (la colección, no la del producto): opcional por la misma razón.
+  if (objeto.secciones != null) {
+    if (!Array.isArray(objeto.secciones)) return { ok: false, error: 'Las secciones del respaldo son inválidas.' };
+    for (const [i, s] of objeto.secciones.entries()) {
+      if (!s || typeof s !== 'object') return { ok: false, error: `Sección #${i + 1} inválida.` };
+      if (typeof s.id !== 'string' || !s.id) return { ok: false, error: `Sección #${i + 1} sin id.` };
+      if (typeof s.nombre !== 'string' || !s.nombre.trim()) return { ok: false, error: `Sección #${i + 1} sin nombre.` };
+    }
   }
 
   if (objeto.general != null) {
@@ -358,7 +372,7 @@ export function validarRespaldo(objeto) {
 }
 
 /** Arma el objeto de respaldo (puro: recibe los datos ya leídos, no toca IndexedDB). */
-export function construirRespaldo({ productos, plantilla, general }) {
+export function construirRespaldo({ productos, plantilla, general, secciones }) {
   return {
     version: VERSION_RESPALDO,
     exportadoEn: new Date().toISOString(),
@@ -370,9 +384,13 @@ export function construirRespaldo({ productos, plantilla, general }) {
       fotoBase64: p.fotoBase64 ?? null,
       estilo: p.estilo ?? null,
       seleccionado: p.seleccionado ?? true,
+      secciones: seccionesDelProducto(p),
       creado: p.creado,
       actualizado: p.actualizado,
     })),
+    // Colección de secciones (etiquetas): un respaldo viejo no la trae, `importarRespaldo` la deja
+    // en `[]`. Va con `orden` para poder reconstruir el mismo orden al importar.
+    secciones: (secciones ?? []).map((s) => ({ id: s.id, nombre: s.nombre, orden: s.orden ?? 0 })),
     plantilla: plantilla
       ? {
           imagenBase64: plantilla.imagenBase64 ?? null,
@@ -394,4 +412,65 @@ export function construirRespaldo({ productos, plantilla, general }) {
 export function generarId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return `p_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// --- Secciones: etiquetas tipo "Lunes"/"Lencería", un producto puede estar en VARIAS (ronda
+// "secciones") ---
+
+/** Pseudo-id del grupo/filtro "Sin sección" (nunca se guarda: no es una sección real). */
+export const ID_SIN_SECCION = 'sin-seccion';
+
+/** Valida el nombre de una sección antes de crearla/renombrarla. */
+export function validarNombreSeccion(nombre) {
+  const limpio = String(nombre ?? '').trim();
+  if (!limpio) return { ok: false, error: 'Poné un nombre para la sección.' };
+  if (limpio.length > 40) return { ok: false, error: 'Máximo 40 caracteres.' };
+  return { ok: true, error: null };
+}
+
+/** Un producto normalizado siempre tiene `secciones` como array (respaldos/registros de antes de
+ * esta ronda no lo tienen: se completa con `[]`, nunca `undefined`). */
+export function seccionesDelProducto(producto) {
+  return Array.isArray(producto?.secciones) ? producto.secciones : [];
+}
+
+/**
+ * Agrupa `productos` por sección, en el ORDEN de `secciones` (ya ordenadas por quien llama), y
+ * agrega al final un grupo "Sin sección" con los que no tienen ninguna asignada. Un producto en 2+
+ * secciones aparece en cada grupo que le corresponde — es el MISMO objeto en los dos arrays (no una
+ * copia), así que su casilla queda sincronizada: cambiarla en un grupo cambia el mismo `producto`
+ * que se lee en el otro.
+ */
+export function agruparProductosPorSeccion(productos, secciones) {
+  const grupos = secciones.map((s) => ({ id: s.id, nombre: s.nombre, productos: [] }));
+  const porId = new Map(grupos.map((g) => [g.id, g]));
+  const sinSeccion = [];
+  for (const producto of productos) {
+    const ids = seccionesDelProducto(producto).filter((id) => porId.has(id));
+    if (ids.length === 0) {
+      sinSeccion.push(producto);
+    } else {
+      for (const id of ids) porId.get(id).productos.push(producto);
+    }
+  }
+  return [...grupos, { id: null, nombre: 'Sin sección', productos: sinSeccion }];
+}
+
+/** Cuenta productos por sección (+ total y "sin sección") para los chips del filtro. */
+export function contarProductosPorSeccion(productos, secciones) {
+  const porSeccion = new Map(secciones.map((s) => [s.id, 0]));
+  let sinSeccion = 0;
+  for (const producto of productos) {
+    const ids = seccionesDelProducto(producto).filter((id) => porSeccion.has(id));
+    if (ids.length === 0) sinSeccion += 1;
+    for (const id of ids) porSeccion.set(id, porSeccion.get(id) + 1);
+  }
+  return { todas: productos.length, porSeccion, sinSeccion };
+}
+
+/** Productos visibles según el filtro elegido ('todas', un id de sección, o `ID_SIN_SECCION`). */
+export function filtrarProductosPorSeccion(productos, filtro) {
+  if (!filtro || filtro === 'todas') return productos;
+  if (filtro === ID_SIN_SECCION) return productos.filter((p) => seccionesDelProducto(p).length === 0);
+  return productos.filter((p) => seccionesDelProducto(p).includes(filtro));
 }

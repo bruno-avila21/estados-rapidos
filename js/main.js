@@ -5,6 +5,7 @@
 import './utils/instalacion.js';
 import * as lista from './vistas/lista.js';
 import * as detalle from './vistas/detalle.js';
+import * as secciones from './vistas/secciones.js';
 import * as ajustes from './vistas/ajustes.js';
 import * as plantilla from './vistas/plantilla.js';
 import * as respaldo from './vistas/respaldo.js';
@@ -17,6 +18,8 @@ const navBotones = Array.from(document.querySelectorAll('.nav-inferior__item'));
 const RUTAS = [
   { patron: /^#\/$/, modulo: lista, titulo: 'Productos', ruta: '#/' },
   { patron: /^#\/producto\/(.+)$/, modulo: detalle, titulo: 'Producto', ruta: null },
+  // No está en la navegación principal: se llega desde el chip "⚙ Secciones" de Productos.
+  { patron: /^#\/secciones$/, modulo: secciones, titulo: 'Secciones', ruta: null },
   { patron: /^#\/ajustes$/, modulo: ajustes, titulo: 'Ajustes', ruta: '#/ajustes' },
   // "Plantilla" ya no está en la navegación principal: se llega desde Ajustes (botón "Abrir
   // editor de plantilla" o "Editar" de una tarjeta de estilo). `?estilo=` (ronda "ajustes por

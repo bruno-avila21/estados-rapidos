@@ -1,6 +1,10 @@
 // IndexedDB mínimo, sin dependencias. Todo el estado de la app vive acá (nada en el repo).
 const NOMBRE_DB = 'estados-rapidos';
-const VERSION_DB = 1;
+// v2: agrega el store 'secciones' (etiquetas tipo "Lunes"/"Lencería", un producto puede tener
+// varias — CREAR-BRIEF.md, ronda "secciones"). onupgradeneeded solo AGREGA lo que falta: instalar
+// esta versión encima de una v1 con productos cargados no toca 'productos'/'blobs'/'config' para
+// nada, los datos existentes quedan intactos.
+const VERSION_DB = 2;
 
 let promesaDb = null;
 
@@ -16,6 +20,10 @@ function abrir() {
       }
       if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('config')) db.createObjectStore('config', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('secciones')) {
+        const store = db.createObjectStore('secciones', { keyPath: 'id' });
+        store.createIndex('orden', 'orden');
+      }
     };
     solicitud.onsuccess = () => resolve(solicitud.result);
     solicitud.onerror = () => reject(solicitud.error);

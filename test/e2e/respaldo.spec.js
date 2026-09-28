@@ -43,7 +43,7 @@ test('exportar, borrar todo, importar: los productos vuelven', async ({ page }) 
 
   await expect(page.locator('[data-accion="editar"]', { hasText: 'Mochila urbana' })).toBeVisible();
   await expect(page.locator('[data-accion="precio"]').first()).toHaveValue('$ 28.000');
-  await expect(page.locator('.tarjeta__foto')).toBeVisible();
+  await expect(page.locator('.fila-compacta__foto')).toBeVisible();
 
   fs.rmSync(rutaRespaldo, { force: true });
 });

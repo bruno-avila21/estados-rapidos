@@ -1114,3 +1114,278 @@ details.grupo > .campo {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- Secciones (etiquetas, ronda "secciones") ---------- */
+
+/* Chip genérico: filtro de Productos, chips de sección en el alta/edición, botón "Secciones". */
+.chip {
+  flex-shrink: 0;
+  min-height: var(--toque-min);
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-borde);
+  background: var(--color-superficie);
+  color: var(--color-texto);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease), color var(--duracion) var(--ease);
+}
+.chip:hover {
+  border-color: var(--color-acento);
+}
+.chip:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.chip:active {
+  transform: scale(0.97);
+}
+.chip--activo {
+  background: var(--color-primario);
+  border-color: var(--color-primario);
+  color: var(--color-primario-texto);
+}
+.chip--fantasma {
+  background: transparent;
+  border-style: dashed;
+  color: var(--color-texto-tenue);
+}
+
+/* Fila de filtro por sección: SCROLL HORIZONTAL PROPIO (no de la página) — el `.vista` general no
+   se mueve, solo esta fila. `overscroll-behavior-x` evita que el gesto se "escape" hacia atrás. */
+.filtro-secciones {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 2px 10px;
+  margin: 0 -2px;
+  scrollbar-width: none;
+}
+.filtro-secciones::-webkit-scrollbar {
+  display: none;
+}
+
+.chips-secciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* A diferencia de `.filtro-secciones` (scroll horizontal propio, donde nowrap es correcto), acá el
+   wrap tiene que poder pasar DENTRO de un chip largo — si no, un nombre de sección largo + letra
+   grande del sistema se pasa del viewport igual que una fila sin flex-wrap (BUGS.md #42). */
+.chips-secciones .chip {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  text-align: center;
+}
+
+.conmutador-vista {
+  padding-bottom: 4px;
+}
+
+.boton-publicar-seccion {
+  margin-top: 8px;
+}
+
+/* Gestión de secciones (#/secciones) */
+.lista-secciones {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fila-seccion {
+  align-items: center;
+}
+.fila-seccion__nombre {
+  flex: 1;
+  min-width: 120px;
+  min-height: var(--toque-min);
+  background: var(--color-superficie-alta);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-chico);
+  color: var(--color-texto);
+  padding: 0 10px;
+  font-size: var(--tamano-16);
+}
+.fila-seccion__nombre:focus-visible {
+  outline: none;
+  border-color: var(--color-acento);
+}
+
+/* Botón cuadrado de ícono (subir/bajar sección, publicar de una fila compacta): >= 44px táctil. */
+.boton-icono {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--color-borde);
+  background: var(--color-superficie);
+  color: var(--color-texto);
+  font-size: var(--tamano-16);
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
+}
+.boton-icono:hover:not(:disabled) {
+  border-color: var(--color-acento);
+}
+.boton-icono:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.boton-icono:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.boton-icono:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Encabezados plegables de la vista "Todas" (details.grupo-seccion reusa details.grupo). */
+details.grupo-seccion > summary.grupo__titulo {
+  font-weight: 600;
+}
+details.grupo-seccion > .lista-compacta,
+details.grupo-seccion > .grilla-productos {
+  padding: 0 4px 10px;
+}
+
+/* ---------- Vista LISTA COMPACTA (Productos): una fila por producto, ~8-10 por pantalla ---------- */
+.lista-compacta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+}
+.fila-compacta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap; /* letra grande del sistema (bug #42, skill crear-apk): envuelve en vez de
+    desbordar el viewport, mismo criterio que `.fila` (BUGS.md #35) */
+  gap: 8px;
+  padding: 4px;
+  border-radius: var(--radio-chico);
+  min-height: 56px;
+}
+.fila-compacta:hover {
+  background: var(--color-superficie);
+}
+.fila-compacta__seleccion {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin: -6px;
+  accent-color: var(--color-primario);
+  cursor: pointer;
+}
+.fila-compacta__foto {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radio-chico);
+  object-fit: cover;
+  background: var(--color-superficie-alta);
+}
+.fila-compacta__foto--vacia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-texto-tenue);
+  font-size: var(--tamano-20);
+}
+.fila-compacta__nombre {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--color-texto);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  min-height: 44px;
+  cursor: pointer;
+}
+.fila-compacta__nombre:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+  border-radius: var(--radio-chico);
+}
+.fila-compacta__precio {
+  flex-shrink: 0;
+  width: 84px;
+  min-height: 40px;
+  font-family: var(--font-datos);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--tamano-14);
+  background: var(--color-superficie-alta);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-chico);
+  color: var(--color-texto);
+  padding: 0 6px;
+}
+.fila-compacta__precio:focus-visible {
+  outline: none;
+  border-color: var(--color-acento);
+}
+
+/* ---------- Vista GRILLA (Productos): 3 columnas, foto cuadrada + nombre + casilla superpuesta ---------- */
+.grilla-productos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 8px;
+}
+.grilla-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  border-radius: var(--radio-chico);
+}
+.grilla-item:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.grilla-item__foto {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radio-chico);
+  object-fit: cover;
+  background: var(--color-superficie-alta);
+}
+.grilla-item__foto--vacia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-texto-tenue);
+  font-size: var(--tamano-28);
+}
+.grilla-item__seleccion {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 26px;
+  height: 26px;
+  /* objetivo táctil real >= 44px aunque el control se vea chico: el padding invisible lo cubre */
+  padding: 9px;
+  margin: -9px;
+  accent-color: var(--color-primario);
+  cursor: pointer;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+}
+.grilla-item__nombre {
+  font-size: var(--tamano-12);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-texto);
+}

@@ -51,15 +51,34 @@ async function medirDesborde(page) {
   return page.evaluate(() => {
     const doc = document.documentElement;
     const culpables = [];
+    // Contenedores con scroll horizontal PROPIO a propósito (carrusel de la hoja de revisión,
+    // filtro de secciones con chips) — sus hijos SE SUPONE que sobresalen del viewport, eso es
+    // justamente lo que el scroll resuelve: no son desbordes, así que ni ellos ni su contenido
+    // cuentan acá (ronda "secciones", BUGS.md #40).
+    function dentroDeScrollHorizontalPropio(el) {
+      let nodo = el;
+      while (nodo && nodo !== document.body) {
+        const estilo = getComputedStyle(nodo);
+        if ((estilo.overflowX === 'auto' || estilo.overflowX === 'scroll') && nodo.scrollWidth > nodo.clientWidth + 1) {
+          return true;
+        }
+        nodo = nodo.parentElement;
+      }
+      return false;
+    }
     document.querySelectorAll('body *').forEach((el) => {
       const rect = el.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) return; // elementos ocultos/sin layout
       if (rect.right > innerWidth + 1 || rect.left < -1) {
+        if (dentroDeScrollHorizontalPropio(el)) return;
         let clase = '';
         if (el.className && typeof el.className === 'string') clase = '.' + el.className.trim().split(/\s+/).join('.');
         culpables.push(`${el.tagName}${el.id ? '#' + el.id : ''}${clase} right=${Math.round(rect.right)} left=${Math.round(rect.left)} "${(el.textContent || '').trim().slice(0, 40)}"`);
       }
     });
+    // El `scrollWidth` del documento SÍ tiene que seguir dando bien: un scroll horizontal propio
+    // (con overflow-x:auto EN SU PROPIO contenedor, no en `body`/`html`) no mueve el ancho de la
+    // página entera — si lo hiciera, ahí sí habría un desborde real.
     return { scrollOverflow: doc.scrollWidth > innerWidth + 1, culpables };
   });
 }
@@ -77,7 +96,7 @@ const ESCALAS_FUENTE = [130, 160]; // % — simula textZoom del sistema (font_sc
 for (const ancho of ANCHOS) {
   for (const escala of ESCALAS_FUENTE) {
     test(`sin desborde horizontal a ${ancho}px con fuente al ${escala}%`, async ({ page }) => {
-      test.setTimeout(60_000);
+      test.setTimeout(90_000);
       // height 1400 y no 800: con la barra + capas del editor de plantilla, el elemento
       // "nombre" del lienzo cae cerca de y=746 — un drag de +60px con altura 800 empuja el
       // puntero AFUERA del viewport (nunca llega a soltar sobre el lienzo) y el gesto no se
@@ -86,6 +105,19 @@ for (const ancho of ANCHOS) {
       // de sobra para que el gesto de personalizarEstiloFotoPrecio() se pueda completar.
       await page.setViewportSize({ width: ancho, height: 1400 });
       await page.goto('/');
+
+      // Secciones (ronda "secciones"): nombres largos a propósito, es lo que más chance tiene de
+      // desbordar la fila de chips con scroll horizontal propio y el panel de gestión (se revisa
+      // más abajo, ya con la letra grande puesta).
+      await page.goto('/#/secciones');
+      for (const nombre of ['Lunes para publicar', 'Electrodomésticos de línea blanca']) {
+        await page.locator('input[aria-label="Nombre de la nueva sección"]').fill(nombre);
+        await page.locator('[data-accion="crear-seccion"]').click();
+        // Esperar la fila nueva ANTES de tipear la siguiente: `recargar()` reconstruye todo el
+        // formulario (input incluido) de forma async — sin esto, el segundo fill() puede escribir
+        // en un input que está a punto de desaparecer y la 2ª sección nunca se crea (BUGS.md #41).
+        await expect(page.locator(`input[aria-label="Nombre de la sección ${nombre}"]`)).toBeVisible();
+      }
 
       await crearProducto(page, { nombre: 'Remera básica algodón', precio: 8500 });
       await crearProducto(page, {
@@ -104,7 +136,7 @@ for (const ancho of ANCHOS) {
       await page.goto('/#/');
       await esperarSinDesborde(page, 'Productos (lista)');
 
-      await page.locator('.tarjeta__seleccion').first().click();
+      await page.locator('.fila-compacta__seleccion').first().click();
       await esperarSinDesborde(page, 'Productos (con selección / barra Publicar)');
 
       await page.goto('/#/producto/nuevo');
@@ -119,6 +151,11 @@ for (const ancho of ANCHOS) {
       });
       await page.goto(`/#/producto/${idLargo}`);
       await esperarSinDesborde(page, 'Edición (nombre largo)');
+      // Chips de sección con las 2 ACTIVAS (más anchas/en negrita que sin marcar): asignar este
+      // producto a ambas y volver a medir es lo que más chance tiene de desbordar la fila.
+      await page.locator('[data-accion="toggle-seccion"]').first().click();
+      await page.locator('[data-accion="toggle-seccion"]').nth(1).click();
+      await esperarSinDesborde(page, 'Edición (chips de sección marcados)');
 
       await page.locator('[data-accion="borrar"]').click();
       await expect(page.locator('.dialogo')).toBeVisible();
@@ -138,7 +175,30 @@ for (const ancho of ANCHOS) {
       await page.goto('/#/respaldo');
       await esperarSinDesborde(page, 'Respaldo');
 
+      await page.goto('/#/secciones');
+      await esperarSinDesborde(page, 'Gestión de secciones');
+
       await page.goto('/#/');
+      // Filtro por sección (chips con scroll horizontal propio) + "Publicar esta sección (N)".
+      await page.locator('[data-accion="filtro-seccion"]', { hasText: 'Lunes para publicar' }).click();
+      await esperarSinDesborde(page, 'Productos (filtro por sección)');
+      await expect(page.locator('[data-accion="publicar-seccion"]')).toBeVisible();
+
+      // Vista GRILLA (3 columnas): conmuta y mide de nuevo, todavía con el filtro activo.
+      await page.locator('[data-accion="vista-grilla"]').click();
+      await esperarSinDesborde(page, 'Productos (grilla, filtrado)');
+
+      // Volver a "Todas" + lista compacta para el resto del flujo (agrupado por sección).
+      await page.locator('[data-accion="filtro-seccion"]', { hasText: 'Todas' }).click();
+      await esperarSinDesborde(page, 'Productos (Todas, agrupado por sección, grilla)');
+      await page.locator('[data-accion="vista-compacta"]').click();
+      await esperarSinDesborde(page, 'Productos (Todas, agrupado por sección, compacta)');
+
+      // Plegar/desplegar un grupo: el summary con el contador es otro candidato a desborde.
+      await page.locator('details.grupo-seccion summary').first().click();
+      await esperarSinDesborde(page, 'Productos (grupo plegado)');
+      await page.locator('details.grupo-seccion summary').first().click();
+
       await page.locator('[data-accion="publicar-seleccionados"]').click();
       await expect(page.locator('.hoja-revision')).toBeVisible();
       await esperarSinDesborde(page, 'Hoja de revisión');

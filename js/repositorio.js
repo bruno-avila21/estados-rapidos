@@ -14,13 +14,20 @@ import {
 import { achicarFoto, blobABase64, base64ABlob } from './utils/imagen.js';
 import { generarPlantillaPorDefecto } from './plantilla-defecto.js';
 
+// Un producto guardado antes de la ronda "secciones" no tiene el campo `secciones`: se normaliza
+// acá (única puerta de lectura) para que el resto de la app nunca vea `undefined`.
+function normalizarProductoLeido(producto) {
+  return { ...producto, secciones: Array.isArray(producto.secciones) ? producto.secciones : [] };
+}
+
 export async function listarProductos() {
   const productos = await db.obtenerTodos('productos');
-  return productos.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+  return productos.map(normalizarProductoLeido).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
 }
 
 export async function obtenerProducto(id) {
-  return await db.obtener('productos', id);
+  const producto = await db.obtener('productos', id);
+  return producto ? normalizarProductoLeido(producto) : null;
 }
 
 export async function guardarProducto(datos, archivoFoto) {
@@ -46,6 +53,9 @@ export async function guardarProducto(datos, archivoFoto) {
     estilo: 'estilo' in datos ? datos.estilo : (existente?.estilo ?? null),
     // los productos nuevos arrancan marcados: lo más común es querer publicarlos (CREAR-BRIEF.md).
     seleccionado: existente?.seleccionado ?? true,
+    // 'secciones' in datos: igual criterio que 'estilo' — un array vacío explícito ("saqué todas
+    // las secciones") tiene que pisar lo existente, no perderse con `??` (ronda "secciones").
+    secciones: 'secciones' in datos ? [...new Set(datos.secciones || [])] : (existente?.secciones ?? []),
     orden: existente?.orden ?? (await siguienteOrden()),
     creado: existente?.creado ?? ahora,
     actualizado: ahora,
@@ -63,14 +73,102 @@ export async function actualizarSeleccion(id, seleccionado) {
   return producto;
 }
 
-/** Marca o desmarca TODOS los productos de una vez ("Marcar todos" / "Desmarcar"). */
-export async function marcarTodos(seleccionado) {
+/** Marca o desmarca TODOS los productos de una vez ("Marcar todos" / "Desmarcar"). Con `idsFiltro`
+ * (filtro de sección activo en la lista) marca solo esos — "Marcar todos" dentro de una sección
+ * marca solo los de esa sección, ronda "secciones". */
+export async function marcarTodos(seleccionado, idsFiltro) {
   const productos = await listarProductos();
-  for (const producto of productos) {
+  const objetivo = idsFiltro ? productos.filter((p) => idsFiltro.includes(p.id)) : productos;
+  for (const producto of objetivo) {
     producto.seleccionado = !!seleccionado;
     await db.guardar('productos', producto);
   }
-  return productos;
+  return objetivo;
+}
+
+// --- Secciones: etiquetas (colección `secciones` + `producto.secciones: [ids]`, ronda "secciones") ---
+
+export async function listarSecciones() {
+  const secciones = await db.obtenerTodos('secciones');
+  return secciones.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+}
+
+export async function crearSeccion(nombre) {
+  const secciones = await listarSecciones();
+  const seccion = {
+    id: generarId(),
+    nombre: String(nombre || '').trim(),
+    orden: secciones.length ? Math.max(...secciones.map((s) => s.orden ?? 0)) + 1 : 0,
+  };
+  await db.guardar('secciones', seccion);
+  return seccion;
+}
+
+export async function renombrarSeccion(id, nombre) {
+  const seccion = await db.obtener('secciones', id);
+  if (!seccion) return null;
+  seccion.nombre = String(nombre || '').trim();
+  await db.guardar('secciones', seccion);
+  return seccion;
+}
+
+/** Sube o baja una sección un lugar (sin drag obligatorio, CREAR-BRIEF.md): intercambia su `orden`
+ * con el vecino inmediato. */
+export async function reordenarSeccion(id, direccion) {
+  const secciones = await listarSecciones();
+  const i = secciones.findIndex((s) => s.id === id);
+  if (i === -1) return secciones;
+  const j = direccion === 'subir' ? i - 1 : i + 1;
+  if (j < 0 || j >= secciones.length) return secciones;
+  const a = secciones[i];
+  const b = secciones[j];
+  const ordenA = a.orden ?? 0;
+  a.orden = b.orden ?? 0;
+  b.orden = ordenA;
+  await db.guardar('secciones', a);
+  await db.guardar('secciones', b);
+  return await listarSecciones();
+}
+
+/** Borrar una sección NO borra productos: solo los desasigna (quita su id de `producto.secciones`).
+ * La confirmación la pide quien llama (pantalla de gestión). */
+export async function borrarSeccion(id) {
+  await db.borrar('secciones', id);
+  const productos = await listarProductos();
+  for (const producto of productos) {
+    if (producto.secciones.includes(id)) {
+      producto.secciones = producto.secciones.filter((s) => s !== id);
+      await db.guardar('productos', producto);
+    }
+  }
+}
+
+/** Asigna el juego completo de secciones de un producto (reemplaza, no suma). */
+export async function asignarSecciones(productoId, secciones) {
+  const producto = await db.obtener('productos', productoId);
+  if (!producto) return null;
+  producto.secciones = [...new Set(Array.isArray(secciones) ? secciones : [])];
+  await db.guardar('productos', producto);
+  return normalizarProductoLeido(producto);
+}
+
+// --- Preferencias de la lista de Productos: filtro de sección, vista compacta/grilla y qué grupos
+// quedaron plegados — todo recordado entre visitas (ronda "secciones"). ---
+export async function obtenerPreferenciasLista() {
+  const guardado = await db.obtener('config', 'listaPrefs');
+  return {
+    id: 'listaPrefs',
+    filtroSeccion: guardado?.filtroSeccion ?? 'todas',
+    vista: guardado?.vista === 'grilla' ? 'grilla' : 'compacta',
+    gruposPlegados: guardado?.gruposPlegados ?? {},
+  };
+}
+
+export async function guardarPreferenciasLista(parcial) {
+  const actual = await obtenerPreferenciasLista();
+  const nuevo = { ...actual, ...parcial };
+  await db.guardar('config', nuevo);
+  return nuevo;
 }
 
 async function siguienteOrden() {
@@ -78,11 +176,12 @@ async function siguienteOrden() {
   return productos.length ? Math.max(...productos.map((p) => p.orden ?? 0)) + 1 : 0;
 }
 
-/** Borra TODO (productos, fotos y plantilla). Irreversible: quien llama ya pidió confirmación. */
+/** Borra TODO (productos, fotos, plantilla y secciones). Irreversible: quien llama ya pidió confirmación. */
 export async function borrarTodo() {
   await db.vaciar('productos');
   await db.vaciar('blobs');
   await db.vaciar('config');
+  await db.vaciar('secciones');
 }
 
 export async function actualizarPrecio(id, precio) {
@@ -220,6 +319,7 @@ export async function exportarRespaldo() {
     ? await blobABase64((await db.obtener('blobs', config.imagenId)).blob)
     : null;
   const general = await obtenerAjustesGenerales();
+  const secciones = await listarSecciones();
 
   return construirRespaldo({
     productos: productosConFoto,
@@ -230,6 +330,7 @@ export async function exportarRespaldo() {
       encuadreFoto: general.encuadreFoto,
       incluirTextoAlCompartir: general.incluirTextoAlCompartir,
     },
+    secciones,
   });
 }
 
@@ -238,6 +339,15 @@ export async function importarRespaldo(respaldo) {
   await db.vaciar('productos');
   await db.vaciar('blobs');
   await db.vaciar('config');
+  await db.vaciar('secciones');
+
+  // Colección de secciones: un respaldo de antes de la ronda "secciones" no la trae — queda `[]`
+  // (nada que migrar: ninguna sección existía, así que ningún producto puede tener una asignada).
+  const idsSeccionesValidos = new Set();
+  for (const s of respaldo.secciones ?? []) {
+    await db.guardar('secciones', { id: s.id, nombre: s.nombre, orden: s.orden ?? 0 });
+    idsSeccionesValidos.add(s.id);
+  }
 
   for (const [i, p] of respaldo.productos.entries()) {
     let fotoId = null;
@@ -253,6 +363,9 @@ export async function importarRespaldo(respaldo) {
       fotoId,
       estilo: p.estilo ?? null,
       seleccionado: p.seleccionado ?? true,
+      // solo secciones que existen en la colección importada (una lista vieja o corrupta con ids
+      // huérfanos no deja "fantasmas" que no se puedan ver ni desasignar desde ningún lado).
+      secciones: Array.isArray(p.secciones) ? p.secciones.filter((id) => idsSeccionesValidos.has(id)) : [],
       orden: i,
       creado: p.creado ?? new Date().toISOString(),
       actualizado: p.actualizado ?? new Date().toISOString(),

@@ -75,3 +75,47 @@ test('validarRespaldo: un respaldo viejo (ajustes compartido, sin ajustesPorEsti
   respaldo.plantilla.ajustes = { nombre: { x: 10, y: 20, w: 100, h: 40 } }; // formato de antes de 2026-09-28
   assert.equal(validarRespaldo(respaldo).ok, true);
 });
+
+// --- Secciones en el respaldo (ronda "secciones", 2026-09-28) ---
+
+test('construirRespaldo: incluye la colección de secciones y `secciones` por producto', () => {
+  const secciones = [{ id: 's1', nombre: 'Lunes', orden: 0 }];
+  const productos = [{ id: 'p1', nombre: 'Gorra', precio: 1000, secciones: ['s1'], creado: 'a', actualizado: 'a' }];
+  const respaldo = construirRespaldo({ productos, secciones });
+  assert.deepEqual(respaldo.secciones, [{ id: 's1', nombre: 'Lunes', orden: 0 }]);
+  assert.deepEqual(respaldo.productos[0].secciones, ['s1']);
+  assert.equal(validarRespaldo(respaldo).ok, true);
+});
+
+test('construirRespaldo: sin secciones, la colección queda vacía y cada producto con `secciones: []`', () => {
+  const productos = [{ id: 'p1', nombre: 'Gorra', precio: 1000, creado: 'a', actualizado: 'a' }];
+  const respaldo = construirRespaldo({ productos });
+  assert.deepEqual(respaldo.secciones, []);
+  assert.deepEqual(respaldo.productos[0].secciones, []);
+  assert.equal(validarRespaldo(respaldo).ok, true);
+});
+
+test('validarRespaldo: un respaldo VIEJO (de antes de la ronda "secciones", sin el campo) sigue siendo válido', () => {
+  const respaldo = construirRespaldo({ productos: [{ id: 'p1', nombre: 'Gorra', precio: 1000, creado: 'a', actualizado: 'a' }] });
+  delete respaldo.secciones;
+  delete respaldo.productos[0].secciones;
+  assert.equal(validarRespaldo(respaldo).ok, true);
+});
+
+test('validarRespaldo: rechaza `secciones` que no sea un array', () => {
+  const respaldo = construirRespaldo({ productos: [] });
+  respaldo.secciones = 'no-es-array';
+  assert.equal(validarRespaldo(respaldo).ok, false);
+});
+
+test('validarRespaldo: rechaza una sección sin id o sin nombre', () => {
+  const base = construirRespaldo({ productos: [] });
+  assert.equal(validarRespaldo({ ...base, secciones: [{ nombre: 'Lunes' }] }).ok, false);
+  assert.equal(validarRespaldo({ ...base, secciones: [{ id: 's1', nombre: '' }] }).ok, false);
+});
+
+test('validarRespaldo: rechaza `secciones` de un producto que no sea un array de strings', () => {
+  const productos = [{ id: 'p1', nombre: 'Gorra', precio: 1000, secciones: [123] }];
+  const respaldo = construirRespaldo({ productos });
+  assert.equal(validarRespaldo(respaldo).ok, false);
+});

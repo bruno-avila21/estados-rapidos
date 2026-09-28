@@ -350,3 +350,105 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `css/estilos.css` — `.fila` con `flex-wrap: wrap`. Es una clase genérica de "fila de controles", así que el arreglo cubre las 8 filas del proyecto de una sola vez (peso/alineación del editor, encuadre de foto y "La app" de Ajustes, acciones de detalle, incluir-texto de la hoja de revisión) sin tocar cada una.
 - **Resuelto:** sí — confirmado con el mismo test en las 6 combinaciones de ancho/escala, 0 desbordes.
 - ¿Se repetiría en otro proyecto? Sí — cualquier `display: flex` de una fila de botones/controles sin `flex-wrap` es candidato al mismo bug con `font_scale` alto; ya está cubierto por el punto general de bug #42 en la skill `crear-apk` (medir con `font_scale` 1.3/1.6), no amerita fila aparte ahí.
+
+### 36. `secciones.spec.js` (ronda "secciones"): `hasText` sobre `.fila-seccion` nunca encuentra el nombre de la sección
+- **Paso:** primera corrida de `test/e2e/secciones.spec.js` recien escrito -- 6 de 8 tests fallan ya en el helper `crearSeccion()`, incluso habiendo creado la seccion con exito (toast "Seccion creada" visible).
+- **Error exacto:**
+  ```
+  Error: expect(locator).toBeVisible() failed
+  Locator: locator('.fila-seccion').filter({ hasText: 'Lunes' })
+  Expected: visible
+  Timeout: 5000ms
+  Error: element(s) not found
+  ```
+  El snapshot de accesibilidad del error confirma que la fila SI esta: `textbox "Nombre de la seccion Lunes": Lunes`.
+- **Reproducir:** `test/e2e/secciones.spec.js`, `crearSeccion()` -- `page.locator('.fila-seccion', { hasText: nombre })`.
+- **Causa:** no es un bug de la app -- es el test. `js/vistas/secciones.js` (`filaSeccion()`) muestra el nombre en un `<input type="text">` editable (para poder renombrar inline), y el `value` de un input **no forma parte del `textContent`** del elemento: `hasText` de Playwright matchea contra texto renderizado (accesible), no contra `value`. `.fila-seccion` solo tiene como texto real los botones "up"/"down"/"Borrar" -- nunca el nombre.
+- **Arreglo:** `test/e2e/secciones.spec.js` -- cambiar todos los `page.locator('.fila-seccion', { hasText: nombre })` por filtrar el contenedor con `.filter({ has: page.getByLabel(...) })` apuntando al input por su `aria-label` (`Nombre de la seccion ${nombre}`, unico y estable).
+- **Resuelto:** si -- confirmado corriendo `secciones.spec.js` completo despues del cambio: 8/8 verdes.
+- Se repetiria en otro proyecto? Si -- cualquier fila con un campo editable inline (nombre-como-input, no como texto) es candidata a este mismo error de test si alguien usa `hasText` sobre el contenedor en vez de apuntar al campo por su rol/label. Nota para la receta compartida de E2E (`~/.claude/crear-kit/recetas/e2e.md`): con inputs editables, localizar por `aria-label`/`getByRole('textbox', {name})`, nunca por `hasText` del contenedor.
+
+### 37. `secciones.spec.js`: `crearProducto()` asume UN solo `[data-accion="editar"]` por nombre, pero un producto en 2 secciones aparece 2 veces
+- **Paso:** test "un producto en 2 secciones aparece en ambos grupos con la MISMA casilla sincronizada" -- falla al crear "Conjunto" (asignado a Lunes + Lencería), no al crear productos de 1 sola seccion.
+- **Error exacto:**
+  ```
+  Error: strict mode violation: locator('[data-accion="editar"]').filter({ hasText: 'Conjunto' }) resolved to 2 elements
+  ```
+- **Reproducir:** `crearProducto()` con `secciones: ['Lunes', 'Lenceria']` -- la vista "Todas" (agrupada) dibuja a "Conjunto" una vez por CADA grupo al que pertenece (comportamiento correcto del feature, ver `agruparProductosPorSeccion`), asi que su boton `[data-accion="editar"]` aparece 2 veces en el DOM.
+- **Causa:** no es un bug de la app -- el helper generico `crearProducto()` (copiado de otros specs que nunca tienen productos multi-seccion) asumia unicidad con un `expect(locator).toBeVisible()` sin desambiguar.
+- **Arreglo:** `test/e2e/secciones.spec.js` -- `.first()` en esa aserción, mismo criterio que `overflow-fuente-grande.spec.js` ya usa (`.last()`) para el caso analogo de 2+ tarjetas con el mismo `data-accion`.
+- **Resuelto:** si.
+- Se repetiria en otro proyecto? Si -- cualquier helper de test que asuma "1 nombre = 1 elemento en el DOM" se rompe apenas la UI puede repetir el mismo dato en mas de un lugar (agrupados, tabs, vistas duplicadas). Ya cubierto en espiritu por la convencion `.first()`/`.last()` que el proyecto ya usa; no amerita nota aparte en la receta compartida.
+
+### 38. `secciones.spec.js`: reload justo despues de plegar un grupo puede ganarle a la escritura async de la preferencia
+- **Paso:** test "plegar un grupo de 'Todas' se recuerda entre visitas" -- falla de forma intermitente (paso, corrio bien en la corrida siguiente sin tocar código).
+- **Error exacto:**
+  ```
+  Error: expect(locator).toHaveJSProperty(expected) failed
+  Expected: false
+  Received: true
+  ```
+  (despues de `page.reload()`, el grupo "Lunes" seguia abierto pese a haberse plegado antes del reload).
+- **Reproducir:** `js/vistas/lista.js`, el listener `detalle.addEventListener('toggle', () => { repo.guardarPreferenciasLista(...) })` no se espera (no hay ningun await entre el toggle y lo que sigue) -- si el test (o el usuario) recarga la pagina INMEDIATAMENTE despues de plegar, la escritura a IndexedDB puede no haber terminado todavia y se pierde, igual que BUGS.md #12/#34 (accion async sin esperar antes de navegar/recargar).
+- **Causa:** el test no esperaba ninguna confirmación (visible o de datos) de que la escritura terminó antes de `page.reload()` -- a diferencia de `revision.spec.js`, acá no hay ningún toast (plegar/desplegar es silencioso a propósito, no amerita interrumpir con un aviso).
+- **Arreglo:** `test/e2e/secciones.spec.js` -- antes del `reload()`, `page.waitForFunction()` releyendo `repo.obtenerPreferenciasLista()` hasta ver el grupo marcado como plegado, en vez de confiar en que el toggle visual ya implica que la escritura async terminó.
+- **Resuelto:** si -- corrida repetida 3 veces seguidas sin flakiness después del cambio.
+- Se repetiria en otro proyecto? Si -- cualquier preferencia que se guarda "en silencio" (sin toast) al reaccionar a un evento del DOM (`toggle`, `change`) es candidata al mismo timing si un test recarga inmediatamente después; cuando no hay señal visible, esperar el dato mismo (releer el store) en vez de un elemento de UI. Nota para la receta compartida de E2E si se repite en otro proyecto.
+
+### 39. `sw.spec.js` y `revision.spec.js` (2 tests) fallan en esta máquina INDEPENDIENTEMENTE de la ronda "secciones"
+- **Paso:** corrida completa de `npm run test:e2e` después de implementar secciones — 11 fallos totales; investigando cada uno, 2 no tienen relación con `lista.js`/`secciones.js`.
+- **Error exacto:** `sw.spec.js` → `page.goto: net::ERR_FAILED at http://127.0.0.1:8991/` con `page.route('**/*', route.abort())` activo (los 3 intentos, incluidos los retries). `revision.spec.js` ("el selector de estilo de la hoja regenera las imágenes") → `expect(segundaImagen).not.toBe(primeraImagen)` sale igual.
+- **Reproducir:** `git stash` (vuelve al commit `e5d5898`, ANTES de esta ronda) + `npx playwright test sw.spec.js revision.spec.js` → los mismos 2 fallan igual, 0 relación con el código de esta ronda.
+- **Causa:** pendiente de investigar — no se tocó nada de `sw.js`/`revision.js` en la ronda "secciones", así que no corresponde diagnosticarlo ni arreglarlo acá (fuera de alcance del pedido). Puede ser un problema de esta máquina/versión de Chromium instalada, no necesariamente del código.
+- **Arreglo:** ninguno en esta ronda — queda anotado para no confundirlo con una regresión de "secciones" en una corrida futura de `npm run test:e2e`.
+- **Resuelto:** no (fuera de alcance).
+- ¿Se repetiría en otro proyecto? No aplica todavía — falta diagnóstico.
+
+### 40. `overflow-fuente-grande.spec.js`: el filtro de secciones (scroll horizontal PROPIO) se detectaba como desborde
+- **Paso:** corrida completa de la matriz 320/360/412 x 130%/160% después de sumarle las pantallas de "secciones" -- 6 de 6 combinaciones fallan en "Productos (con selección / barra Publicar)".
+- **Error exacto:**
+  ```
+  Error: Productos (con selección / barra Publicar): scrollOverflow=false
+  BUTTON.chip right=428 left=152 "Lunes para publicar (0)"
+  BUTTON.chip right=624 left=436 "Sin sección (3)"
+  BUTTON.chip.chip--fantasma right=798 left=632 "⚙ Secciones"
+  ```
+- **Reproducir:** `.filtro-secciones` (`css/estilos.css`) es a propósito una fila con `overflow-x: auto` -- "SCROLL HORIZONTAL PROPIO (no de la página)" pedido en el brief. Con nombres de sección largos, sus chips sobresalen del viewport DE MANERA INTENCIONAL (para eso existe el scroll): `medirDesborde()` mide `getBoundingClientRect()` de cada elemento sin distinguir "se pasa del viewport porque hay un bug" de "se pasa del viewport porque su contenedor lo scrollea a propósito".
+- **Causa:** no es un bug de la app -- el detector genérico del spec no tenía en cuenta contenedores con scroll horizontal propio (ya existía uno, `.hoja-revision__carrusel`, pero nunca había tenido contenido suficiente para disparar el falso positivo).
+- **Arreglo:** `test/e2e/overflow-fuente-grande.spec.js`, `medirDesborde()` -- un elemento cuenta como desborde solo si NINGÚN ancestro (hasta `body`) tiene `overflow-x: auto/scroll` con `scrollWidth > clientWidth` (scroll real, no solo declarado). El chequeo de `document.documentElement.scrollWidth` (el desborde de LA PÁGINA, no de un contenedor) se mantiene sin cambios: un scroll horizontal propio bien encapsulado nunca debería mover ese número.
+- **Resuelto:** sí -- las 6 combinaciones vuelven a dar 0 desbordes con nombres de sección largos.
+- ¿Se repetiría en otro proyecto? Sí -- cualquier spec de "sin desborde horizontal" que mida `getBoundingClientRect()` de todos los elementos (necesario cuando hay `overflow-x: clip/hidden`, ver bug #42 de la skill `crear-apk`) tiene que excluir los contenedores con scroll horizontal PROPIO, o cualquier carrusel/fila de chips real dispara un falso positivo apenas su contenido es más ancho que la pantalla. Nota para la receta compartida de E2E (`~/.claude/crear-kit/recetas/e2e.md`).
+
+### 41. `overflow-fuente-grande.spec.js`: crear 2 secciones seguidas sin esperar el re-render pierde la segunda
+- **Paso:** matriz completa (320/360/412 x 130%/160%) -- 6 de 6 fallan con timeout en `[data-accion="toggle-seccion"]').nth(1)` al editar el producto "Campera...": solo existía 1 chip de sección, no 2.
+- **Error exacto:**
+  ```
+  Test timeout of 90000ms exceeded.
+  Error: locator.click: Test timeout of 90000ms exceeded.
+  Call log:
+    - waiting for locator('[data-accion="toggle-seccion"]').nth(1)
+  ```
+- **Reproducir:** el setup del test crea las 2 secciones en un loop sin esperar confirmación entre una y otra:
+  ```js
+  for (const nombre of ['Lunes para publicar', 'Electrodomésticos de línea blanca']) {
+    await page.locator('input[aria-label="Nombre de la nueva sección"]').fill(nombre);
+    await page.locator('[data-accion="crear-seccion"]').click();
+  }
+  ```
+- **Causa:** no es un bug de la app -- es el mismo patrón de carrera que BUGS.md #34/#38 (acción async sin esperar antes de la siguiente acción). `.click()` en "crear-seccion" resuelve al DESPACHAR el evento, no al terminar el handler async (`await repo.crearSeccion(...)` + `recargar()`, que hace `contenedor.textContent=''` y reconstruye TODO el formulario, input incluido). Si el segundo `.fill()` corre ANTES de que termine ese `recargar()`, escribe en el input VIEJO (a punto de destruirse); cuando el `recargar()` de la primera sección por fin corre, ese input desaparece y el que queda es uno NUEVO y VACÍO. El `.click()` en "crear-seccion" que sigue manda el form con el nombre vacío → `validarNombreSeccion` lo rechaza (`mostrarToast(error)` y `return`, sin crear nada) → la segunda sección nunca se crea.
+- **Arreglo:** `test/e2e/overflow-fuente-grande.spec.js` -- esperar `.fila-seccion` visible con ese nombre (mismo criterio que `crearSeccion()` de `secciones.spec.js`) antes de tipear la siguiente, en vez de encadenar los 2 `fill()+click()` a ciegas.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí -- ya está cubierto por el mismo punto general que #34/#38 (nunca encadenar una segunda acción sobre un formulario que se auto-reconstruye async sin esperar una confirmación visible de la primera); no amerita nota aparte en la receta compartida, ya quedó anotado ahí con #38.
+
+### 42. Chip de sección largo en el alta/edición de producto se pasa del viewport a 320-412px + letra grande
+- **Paso:** `overflow-fuente-grande.spec.js`, corrida limpia tras arreglar la carrera de creación de secciones (#41) -- ahora SÍ se crean las 2 secciones, y "Alta de producto" (con las 2 disponibles como chips) falla a 320px/130-160%, 360px/160% y 412px/160%.
+- **Error exacto:**
+  ```
+  Alta de producto: scrollOverflow=false
+  BUTTON.chip right=428 left=31 "Electrodomésticos de línea blanca"
+  ```
+- **Reproducir:** pantalla de alta/edición de producto (`js/vistas/detalle.js`, `grupoSecciones`/`chipsSecciones`), con una sección de nombre largo ("Electrodomésticos de línea blanca") entre las disponibles.
+- **Causa:** `.chip` (`css/estilos.css`) tiene `white-space: nowrap` -- pensado para la fila `.filtro-secciones`, que SÍ tiene scroll horizontal propio y donde nowrap es lo correcto (cada chip entero, deslizable). Pero `.chips-secciones` (chips del alta/edición) NO scrollea: es un `flex-wrap: wrap` normal, donde el wrap tiene que pasar DENTRO de un chip demasiado largo, no solo ENTRE chips -- con `nowrap`, un chip cuyo texto por sí solo mide más que el viewport no tiene forma de encogerse y sobresale.
+- **Arreglo:** `css/estilos.css` -- `.chips-secciones .chip { white-space: normal; text-align: center; }` (más específico que `.chip`, sin tocar el comportamiento de `.filtro-secciones`, que sigue con scroll horizontal y `nowrap`).
+- **Resuelto:** sí -- confirmado corriendo las 6 combinaciones de `overflow-fuente-grande.spec.js` despues del cambio: 6/6 verdes.
+- ¿Se repetiría en otro proyecto? Sí -- un chip/pill con `white-space: nowrap` es seguro solo dentro de un contenedor con scroll horizontal propio; en cualquier `flex-wrap` normal (chips seleccionables, tags), un solo chip con texto largo + letra grande del sistema puede desbordar igual que una fila sin `flex-wrap` (mismo espíritu que bug #35/#42 de la skill `crear-apk`).
