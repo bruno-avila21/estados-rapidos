@@ -21,3 +21,6 @@ playwright/.cache/
 *.log
 .DS_Store
 Thumbs.db
+
+# salida de scripts/armar-sitio.mjs
+_sitio/

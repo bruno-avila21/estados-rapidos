@@ -24,10 +24,8 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Armar el sitio (solo lo que se sirve)
-        run: |
-          mkdir _sitio
-          cp -r index.html manifest.webmanifest sw.js css js icons fonts .nojekyll _sitio/
+      - name: Armar el sitio (solo lo que se sirve; misma lista que Cloudflare)
+        run: node scripts/armar-sitio.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
