@@ -38,14 +38,46 @@ function archivoADataUrl(archivo) {
   });
 }
 
-/** Copiar al portapapeles. En el APK, `navigator.clipboard` puede fallar dentro del WebView. */
+/** Copiar al portapapeles. En el APK, `navigator.clipboard` puede fallar dentro del WebView; en el
+ * navegador, `navigator.clipboard` puede no existir (contexto no seguro) o rechazar (permiso
+ * denegado) — en ambos casos se cae a `document.execCommand('copy')` sobre un `<textarea>` oculto
+ * antes de darse por vencido (Fase 2, "S" #4: "con fallback si clipboard falla"). */
 export async function copiarTexto(texto) {
   if (enApk()) {
     window.Android.copiar(texto);
     return true;
   }
-  await navigator.clipboard.writeText(texto);
-  return true;
+  try {
+    await navigator.clipboard.writeText(texto);
+    return true;
+  } catch (error) {
+    if (copiarConExecCommand(texto)) return true;
+    throw error;
+  }
+}
+
+/** Fallback viejo pero universal: un `<textarea>` fuera de pantalla, seleccionado y copiado con
+ * `execCommand`. Sigue funcionando en WebViews/navegadores donde la Clipboard API async no anda.
+ * Devuelve `false` (nunca lanza) si tampoco esto funciona, para que `copiarTexto` decida qué hacer. */
+function copiarConExecCommand(texto) {
+  if (typeof document === 'undefined' || typeof document.execCommand !== 'function') return false;
+  const area = document.createElement('textarea');
+  area.value = texto;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.top = '0';
+  area.style.left = '-9999px';
+  document.body.append(area);
+  area.select();
+  area.setSelectionRange(0, texto.length);
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  area.remove();
+  return ok;
 }
 
 /**

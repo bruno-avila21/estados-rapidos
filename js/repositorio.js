@@ -6,6 +6,7 @@ import {
   ESTILO_POR_DEFECTO,
   DESCRIPCION_MODELO_POR_DEFECTO,
   ENCUADRE_FOTO_POR_DEFECTO,
+  CALIDAD_IMAGEN_POR_DEFECTO,
   construirRespaldo,
   migrarAjustesPorEstilo,
   normalizarAjustesPorEstilo,
@@ -271,6 +272,10 @@ export async function obtenerAjustesGenerales() {
     // "Incluir texto" de la hoja de revisión (ronda "compartir sin texto", 2026-09-28): se recuerda
     // la última elección; por defecto encendido (copiar/mandar el texto es lo de siempre).
     incluirTextoAlCompartir: true,
+    // Calidad de imagen al exportar (Fase 2, "S" #5): se recuerda la última elección de la hoja de
+    // revisión; por defecto 'estandar' (mismo criterio que los campos de arriba: un registro de
+    // antes de esta ronda no lo trae y queda con el valor por defecto).
+    calidadImagen: CALIDAD_IMAGEN_POR_DEFECTO,
   };
   return guardado ? { ...base, ...guardado } : base;
 }
@@ -306,6 +311,15 @@ export async function guardarIncluirTextoAlCompartir(incluirTextoAlCompartir) {
   return config;
 }
 
+/** Calidad de imagen ('estandar'/'alta') elegida en la hoja de revisión: se recuerda entre hojas,
+ * igual que "Incluir texto" (Fase 2, "S" #5). */
+export async function guardarCalidadImagen(calidadImagen) {
+  const config = await obtenerAjustesGenerales();
+  config.calidadImagen = calidadImagen;
+  await db.guardar('config', config);
+  return config;
+}
+
 export async function exportarRespaldo() {
   const productos = await listarProductos();
   const productosConFoto = await Promise.all(
@@ -329,6 +343,7 @@ export async function exportarRespaldo() {
       descripcionModelo: general.descripcionModelo,
       encuadreFoto: general.encuadreFoto,
       incluirTextoAlCompartir: general.incluirTextoAlCompartir,
+      calidadImagen: general.calidadImagen,
     },
     secciones,
   });
@@ -400,5 +415,6 @@ export async function importarRespaldo(respaldo) {
     descripcionModelo: respaldo.general?.descripcionModelo || DESCRIPCION_MODELO_POR_DEFECTO,
     encuadreFoto: respaldo.general?.encuadreFoto || ENCUADRE_FOTO_POR_DEFECTO,
     incluirTextoAlCompartir: respaldo.general?.incluirTextoAlCompartir ?? true,
+    calidadImagen: respaldo.general?.calidadImagen || CALIDAD_IMAGEN_POR_DEFECTO,
   });
 }

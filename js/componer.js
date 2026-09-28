@@ -3,9 +3,11 @@
 //   - `dibujarSegunEstilo(ctx, datos)` — SÍNCRONA, dibuja en cualquier CanvasRenderingContext2D ya
 //     preparado (fuentes cargadas de antemano). La usa el editor para pintar directo en el canvas
 //     visible en cada frame (requestAnimationFrame), y también la exportación de abajo.
-//   - `componerSegunEstilo(datos)` — async: crea un lienzo 1080×1920 fuera de pantalla, llama a la
-//     función de arriba y exporta un Blob JPEG (calidad 0.9: lo que se comparte). La usan Publicar
-//     y la hoja de revisión para el archivo final.
+//   - `componerSegunEstilo(datos, opciones)` — async: crea un lienzo 1080×1920 fuera de pantalla,
+//     llama a la función de arriba y exporta un Blob JPEG. La usa la hoja de revisión para el
+//     archivo final, con `opciones` = `resolverOpcionesExportacion(calidadImagen)` (modelo.js,
+//     Fase 2 "S" #5: "Estándar" 0.85 / "Alta" 0.95 — el `calidad: 0.9` de acá abajo es solo el
+//     default si alguien llama sin pasar `opciones`).
 //   - `componerMiniatura(datos)` — async: igual, pero a 270×480 para vista previa (Ajustes,
 //     carrusel de la hoja de revisión): no hace falta resolución completa para una miniatura.
 // Cada estilo con texto ("Foto con precio", "Foto con descripción", "Mi plantilla") tiene su PROPIO

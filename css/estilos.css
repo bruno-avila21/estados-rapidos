@@ -1096,6 +1096,48 @@ details.grupo > .campo {
   border-color: var(--color-texto);
 }
 
+/* Presets de fondo/etiqueta (Fase 2, "S" #3): fila de botones con muestra de color + nombre,
+   ≥48px de alto (regla de UI 6), que envuelve en 412px en vez de desbordar (mismo `.fila` que el
+   resto del panel). */
+.editor-plantilla__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.editor-plantilla__preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--toque-min);
+  padding: 0 12px;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--color-borde);
+  background: var(--color-superficie);
+  color: var(--color-texto);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--duracion) var(--ease), background var(--duracion) var(--ease);
+}
+.editor-plantilla__preset:hover {
+  border-color: var(--color-acento);
+}
+.editor-plantilla__preset:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.editor-plantilla__preset--activo {
+  border-color: var(--color-primario);
+  background: var(--color-primario-tinte);
+}
+.editor-plantilla__preset-muestra {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-borde);
+}
+
 /* ---------- Ajustes: "La app" (instalar/compartir/QR) ---------- */
 .qr-app {
   display: flex;
@@ -1307,6 +1349,13 @@ details.grupo > .campo {
 .fila-seccion__nombre:focus-visible {
   outline: none;
   border-color: var(--color-acento);
+}
+/* Contador de productos (Fase 2, "S" #2): siempre en su propia línea (flex-basis 100%), la fila de
+   controles de arriba (nombre + subir/bajar/borrar) ya usa todo el ancho en 412px. */
+.fila-seccion__conteo {
+  flex-basis: 100%;
+  font-size: var(--tamano-14);
+  color: var(--color-texto-tenue);
 }
 
 /* Botón cuadrado de ícono (subir/bajar sección, publicar de una fila compacta): >= 44px táctil. */

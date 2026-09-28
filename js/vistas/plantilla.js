@@ -29,6 +29,8 @@ import {
   AJUSTES_POR_DEFECTO_POR_ESTILO,
   esAjustePersonalizado,
   resolverDescripcion,
+  PRESETS_FONDO_TEXTO,
+  aplicarPresetFondo,
 } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { crearIcono } from '../utils/iconos.js';
@@ -504,6 +506,13 @@ export async function render(contenedor, { navegar, params } = {}) {
     tituloFondo.className = 'grupo__titulo';
     tituloFondo.textContent = 'Fondo / etiqueta';
     panel.append(tituloFondo);
+    panel.append(campoPresetsFondo(caja, (presetId) => {
+      ajustes[seleccion] = aplicarPresetFondo(ajustes[seleccion], presetId);
+      dibujarOverlay();
+      solicitarRedibujo();
+      guardarEnHistorial(); // un preset = UN paso de deshacer (los 3 campos juntos)
+      mostrarToast(`Fondo: ${PRESETS_FONDO_TEXTO.find((p) => p.id === presetId)?.nombre ?? ''}`);
+    }));
     panel.append(campoColor('Color de fondo', caja.fondoColor, (v, conPanel) => actualizarCampo(seleccion, 'fondoColor', v, true, conPanel)));
     panel.append(
       campoRangoNumero('Opacidad del fondo', Math.round((caja.fondoOpacidad ?? 0) * 100), 0, 100, (v) =>
@@ -653,6 +662,43 @@ export async function render(contenedor, { navegar, params } = {}) {
     btnDeshacer.disabled = indiceHistorial === 0;
     btnRehacer.disabled = indiceHistorial === historial.length - 1;
   }
+}
+
+/**
+ * Fila de presets de fondo/etiqueta (Fase 2, "S" #3): un toque aplica color+opacidad+radio juntos
+ * (`aplicarPresetFondo`, modelo.js), además del color libre de `campoColor`/los deslizadores de
+ * abajo. El preset que coincide con la caja actual queda resaltado (mismo criterio visual que
+ * `tarjeta-estilo--activa`), incluida "Sin fondo" recién abierto el editor.
+ */
+function campoPresetsFondo(caja, onAplicar) {
+  const div = document.createElement('div');
+  div.className = 'campo';
+  const label = document.createElement('label');
+  label.className = 'campo__etiqueta';
+  label.textContent = 'Fondos predefinidos';
+  const fila = document.createElement('div');
+  fila.className = 'editor-plantilla__presets';
+  for (const preset of PRESETS_FONDO_TEXTO) {
+    const activo =
+      (caja.fondoColor || '').toLowerCase() === preset.fondoColor.toLowerCase() &&
+      Math.round((caja.fondoOpacidad ?? 0) * 100) === Math.round(preset.fondoOpacidad * 100) &&
+      (caja.fondoRadio ?? 0) === preset.fondoRadio;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'editor-plantilla__preset' + (activo ? ' editor-plantilla__preset--activo' : '');
+    btn.setAttribute('data-accion', `preset-fondo-${preset.id}`);
+    btn.setAttribute('aria-pressed', String(activo));
+    const muestra = document.createElement('span');
+    muestra.className = 'editor-plantilla__preset-muestra';
+    muestra.style.background = preset.fondoColor;
+    muestra.style.opacity = String(Math.max(0.12, preset.fondoOpacidad)); // visible aun en "Sin fondo"
+    muestra.style.borderRadius = `${Math.min(preset.fondoRadio, 12)}px`;
+    btn.append(muestra, document.createTextNode(preset.nombre));
+    btn.addEventListener('click', () => onAplicar(preset.id));
+    fila.append(btn);
+  }
+  div.append(label, fila);
+  return div;
 }
 
 function estructuraClonada(obj) {

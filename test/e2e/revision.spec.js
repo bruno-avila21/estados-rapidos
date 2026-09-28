@@ -27,7 +27,8 @@ async function mockearCompartir(page) {
         dimensiones.push({ w: bitmap.width, h: bitmap.height, tipo: archivo.type });
         bitmap.close?.();
       }
-      window.__compartir.llamadas.push({ text: datos.text, cantidad: datos.files?.length ?? 0, dimensiones });
+      const tamanos = (datos.files ?? []).map((archivo) => archivo.size);
+      window.__compartir.llamadas.push({ text: datos.text, cantidad: datos.files?.length ?? 0, dimensiones, tamanos });
       return Promise.resolve();
     };
   });
@@ -228,4 +229,105 @@ test('cerrar la hoja con la X no deja un paso de más en el historial', async ({
   await expect(page.locator('.hoja-revision')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => history.state?.hojaRevision ?? null)).toBeNull();
   expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(largo);
+});
+
+// --- Fase 2, "S" #1: "Subir a Estado" individual no toca la selección múltiple persistente ---
+
+test('Publicar de una tarjeta no toca la selección múltiple persistente', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Selección Uno', precio: '1000' });
+  await crearProducto(page, { nombre: 'Selección Dos', precio: '2000' });
+
+  const filaUno = page.locator('.fila-compacta', { hasText: 'Selección Uno' });
+  const filaDos = page.locator('.fila-compacta', { hasText: 'Selección Dos' });
+
+  // ambos arrancan seleccionados (CREAR-BRIEF.md); se desmarca uno para tener un estado no trivial
+  await filaUno.locator('[data-accion="seleccionar"]').uncheck();
+  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1');
+
+  await filaDos.locator('[data-accion="publicar"]').click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+  await expect(page.locator('.dialogo__titulo')).toHaveText('Revisar antes de publicar');
+  await page.locator('[data-accion="revision-cerrar"]').click();
+  await expect(page.locator('.hoja-revision')).toHaveCount(0);
+
+  // la selección múltiple queda EXACTAMENTE como estaba antes de publicar de a una
+  await expect(filaUno.locator('[data-accion="seleccionar"]')).not.toBeChecked();
+  await expect(filaDos.locator('[data-accion="seleccionar"]')).toBeChecked();
+  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1');
+});
+
+// --- Fase 2, "S" #4: "Copiar descripción" ---
+
+test('"Copiar descripción" copia el texto al portapapeles con toast, sin depender de "Incluir texto"', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Copiable', precio: '1500' });
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+
+  await page.locator('#revision-descripcion').fill('Texto a mano para copiar');
+  // "Incluir texto" apagado: el botón sigue andando igual (copia manual explícita, no depende del
+  // interruptor que solo controla lo que se manda AL COMPARTIR).
+  await page.locator('[data-accion="revision-incluir-texto"]').uncheck();
+  await page.locator('[data-accion="revision-copiar-descripcion"]').click();
+  await expect(page.locator('#toast')).toHaveText('Descripción copiada');
+
+  const portapapeles = await page.evaluate(() => navigator.clipboard.readText());
+  expect(portapapeles).toBe('Texto a mano para copiar');
+});
+
+test('"Copiar descripción" con el campo vacío avisa en vez de copiar nada', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Vacía', precio: '100' });
+  await page.evaluate(() => navigator.clipboard.writeText('placeholder-previo'));
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+
+  await page.locator('#revision-descripcion').fill('   ');
+  await page.locator('[data-accion="revision-copiar-descripcion"]').click();
+  await expect(page.locator('#toast')).toHaveText('No hay descripción para copiar');
+
+  const portapapeles = await page.evaluate(() => navigator.clipboard.readText());
+  expect(portapapeles).toBe('placeholder-previo'); // no se tocó el portapapeles
+});
+
+// --- Fase 2, "S" #5: selector de calidad de imagen ---
+
+test('"Calidad de imagen": Estándar por defecto, "Alta" pesa más y se recuerda entre hojas', async ({ page }) => {
+  await mockearCompartir(page);
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Calidad', precio: '3000' });
+
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+  await expect(page.locator('[data-accion="revision-calidad-estandar"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-accion="revision-calidad-alta"]')).toHaveAttribute('aria-pressed', 'false');
+
+  await page.locator('[data-accion="revision-compartir"]').click();
+  await expect(page.locator('#toast')).toHaveText(/Mi estado/);
+  const llamadasEstandar = await page.evaluate(() => window.__compartir.llamadas);
+  const pesoEstandar = llamadasEstandar.at(-1).tamanos[0];
+
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+  await page.locator('[data-accion="revision-calidad-alta"]').click();
+  await expect(page.locator('[data-accion="revision-calidad-alta"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-accion="revision-compartir"]').click();
+  // El toast "¡Listo! ... Mi estado" del PRIMER compartir sigue en pantalla (dura 3.2s): esperar el
+  // TEXTO no alcanza como señal de que este segundo share ya terminó. La señal real es que
+  // `navigator.share` (mockeado) sumó una SEGUNDA llamada.
+  await expect.poll(() => page.evaluate(() => window.__compartir.llamadas.length)).toBe(2);
+  const llamadasAlta = await page.evaluate(() => window.__compartir.llamadas);
+  const pesoAlta = llamadasAlta.at(-1).tamanos[0];
+
+  expect(pesoAlta).toBeGreaterThan(pesoEstandar); // JPEG 0.95 pesa más que 0.85 (medido en modelo.js)
+
+  // se recuerda: otra hoja en la MISMA sesión, y de nuevo después de recargar (ajustes generales)
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('[data-accion="revision-calidad-alta"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-accion="revision-cerrar"]').click();
+
+  await page.reload();
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('[data-accion="revision-calidad-alta"]')).toHaveAttribute('aria-pressed', 'true');
 });

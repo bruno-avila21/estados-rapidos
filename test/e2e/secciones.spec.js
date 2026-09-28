@@ -207,3 +207,31 @@ test('plegar un grupo de "Todas" se recuerda entre visitas', async ({ page }) =>
   await page.reload();
   await expect(page.locator('details.grupo-seccion', { hasText: 'Lunes' })).toHaveJSProperty('open', false);
 });
+
+// --- Fase 2, "S" #2: contador de productos por sección en la pantalla de gestión ---
+
+test('la pantalla de gestión de secciones muestra el contador de productos por sección', async ({ page }) => {
+  await page.goto('/');
+  await crearSeccion(page, 'Lunes');
+  await crearSeccion(page, 'Martes');
+  await crearProducto(page, { nombre: 'Remera lunes', precio: 1000, secciones: ['Lunes'] });
+  await crearProducto(page, { nombre: 'Pantalón lunes y martes', precio: 2000, secciones: ['Lunes', 'Martes'] });
+  await crearProducto(page, { nombre: 'Sin sección', precio: 500 });
+
+  await page.goto('/#/secciones');
+  const filaLunes = filaSeccionPorNombre(page, 'Lunes');
+  const filaMartes = filaSeccionPorNombre(page, 'Martes');
+  // "Lunes" tiene 2 productos (uno de ellos también en "Martes"); "Martes" tiene 1.
+  await expect(filaLunes.locator('.fila-seccion__conteo')).toHaveText('2 productos');
+  await expect(filaMartes.locator('.fila-seccion__conteo')).toHaveText('1 producto');
+
+  // Resumen de "sin sección" arriba de la lista (mismo dato que el chip de la lista de Productos).
+  await expect(page.getByText('1 producto sin ninguna sección todavía.')).toBeVisible();
+});
+
+test('el contador de una sección nueva (sin productos) arranca en 0', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Suelto', precio: 100 });
+  await crearSeccion(page, 'Vacía');
+  await expect(filaSeccionPorNombre(page, 'Vacía').locator('.fila-seccion__conteo')).toHaveText('0 productos');
+});

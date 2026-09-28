@@ -421,3 +421,51 @@ test('la capa seleccionada queda resaltada', async ({ page }) => {
   await page.locator('[data-accion="capa-nombre"]').click();
   await expect(filaNombre).toHaveClass(/editor-plantilla__fila-capa--activa/);
 });
+
+// --- Fase 2, "S" #3: fondos de texto predefinidos ---
+
+test('un preset de fondo aplica color+opacidad+radio juntos y se ve al instante', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla');
+  await editorListo(page);
+
+  await page.locator('[data-elemento="nombre"]').click();
+  const revisionInicial = await revisionDibujo(page);
+
+  await page.locator('[data-accion="preset-fondo-lino-claro"]').click();
+  await expect.poll(() => revisionDibujo(page), { timeout: 5_000 }).toBeGreaterThan(revisionInicial);
+
+  const caja = await page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre);
+  expect(caja.fondoColor.toLowerCase()).toBe('#f3efea');
+  expect(caja.fondoOpacidad).toBeCloseTo(0.9, 5);
+  expect(caja.fondoRadio).toBe(12);
+
+  // el preset aplicado queda resaltado como "activo"
+  await expect(page.locator('[data-accion="preset-fondo-lino-claro"]')).toHaveClass(/editor-plantilla__preset--activo/);
+  await expect(page.locator('[data-accion="preset-fondo-lino-claro"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('un preset de fondo es UN solo paso de deshacer (los 3 campos juntos)', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla');
+  await editorListo(page);
+
+  await page.locator('[data-elemento="nombre"]').click();
+  const fondoInicial = await page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.fondoColor);
+
+  await page.locator('[data-accion="preset-fondo-contraste-alto"]').click();
+  await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.fondoRadio)).toBe(4);
+
+  await page.locator('[data-accion="deshacer"]').click();
+  // UN deshacer alcanza para volver a los 3 campos de antes del preset (no hace falta deshacer 3 veces).
+  await expect
+    .poll(() => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.fondoColor))
+    .toBe(fondoInicial);
+
+  await page.locator('[data-accion="rehacer"]').click();
+  await expect
+    .poll(() => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.fondoRadio))
+    .toBe(4);
+});

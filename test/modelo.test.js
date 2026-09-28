@@ -19,6 +19,11 @@ import {
   normalizarAjustesPorEstilo,
   migrarAjustesPorEstilo,
   esAjustePersonalizado,
+  PRESETS_FONDO_TEXTO,
+  aplicarPresetFondo,
+  CALIDADES_IMAGEN,
+  CALIDAD_IMAGEN_POR_DEFECTO,
+  resolverOpcionesExportacion,
 } from '../js/modelo.js';
 
 test('formatearPrecio: miles es-AR, sin decimales por defecto', () => {
@@ -326,4 +331,74 @@ test('esAjustePersonalizado: false contra los defaults de fábrica, true apenas 
 test('esAjustePersonalizado: estilo desconocido o ajustes ausentes no revienta, da false', () => {
   assert.equal(esAjustePersonalizado('no-existe', {}), false);
   assert.equal(esAjustePersonalizado('foto-precio', null), false);
+});
+
+// --- Presets de fondo de texto (Fase 2, "S" #3) ---
+
+test('PRESETS_FONDO_TEXTO: hay más de uno y cada uno trae color, opacidad y radio', () => {
+  assert.ok(PRESETS_FONDO_TEXTO.length >= 3);
+  for (const preset of PRESETS_FONDO_TEXTO) {
+    assert.equal(typeof preset.id, 'string');
+    assert.equal(typeof preset.nombre, 'string');
+    assert.match(preset.fondoColor, /^#[0-9a-f]{6}$/i);
+    assert.ok(preset.fondoOpacidad >= 0 && preset.fondoOpacidad <= 1);
+    assert.ok(preset.fondoRadio >= 0);
+  }
+});
+
+test('aplicarPresetFondo: pisa color/opacidad/radio de la caja, sin tocar posición/tipografía', () => {
+  const caja = { x: 60, y: 1460, w: 960, h: 120, tamano: 58, familia: 'inter', fondoColor: '#111111', fondoOpacidad: 0.2, fondoRadio: 2 };
+  const preset = PRESETS_FONDO_TEXTO.find((p) => p.id === 'lino-claro');
+  const resultado = aplicarPresetFondo(caja, 'lino-claro');
+  assert.equal(resultado.fondoColor, preset.fondoColor);
+  assert.equal(resultado.fondoOpacidad, preset.fondoOpacidad);
+  assert.equal(resultado.fondoRadio, preset.fondoRadio);
+  // el resto de la caja no se toca
+  assert.equal(resultado.x, 60);
+  assert.equal(resultado.tamano, 58);
+  assert.equal(resultado.familia, 'inter');
+});
+
+test('aplicarPresetFondo: pura (no muta la caja recibida) y devuelve un objeto nuevo', () => {
+  const caja = { fondoColor: '#000000', fondoOpacidad: 1, fondoRadio: 0 };
+  const resultado = aplicarPresetFondo(caja, 'acento');
+  assert.notEqual(resultado, caja);
+  assert.equal(caja.fondoColor, '#000000'); // el original queda intacto
+});
+
+test('aplicarPresetFondo: id desconocido o caja ausente no revienta, devuelve la caja tal cual', () => {
+  const caja = { fondoColor: '#abcdef' };
+  assert.equal(aplicarPresetFondo(caja, 'no-existe'), caja);
+  assert.equal(aplicarPresetFondo(null, 'acento'), null);
+});
+
+// --- Calidad de imagen al exportar (Fase 2, "S" #5) ---
+
+test('resolverOpcionesExportacion: "estandar" es JPEG 0.85, "alta" es JPEG 0.95', () => {
+  assert.deepEqual(resolverOpcionesExportacion('estandar'), { formato: 'image/jpeg', calidad: 0.85 });
+  assert.deepEqual(resolverOpcionesExportacion('alta'), { formato: 'image/jpeg', calidad: 0.95 });
+});
+
+test('resolverOpcionesExportacion: valor inválido o ausente cae a la calidad por defecto (estandar)', () => {
+  assert.deepEqual(resolverOpcionesExportacion(undefined), resolverOpcionesExportacion(CALIDAD_IMAGEN_POR_DEFECTO));
+  assert.deepEqual(resolverOpcionesExportacion('ultra'), resolverOpcionesExportacion(CALIDAD_IMAGEN_POR_DEFECTO));
+  assert.equal(CALIDAD_IMAGEN_POR_DEFECTO, 'estandar');
+});
+
+test('CALIDADES_IMAGEN: exactamente "estandar" y "alta"', () => {
+  assert.deepEqual([...CALIDADES_IMAGEN].sort(), ['alta', 'estandar']);
+});
+
+test('validarRespaldo: acepta calidadImagen válida y rechaza un valor inventado', () => {
+  const base = construirRespaldo({ productos: [], plantilla: null, general: { calidadImagen: 'alta' } });
+  assert.equal(validarRespaldo(base).ok, true);
+  const corrupto = { ...base, general: { ...base.general, calidadImagen: 'ultra-hd' } };
+  const { ok, error } = validarRespaldo(corrupto);
+  assert.equal(ok, false);
+  assert.match(error, /calidad/i);
+});
+
+test('construirRespaldo: sin calidadImagen explícita, guarda el valor por defecto (compatibilidad con respaldos viejos)', () => {
+  const respaldo = construirRespaldo({ productos: [], plantilla: null, general: {} });
+  assert.equal(respaldo.general.calidadImagen, CALIDAD_IMAGEN_POR_DEFECTO);
 });

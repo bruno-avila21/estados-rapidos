@@ -165,6 +165,50 @@ export const FORMATO_PRECIO_POR_DEFECTO = Object.freeze({
   decimales: false,
 });
 
+// --- Fondos de texto PREDEFINIDOS (Fase 2, "S" #3): unos pocos presets de fondo/etiqueta
+// (color + opacidad + radio) aplicables con un toque en el editor de plantilla, además del color
+// libre que ya existía. Colores tomados de los tokens de la piel "Organic Minimalist"
+// (css/estilos.css: --color-texto, --color-primario, --color-acento) para que calcen con el resto
+// de la app en vez de inventar una paleta aparte. */
+export const PRESETS_FONDO_TEXTO = Object.freeze([
+  { id: 'sin-fondo', nombre: 'Sin fondo', fondoColor: '#242220', fondoOpacidad: 0, fondoRadio: 0 },
+  { id: 'tinta-suave', nombre: 'Tinta suave', fondoColor: '#242220', fondoOpacidad: 0.55, fondoRadio: 18 },
+  { id: 'lino-claro', nombre: 'Lino claro', fondoColor: '#f3efea', fondoOpacidad: 0.9, fondoRadio: 12 },
+  { id: 'contraste-alto', nombre: 'Contraste alto', fondoColor: '#242220', fondoOpacidad: 0.9, fondoRadio: 4 },
+  { id: 'acento', nombre: 'Acento', fondoColor: '#3a4d39', fondoOpacidad: 0.7, fondoRadio: 24 },
+]);
+
+/** Aplica un preset de fondo/etiqueta (por `id` de PRESETS_FONDO_TEXTO) a una caja de texto: pura,
+ * no muta `caja`. Un id que no existe devuelve `caja` sin cambios (defensivo, mismo criterio que
+ * `crearIcono` con un nombre desconocido). */
+export function aplicarPresetFondo(caja, presetId) {
+  const preset = PRESETS_FONDO_TEXTO.find((p) => p.id === presetId);
+  if (!preset || !caja) return caja;
+  return { ...caja, fondoColor: preset.fondoColor, fondoOpacidad: preset.fondoOpacidad, fondoRadio: preset.fondoRadio };
+}
+
+// --- Calidad de imagen al exportar (Fase 2, "S" #5): "Estándar" vs "Alta", elegible en la hoja de
+// revisión y recordada en los ajustes generales. Medido contra una foto real (900×900) compuesta a
+// 1080×1920 con texto ("Foto con precio"): JPEG 0.85 ≈ 59KB, 0.9 (el fijo de antes) ≈ 73KB, 0.95 ≈
+// 102KB, PNG ≈ 230KB. PNG queda descartado para "Alta": es 2-3× más pesado que JPEG 0.95 sin
+// beneficio real, porque WhatsApp recomprime la imagen que reciba de todos modos (ver componer.js)
+// — más peso solo alarga la espera para compartir. "Alta" es JPEG 0.95 (mejor calidad visible,
+// sigue liviano); "Estándar" baja a JPEG 0.85 (antes 0.9 fijo): más rápida de armar y compartir,
+// con una pérdida de nitidez que no se nota en la pantalla de un celular.
+export const CALIDADES_IMAGEN = Object.freeze(['estandar', 'alta']);
+export const CALIDAD_IMAGEN_POR_DEFECTO = 'estandar';
+export const ETIQUETA_CALIDAD_IMAGEN = Object.freeze({ estandar: 'Estándar', alta: 'Alta' });
+export const OPCIONES_EXPORTACION_POR_CALIDAD = Object.freeze({
+  estandar: Object.freeze({ formato: 'image/jpeg', calidad: 0.85 }),
+  alta: Object.freeze({ formato: 'image/jpeg', calidad: 0.95 }),
+});
+
+/** {formato, calidad} para `componerSegunEstilo` según la calidad elegida ('estandar'/'alta'); un
+ * valor inválido o ausente cae a la calidad por defecto. */
+export function resolverOpcionesExportacion(calidadImagen) {
+  return OPCIONES_EXPORTACION_POR_CALIDAD[calidadImagen] ?? OPCIONES_EXPORTACION_POR_CALIDAD[CALIDAD_IMAGEN_POR_DEFECTO];
+}
+
 // --- Estilo de imagen (2026-09-27: 4 modos, ver CREAR-BRIEF.md) ---
 export const ESTILOS_IMAGEN = Object.freeze(['solo-foto', 'foto-precio', 'foto-descripcion', 'mi-plantilla']);
 export const ESTILO_POR_DEFECTO = 'solo-foto';
@@ -355,6 +399,10 @@ export function validarRespaldo(objeto) {
       return { ok: false, error: 'Encuadre de foto inválido en el respaldo.' };
     if (objeto.general.incluirTextoAlCompartir != null && typeof objeto.general.incluirTextoAlCompartir !== 'boolean')
       return { ok: false, error: '"Incluir texto" inválido en el respaldo.' };
+    // Campo agregado en la ronda "calidad de imagen" (Fase 2): opcional, un respaldo viejo no lo
+    // trae y queda en el valor por defecto ('estandar') al importar.
+    if (objeto.general.calidadImagen != null && !CALIDADES_IMAGEN.includes(objeto.general.calidadImagen))
+      return { ok: false, error: 'Calidad de imagen inválida en el respaldo.' };
   }
 
   if (objeto.plantilla != null) {
@@ -404,6 +452,7 @@ export function construirRespaldo({ productos, plantilla, general, secciones }) 
           descripcionModelo: general.descripcionModelo ?? DESCRIPCION_MODELO_POR_DEFECTO,
           encuadreFoto: general.encuadreFoto ?? ENCUADRE_FOTO_POR_DEFECTO,
           incluirTextoAlCompartir: general.incluirTextoAlCompartir ?? true,
+          calidadImagen: general.calidadImagen ?? CALIDAD_IMAGEN_POR_DEFECTO,
         }
       : null,
   };

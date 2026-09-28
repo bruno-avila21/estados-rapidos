@@ -15,9 +15,19 @@
 //     para la miniatura como para el archivo final, y de nuevo si se cambia el estilo de la tanda.
 import * as repo from '../repositorio.js';
 import { componerSegunEstilo, componerMiniatura } from '../componer.js';
-import { resolverEstilo, resolverDescripcion, ESTILOS_IMAGEN, ETIQUETA_ESTILO } from '../modelo.js';
+import {
+  resolverEstilo,
+  resolverDescripcion,
+  ESTILOS_IMAGEN,
+  ETIQUETA_ESTILO,
+  CALIDADES_IMAGEN,
+  CALIDAD_IMAGEN_POR_DEFECTO,
+  ETIQUETA_CALIDAD_IMAGEN,
+  resolverOpcionesExportacion,
+} from '../modelo.js';
 import { compartirArchivos, copiarDescripcion, descargarImagen, puedeCompartirArchivos } from '../utils/compartir.js';
 import { mostrarToast } from '../utils/toast.js';
+import { crearIcono } from '../utils/iconos.js';
 
 export const LIMITE_IMAGENES = 30;
 const CONCURRENCIA_EXPORTACION = 3; // "en paralelo ACOTADO": no decodificar/comprimir todo a la vez
@@ -56,6 +66,9 @@ export async function abrirHojaRevision({ ids }) {
   const general = await repo.obtenerAjustesGenerales();
   const plantillaConfig = await repo.obtenerPlantillaConfig();
   let estiloSesion = null; // si se elige acá, se usa para TODAS las imágenes de esta hoja
+  // Calidad de exportación (Fase 2, "S" #5): arranca en la última elegida (ajustes generales) y se
+  // recuerda apenas se cambia acá, igual que "Incluir texto".
+  let calidadImagen = CALIDADES_IMAGEN.includes(general.calidadImagen) ? general.calidadImagen : CALIDAD_IMAGEN_POR_DEFECTO;
 
   // Decodificar cada foto UNA sola vez y reusarla (miniatura + final + si cambia el estilo).
   const bitmapsFoto = new Map(); // fotoId -> Promise<ImageBitmap|null>
@@ -143,6 +156,44 @@ export async function abrirHojaRevision({ ids }) {
   }
   campoEstilo.append(labelEstilo, selectEstilo);
 
+  // --- Calidad de imagen (Fase 2, "S" #5): "Estándar" (JPEG 0.85, más liviana y rápida de armar/
+  // compartir) o "Alta" (JPEG 0.95, mejor nitidez). Nunca PNG: WhatsApp recomprime igual la imagen
+  // que reciba, así que un PNG sin pérdida solo suma peso y tiempo sin ganancia real (medido en
+  // modelo.js, junto a OPCIONES_EXPORTACION_POR_CALIDAD). Se recuerda entre hojas de revisión. ---
+  const campoCalidad = document.createElement('div');
+  campoCalidad.className = 'campo';
+  const labelCalidad = document.createElement('span');
+  labelCalidad.className = 'campo__etiqueta';
+  labelCalidad.textContent = 'Calidad de imagen';
+  const filaCalidad = document.createElement('div');
+  filaCalidad.className = 'fila';
+  const botonesCalidad = {};
+  for (const valor of CALIDADES_IMAGEN) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip' + (calidadImagen === valor ? ' chip--activo' : '');
+    btn.setAttribute('data-accion', `revision-calidad-${valor}`);
+    btn.setAttribute('aria-pressed', String(calidadImagen === valor));
+    btn.textContent = ETIQUETA_CALIDAD_IMAGEN[valor];
+    btn.addEventListener('click', async () => {
+      if (calidadImagen === valor) return;
+      calidadImagen = valor;
+      for (const v of CALIDADES_IMAGEN) {
+        botonesCalidad[v].classList.toggle('chip--activo', v === valor);
+        botonesCalidad[v].setAttribute('aria-pressed', String(v === valor));
+      }
+      await repo.guardarCalidadImagen(valor);
+      await regenerarFinales();
+    });
+    botonesCalidad[valor] = btn;
+    filaCalidad.append(btn);
+  }
+  const ayudaCalidad = document.createElement('p');
+  ayudaCalidad.className = 'texto-tenue';
+  ayudaCalidad.textContent =
+    'Estándar: más rápida de armar y compartir. Alta: mejor nitidez, pesa más (WhatsApp igual la recomprime al recibirla).';
+  campoCalidad.append(labelCalidad, filaCalidad, ayudaCalidad);
+
   // --- "Incluir texto" (ronda "compartir sin texto"): apagado, no se copia al portapapeles ni se
   // manda como EXTRA_TEXT/text; se recuerda la última elección en Ajustes generales. ---
   const campoIncluirTexto = document.createElement('label');
@@ -167,7 +218,25 @@ export async function abrirHojaRevision({ ids }) {
   const textareaDescripcion = document.createElement('textarea');
   textareaDescripcion.id = 'revision-descripcion';
   textareaDescripcion.value = productos.map((p) => resolverDescripcion(p, { ...general, formatoPrecio: plantillaConfig.formatoPrecio })).join('\n');
-  campoDescripcion.append(labelDescripcion, textareaDescripcion);
+
+  // --- "Copiar descripción" (Fase 2, "S" #4): copia el texto de ARRIBA al portapapeles en el
+  // momento, con toast de confirmación (o de error) y sin depender de "Incluir texto" ni de tocar
+  // "Compartir" — útil para pegar el texto a mano en otro lado antes de publicar. ---
+  const btnCopiarDescripcion = document.createElement('button');
+  btnCopiarDescripcion.type = 'button';
+  btnCopiarDescripcion.className = 'boton boton--fantasma';
+  btnCopiarDescripcion.setAttribute('data-accion', 'revision-copiar-descripcion');
+  btnCopiarDescripcion.append(crearIcono('copiar'), document.createTextNode('Copiar descripción'));
+  btnCopiarDescripcion.addEventListener('click', () => {
+    const texto = textareaDescripcion.value.trim();
+    if (!texto) {
+      mostrarToast('No hay descripción para copiar');
+      return;
+    }
+    copiarDescripcion(texto);
+  });
+
+  campoDescripcion.append(labelDescripcion, textareaDescripcion, btnCopiarDescripcion);
 
   function actualizarEstadoIncluirTexto() {
     textareaDescripcion.disabled = !checkIncluirTexto.checked;
@@ -192,7 +261,7 @@ export async function abrirHojaRevision({ ids }) {
   btnCompartir.textContent = 'Compartir';
   acciones.append(btnCerrar, btnCompartir);
 
-  caja.append(titulo, progreso, carrusel, campoEstilo, campoIncluirTexto, campoDescripcion, acciones);
+  caja.append(titulo, progreso, carrusel, campoEstilo, campoCalidad, campoIncluirTexto, campoDescripcion, acciones);
   overlay.append(caja);
   document.body.append(overlay);
 
@@ -245,12 +314,19 @@ export async function abrirHojaRevision({ ids }) {
   }
 
   async function generarFinales(miGeneracion) {
+    const opcionesExportacion = resolverOpcionesExportacion(calidadImagen);
     const resultado = await enParaleloAcotado(productos, CONCURRENCIA_EXPORTACION, async (producto) => {
       const datos = await datosParaProducto(producto);
-      const blob = await componerSegunEstilo(datos, { formato: 'image/jpeg', calidad: 0.9 });
+      const blob = await componerSegunEstilo(datos, opcionesExportacion);
       return { producto, blob };
     });
-    if (miGeneracion === generacion) finales = resultado;
+    if (miGeneracion === generacion) {
+      finales = resultado;
+      // Para tests (mismo criterio que `window.__editorDebugPlantilla` en plantilla.js): permite
+      // verificar qué calidad se usó y cuánto pesó cada archivo final sin depender de mockear
+      // `navigator.share`.
+      window.__revisionDebug = { calidadImagen, opcionesExportacion, tamanos: resultado.map((f) => f.blob.size) };
+    }
     return resultado;
   }
 
@@ -264,6 +340,19 @@ export async function abrirHojaRevision({ ids }) {
     if (miGeneracion !== generacion) return;
     btnCompartir.disabled = false;
     promesaFinales = generarFinales(miGeneracion);
+  }
+
+  // Cambiar SOLO la calidad no cambia lo que se ve en las miniaturas (misma composición, otro
+  // nivel de compresión del archivo final): no hace falta rehacer el carrusel, alcanza con
+  // rearmar los archivos finales en segundo plano — mismo patrón que `generarTodo`, pero sin tocar
+  // `generarMiniaturas`.
+  async function regenerarFinales() {
+    generacion += 1;
+    const miGeneracion = generacion;
+    btnCompartir.disabled = true;
+    promesaFinales = generarFinales(miGeneracion);
+    await promesaFinales;
+    if (miGeneracion === generacion) btnCompartir.disabled = false;
   }
 
   selectEstilo.addEventListener('change', async () => {

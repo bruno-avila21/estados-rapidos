@@ -3,14 +3,17 @@
 // sin drag obligatorio) y borrar (nunca borra productos, solo los desasigna, con su propia
 // confirmación).
 import * as repo from '../repositorio.js';
-import { validarNombreSeccion } from '../modelo.js';
+import { validarNombreSeccion, contarProductosPorSeccion } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 import { crearIcono } from '../utils/iconos.js';
 
 export async function render(contenedor, { navegar }) {
   contenedor.textContent = '';
-  const secciones = await repo.listarSecciones();
+  // Las dos lecturas en paralelo (CREAR-BRIEF.md, mismo criterio que lista.js): el conteo por
+  // sección (Fase 2, "S" #2) necesita los productos además de las secciones.
+  const [secciones, productos] = await Promise.all([repo.listarSecciones(), repo.listarProductos()]);
+  const conteos = contarProductosPorSeccion(productos, secciones);
   const recargar = () => render(contenedor, { navegar });
 
   const raiz = document.createElement('div');
@@ -31,6 +34,16 @@ export async function render(contenedor, { navegar }) {
   tituloLista.textContent = 'Tus secciones';
   grupoLista.append(tituloLista);
 
+  // Resumen "Sin sección" (Fase 2, "S" #2): mismo dato que el chip de la lista de Productos, para
+  // saber de un vistazo si conviene asignar los que quedaron sueltos — solo si hay productos y al
+  // menos uno sin ninguna sección (si hay 0 productos cargados, decirlo es ruido).
+  if (secciones.length > 0 && conteos.sinSeccion > 0) {
+    const resumenSinSeccion = document.createElement('p');
+    resumenSinSeccion.className = 'texto-tenue';
+    resumenSinSeccion.textContent = `${conteos.sinSeccion} producto${conteos.sinSeccion === 1 ? '' : 's'} sin ninguna sección todavía.`;
+    grupoLista.append(resumenSinSeccion);
+  }
+
   const lista = document.createElement('div');
   lista.className = 'lista-secciones';
   if (secciones.length === 0) {
@@ -41,7 +54,8 @@ export async function render(contenedor, { navegar }) {
     lista.append(vacio);
   } else {
     secciones.forEach((seccion, indice) => {
-      lista.append(filaSeccion(seccion, indice, secciones.length, recargar));
+      const cantidad = conteos.porSeccion.get(seccion.id) || 0;
+      lista.append(filaSeccion(seccion, indice, secciones.length, cantidad, recargar));
     });
   }
   grupoLista.append(lista);
@@ -82,10 +96,16 @@ export async function render(contenedor, { navegar }) {
   contenedor.append(raiz);
 }
 
-function filaSeccion(seccion, indice, total, recargar) {
+function filaSeccion(seccion, indice, total, cantidad, recargar) {
   const fila = document.createElement('div');
   fila.className = 'fila fila-seccion';
   fila.setAttribute('data-id', seccion.id);
+
+  // Contador de productos (Fase 2, "S" #2): mismo texto singular/plural que el resumen de "Datos"
+  // en Ajustes ("1 producto"/"N productos").
+  const conteo = document.createElement('span');
+  conteo.className = 'fila-seccion__conteo';
+  conteo.textContent = `${cantidad} producto${cantidad === 1 ? '' : 's'}`;
 
   const nombre = document.createElement('input');
   nombre.type = 'text';
@@ -152,6 +172,6 @@ function filaSeccion(seccion, indice, total, recargar) {
     recargar();
   });
 
-  fila.append(nombre, btnSubir, btnBajar, btnBorrar);
+  fila.append(nombre, btnSubir, btnBajar, btnBorrar, conteo);
   return fila;
 }

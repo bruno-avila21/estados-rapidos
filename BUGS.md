@@ -3,7 +3,51 @@
 Registro de fallos encontrados durante la construcción, con causa y arreglo (regla de cierre.md /
 seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos resueltos.
 
-### 43. Reskin "Organic Minimalist": carrera en `revision.spec.js` (miniatura leída sin `src` todavía) + `sw.spec.js` (#10) más inestable
+### 45. `sw.spec.js` sigue fallando en esta máquina (recurrencia de #39), confirmado ajeno a Fase 2
+- **Paso:** `npm run test:e2e` completo al cerrar Fase 2 (5 funcionalidades "S" del reskin). Único
+  fallo restante además de #44 (ya resuelto).
+- **Error exacto:** igual que #39 — `page.goto: net::ERR_FAILED at http://127.0.0.1:8991/` con
+  `page.route('**/*', route.abort())` activo, los 3 intentos (intento + 2 retries), tanto en la
+  suite completa como aislado (`npx playwright test test/e2e/sw.spec.js`).
+- **Reproducir:** `npx playwright test test/e2e/sw.spec.js`. Confirmado con `git stash push -- sw.js`
+  (vuelve `sw.js` a como estaba ANTES de Fase 2, VERSION `v10` sin `secciones.js` en `NUCLEO`) → el
+  mismo test falla IGUAL, 3/3, con el `sw.js` viejo — cero relación con los cambios de esta ronda
+  (subir `VERSION` a `v11` + sumar `./js/vistas/secciones.js` a `NUCLEO`, que faltaba desde la ronda
+  "secciones" original).
+- **Causa:** la misma de #39 (pendiente de investigar, marcada ahí como fuera de alcance — probable
+  cosa de esta máquina/versión de Chromium con `page.route abort` + Service Worker, no del código).
+- **Arreglo:** ninguno en esta ronda (mismo criterio que #39: no corresponde diagnosticar/arreglar
+  acá un fallo que ya existía antes de tocar nada de Fase 2).
+- **Resuelto:** no (fuera de alcance, igual que #39).
+- ¿Se repetiría en otro proyecto? No aplica — sigue sin diagnóstico (ver #39).
+
+### 44. Fase 2 "S" #5 (calidad de imagen): "Alta" (JPEG 0.95) no pesa más que "Estándar" (JPEG 0.85) en el test nuevo
+- **Paso:** `npm run test:e2e`, test nuevo `revision.spec.js` `"Calidad de imagen": Estándar por
+  defecto, "Alta" pesa más y se recuerda entre hojas` (Fase 2, implementando el selector de calidad
+  en la hoja de revisión, `js/vistas/revision.js` + `js/modelo.js` `resolverOpcionesExportacion`).
+- **Error exacto:**
+  ```
+  Error: expect(received).toBeGreaterThan(expected)
+  Expected: > 43313
+  Received:   43313
+  ```
+  (`pesoAlta` y `pesoEstandar`, tamaño en bytes del archivo final compartido, salen exactamente
+  iguales — no solo "parecidos": el mismo número.)
+- **Reproducir:** `npx playwright test test/e2e/revision.spec.js -g "Calidad de imagen"`.
+- **Causa:** del TEST, no de la app — se agregó `window.__revisionDebug` (mismo criterio que
+  `window.__editorDebugPlantilla` en `plantilla.js`) para verificar `calidadImagen`/tamaños reales
+  en cada `generarFinales`, y mostró que la app SÍ generaba los tamaños correctos (43313 con
+  "Estándar", 79169 con "Alta"). El test sincronizaba el segundo "Compartir" esperando el TEXTO del
+  toast (`/Mi estado/`), pero ese mismo texto ya estaba en pantalla desde el PRIMER compartir (dura
+  3.2s, `js/utils/toast.js`) — `expect(...).toHaveText(...)` pasaba de inmediato, sin esperar a que
+  el segundo `navigator.share` (mockeado) terminara de verdad, y el test leía `window.__compartir.
+  llamadas.at(-1)` con la llamada VIEJA (todavía 1 sola en el array).
+- **Arreglo:** `test/e2e/revision.spec.js` — la espera pasa a ser `expect.poll(() =>
+  window.__compartir.llamadas.length).toBe(2)` (una señal real: sumó una SEGUNDA llamada), en vez
+  de confiar en el texto del toast cuando se comparte dos veces en el mismo test. De paso queda
+  `window.__revisionDebug` en `js/vistas/revision.js` (calidad usada + tamaños de los archivos
+  finales), reusable en otros tests sin mockear `navigator.share`.
+- **Resuelto:** sí — `npx playwright test test/e2e/revision.spec.js` → 14/14.
 - **Paso:** `npm run test:e2e` completo, rama `rediseno-organic`, después de reescribir `css/estilos.css`
   (tokens + 2 fuentes nuevas autoalojadas) y sumar `js/utils/iconos.js` (íconos SVG inline
   reemplazando emojis/glifos en `lista.js`/`plantilla.js`/`secciones.js`/`detalle.js`).
