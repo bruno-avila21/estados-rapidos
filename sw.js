@@ -2,7 +2,7 @@
 // cache-first solo para los íconos. Receta pwa.md. `VERSION` sube en cada release.
 import { tipoDeCache } from './js/sw-estrategia.js';
 
-const VERSION = 'v8';
+const VERSION = 'v9';
 const CACHE = `estados-rapidos-${VERSION}`;
 const NUCLEO = [
   './',
@@ -33,6 +33,7 @@ const NUCLEO = [
   './js/vistas/revision.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './assets/ejemplo.jpg',
   './fonts/inter-400.woff2',
   './fonts/inter-700.woff2',
   './fonts/montserrat-400.woff2',

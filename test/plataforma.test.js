@@ -63,26 +63,28 @@ test('guardarArchivoApk: llama a Android.guardarArchivo con nombre/mime/contenid
   }
 });
 
-test('compartirImagenesApk: manda un JSON con una dataURL por archivo', async () => {
-  const compartirImagenes = mock.fn();
-  global.window = { Android: { compartirImagenes } };
+test('compartirImagenesApk: manda una dataURL por archivo, apenas está lista, y al final compartirPreparadas', async () => {
+  const guardarParaCompartir = mock.fn();
+  const compartirPreparadas = mock.fn();
+  global.window = { Android: { guardarParaCompartir, compartirPreparadas } };
   try {
     const archivo = { arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
     // FileReader no existe en node --test: se simula devolviendo directo una dataURL fija,
-    // total lo que importa acá es que el array llegue armado y en el mismo orden.
+    // total lo que importa acá es que cada archivo llegue con su índice, en orden.
     global.FileReader = class {
       readAsDataURL() {
         this.onload && this.onload();
       }
       get result() {
-        return 'data:image/png;base64,AQID';
+        return 'data:image/jpeg;base64,AQID';
       }
     };
     await compartirImagenesApk({ archivos: [archivo, archivo], texto: 'hola' });
-    assert.equal(compartirImagenes.mock.calls.length, 1);
-    const [json, texto] = compartirImagenes.mock.calls[0].arguments;
-    assert.deepEqual(JSON.parse(json), ['data:image/png;base64,AQID', 'data:image/png;base64,AQID']);
-    assert.equal(texto, 'hola');
+    assert.equal(guardarParaCompartir.mock.calls.length, 2);
+    assert.deepEqual(guardarParaCompartir.mock.calls[0].arguments, [0, 'data:image/jpeg;base64,AQID']);
+    assert.deepEqual(guardarParaCompartir.mock.calls[1].arguments, [1, 'data:image/jpeg;base64,AQID']);
+    assert.equal(compartirPreparadas.mock.calls.length, 1);
+    assert.equal(compartirPreparadas.mock.calls[0].arguments[0], 'hola');
   } finally {
     delete global.window;
     delete global.FileReader;

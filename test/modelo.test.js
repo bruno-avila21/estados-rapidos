@@ -14,6 +14,11 @@ import {
   DESCRIPCION_MODELO_POR_DEFECTO,
   AJUSTES_POR_DEFECTO,
   normalizarAjustes,
+  ESTILOS_CON_AJUSTES,
+  AJUSTES_POR_DEFECTO_POR_ESTILO,
+  normalizarAjustesPorEstilo,
+  migrarAjustesPorEstilo,
+  esAjustePersonalizado,
 } from '../js/modelo.js';
 
 test('formatearPrecio: miles es-AR, sin decimales por defecto', () => {
@@ -240,4 +245,85 @@ test('normalizarAjustes: un respaldo viejo (sin descripcion ni familia/fondo) si
   assert.equal(resultado.nombre.x, 60); // se preservó lo guardado
   assert.equal(resultado.nombre.familia, AJUSTES_POR_DEFECTO.nombre.familia); // se completó lo que faltaba
   assert.deepEqual(resultado.descripcion, AJUSTES_POR_DEFECTO.descripcion); // caja nueva, default completo
+});
+
+// --- Ajustes POR ESTILO (ronda 2026-09-28): defaults propios, detección de "Personalizado" y
+// migración de un config/respaldo viejo (ajustes compartidos) al formato nuevo ---
+
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: foto-precio arranca con nombre y precio visibles, descripción oculta', () => {
+  const d = AJUSTES_POR_DEFECTO_POR_ESTILO['foto-precio'];
+  assert.equal(d.nombre.visible, true);
+  assert.equal(d.precio.visible, true);
+  assert.equal(d.descripcion.visible, false);
+});
+
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: foto-descripcion arranca con SOLO la descripción visible', () => {
+  const d = AJUSTES_POR_DEFECTO_POR_ESTILO['foto-descripcion'];
+  assert.equal(d.nombre.visible, false);
+  assert.equal(d.precio.visible, false);
+  assert.equal(d.descripcion.visible, true);
+});
+
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: mi-plantilla arranca con foto, nombre y precio visibles, descripción oculta', () => {
+  const d = AJUSTES_POR_DEFECTO_POR_ESTILO['mi-plantilla'];
+  assert.equal(d.foto.visible, true);
+  assert.equal(d.nombre.visible, true);
+  assert.equal(d.precio.visible, true);
+  assert.equal(d.descripcion.visible, false);
+});
+
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: tiene exactamente los 3 estilos con texto, no "solo-foto"', () => {
+  assert.deepEqual(Object.keys(AJUSTES_POR_DEFECTO_POR_ESTILO).sort(), [...ESTILOS_CON_AJUSTES].sort());
+  assert.equal(ESTILOS_CON_AJUSTES.includes('solo-foto'), false);
+});
+
+test('normalizarAjustesPorEstilo: sin nada guardado, cada estilo con sus propios defaults', () => {
+  const resultado = normalizarAjustesPorEstilo(null);
+  for (const estilo of ESTILOS_CON_AJUSTES) {
+    assert.deepEqual(resultado[estilo], AJUSTES_POR_DEFECTO_POR_ESTILO[estilo]);
+  }
+});
+
+test('normalizarAjustesPorEstilo: completa un estilo con cajas parciales contra SUS defaults (no los de otro estilo)', () => {
+  const resultado = normalizarAjustesPorEstilo({ 'foto-precio': { nombre: { x: 5 } } });
+  assert.equal(resultado['foto-precio'].nombre.x, 5); // se preservó
+  assert.equal(resultado['foto-precio'].nombre.visible, true); // completado con el default de foto-precio
+  assert.deepEqual(resultado['foto-descripcion'], AJUSTES_POR_DEFECTO_POR_ESTILO['foto-descripcion']);
+});
+
+test('migrarAjustesPorEstilo: sin config guardada, defaults de cada estilo', () => {
+  const resultado = migrarAjustesPorEstilo(null);
+  assert.deepEqual(resultado, normalizarAjustesPorEstilo(null));
+});
+
+test('migrarAjustesPorEstilo: ya viene en formato nuevo (ajustesPorEstilo), se normaliza tal cual', () => {
+  const guardado = { ajustesPorEstilo: { 'mi-plantilla': { nombre: { x: 77 } } } };
+  const resultado = migrarAjustesPorEstilo(guardado);
+  assert.equal(resultado['mi-plantilla'].nombre.x, 77);
+});
+
+test('migrarAjustesPorEstilo: formato VIEJO (ajustes compartido) se copia a los 3 estilos, conservando lo hecho', () => {
+  const ajustesViejos = {
+    foto: { x: 10, y: 10, w: 500, h: 500, modo: 'cover' },
+    nombre: { x: 321, y: 900, w: 900, h: 100, tamano: 60, color: '#fff', peso: 700, alineacion: 'center' },
+    precio: { x: 60, y: 1000, w: 900, h: 100, tamano: 80, color: '#f5a623', peso: 800, alineacion: 'center' },
+  };
+  const resultado = migrarAjustesPorEstilo({ ajustes: ajustesViejos });
+  for (const estilo of ESTILOS_CON_AJUSTES) {
+    assert.equal(resultado[estilo].nombre.x, 321); // lo que el usuario ya había movido, conservado
+  }
+  // los 3 quedan IGUALES entre sí justo después de migrar (recién divergen si el usuario edita).
+  assert.deepEqual(resultado['foto-precio'], resultado['foto-descripcion']);
+  assert.deepEqual(resultado['foto-precio'], resultado['mi-plantilla']);
+});
+
+test('esAjustePersonalizado: false contra los defaults de fábrica, true apenas se cambia algo', () => {
+  assert.equal(esAjustePersonalizado('foto-precio', AJUSTES_POR_DEFECTO_POR_ESTILO['foto-precio']), false);
+  const modificado = { ...AJUSTES_POR_DEFECTO_POR_ESTILO['foto-precio'], nombre: { ...AJUSTES_POR_DEFECTO_POR_ESTILO['foto-precio'].nombre, x: 999 } };
+  assert.equal(esAjustePersonalizado('foto-precio', modificado), true);
+});
+
+test('esAjustePersonalizado: estilo desconocido o ajustes ausentes no revienta, da false', () => {
+  assert.equal(esAjustePersonalizado('no-existe', {}), false);
+  assert.equal(esAjustePersonalizado('foto-precio', null), false);
 });

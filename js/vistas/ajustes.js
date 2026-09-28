@@ -1,20 +1,35 @@
 // Pantalla "Ajustes": 4 secciones con título + explicación (estilo de imagen con tarjetas de
-// miniatura en vivo, texto que acompaña, tu plantilla, datos). CREAR-BRIEF.md, ronda 2026-09-27.
+// miniatura en vivo, texto que acompaña, tu plantilla, datos). CREAR-BRIEF.md, ronda 2026-09-27;
+// ronda "ajustes por estilo" 2026-09-28 (badge "Personalizado" + botón "Editar" por tarjeta).
 import * as repo from '../repositorio.js';
 import {
   ESTILOS_IMAGEN,
+  ESTILOS_CON_AJUSTES,
   ETIQUETA_ESTILO,
   ENCUADRES_FOTO,
   ETIQUETA_ENCUADRE_FOTO,
   aplicarPlantillaDescripcion,
   resolverDescripcion,
+  esAjustePersonalizado,
 } from '../modelo.js';
-import { componerSegunEstilo } from '../componer.js';
+import { componerMiniatura } from '../componer.js';
 import { mostrarToast } from '../utils/toast.js';
 import { seccionLaApp } from './ajustes-la-app.js';
 
 let debounce = null;
 let urlsMiniaturas = [];
+
+// Cache en memoria de miniaturas por (estilo, hash de lo que puede cambiar el dibujo, producto):
+// evita rehacer el canvas/JPEG en cada entrada a Ajustes o cambio de un ajuste que no afecta a
+// ESTE estilo (ronda "miniaturas con placeholder", 2026-09-28). Vive mientras dure la pestaña —
+// se guarda el Blob (no la URL: esa se crea/revoca en cada render de la pantalla).
+const cacheMiniaturas = new Map();
+
+function hashCadena(texto) {
+  let h = 0;
+  for (let i = 0; i < texto.length; i += 1) h = (Math.imul(31, h) + texto.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
 
 export async function render(contenedor, { navegar }) {
   contenedor.textContent = '';
@@ -39,15 +54,22 @@ export async function render(contenedor, { navegar }) {
   grillaEstilos.className = 'grilla-estilos';
   const tarjetasPorEstilo = {};
   for (const valor of ESTILOS_IMAGEN) {
-    const { tarjeta, img } = tarjetaEstilo(valor, general.estiloGeneral === valor, async () => {
-      await repo.guardarEstiloGeneral(valor);
-      general.estiloGeneral = valor;
-      for (const v of ESTILOS_IMAGEN) tarjetasPorEstilo[v].classList.toggle('tarjeta-estilo--activa', v === valor);
-      mostrarToast(`Estilo general: ${ETIQUETA_ESTILO[valor]}`);
+    const editable = ESTILOS_CON_AJUSTES.includes(valor);
+    const tarjeta = tarjetaEstilo(valor, general.estiloGeneral === valor, {
+      editable,
+      onSeleccionar: async () => {
+        await repo.guardarEstiloGeneral(valor);
+        general.estiloGeneral = valor;
+        for (const v of ESTILOS_IMAGEN) {
+          tarjetasPorEstilo[v].raiz.classList.toggle('tarjeta-estilo--activa', v === valor);
+          tarjetasPorEstilo[v].btnSeleccionar.setAttribute('aria-pressed', String(v === valor));
+        }
+        mostrarToast(`Estilo general: ${ETIQUETA_ESTILO[valor]}`);
+      },
+      onEditar: editable ? () => navegar(`#/plantilla?estilo=${valor}`) : null,
     });
     tarjetasPorEstilo[valor] = tarjeta;
-    tarjeta.dataset.imgRef = valor;
-    grillaEstilos.append(tarjeta);
+    grillaEstilos.append(tarjeta.raiz);
   }
   seccionEstilo.append(grillaEstilos);
 
@@ -187,37 +209,77 @@ export async function render(contenedor, { navegar }) {
   wrap.append(seccionEstilo, seccionTexto, seccionPlantilla, seccionDatos, seccionLaApp());
   contenedor.append(wrap);
 
+  function claveProducto(p) {
+    return { id: p.id ?? null, nombre: p.nombre, precio: p.precio, descripcion: p.descripcion ?? '', fotoId: p.fotoId ?? null };
+  }
+
   async function regenerarMiniaturas() {
     const config = await repo.obtenerPlantillaConfig();
     // siempre se busca: la tarjeta "Mi plantilla" necesita su miniatura aunque no sea el estilo activo.
     const plantillaBlob = await repo.obtenerImagenPlantillaBlob();
     const plantillaImagen = await createImageBitmap(plantillaBlob);
-    const fotoImagen = fotoEjemploBlob ? await createImageBitmap(fotoEjemploBlob) : null;
+    const fotoImagen = fotoEjemploBlob ? await createImageBitmap(fotoEjemploBlob) : await fotoDeEjemploPorDefecto();
     const descripcionResuelta = resolverDescripcion(productoEjemplo, { ...general, formatoPrecio: config.formatoPrecio });
 
-    for (const valor of ESTILOS_IMAGEN) {
-      try {
-        const blob = await componerSegunEstilo({
-          estilo: valor,
-          plantillaImagen,
-          fotoImagen,
-          producto: productoEjemplo,
-          ajustes: config.ajustes,
-          formatoPrecio: config.formatoPrecio,
-          descripcion: descripcionResuelta,
-          encuadreFoto: general.encuadreFoto,
-        });
-        const url = URL.createObjectURL(blob);
-        urlsMiniaturas.push(url);
-        const img = tarjetasPorEstilo[valor].querySelector('img');
-        img.src = url;
-      } catch {
-        // una miniatura que falla no rompe el resto de la pantalla
-      }
-    }
+    await Promise.all(
+      ESTILOS_IMAGEN.map(async (valor) => {
+        try {
+          const ajustesEstilo = config.ajustesPorEstilo[valor] ?? null;
+          const clave = `${valor}:${hashCadena(
+            JSON.stringify({
+              ajustesEstilo,
+              imagenId: config.imagenId,
+              formatoPrecio: config.formatoPrecio,
+              encuadreFoto: general.encuadreFoto,
+              producto: claveProducto(productoEjemplo),
+              tieneFoto: !!fotoImagen,
+            })
+          )}`;
+          let blob = cacheMiniaturas.get(clave);
+          if (!blob) {
+            blob = await componerMiniatura({
+              estilo: valor,
+              plantillaImagen,
+              fotoImagen,
+              producto: productoEjemplo,
+              ajustes: ajustesEstilo ?? {},
+              formatoPrecio: config.formatoPrecio,
+              descripcion: descripcionResuelta,
+              encuadreFoto: general.encuadreFoto,
+            });
+            cacheMiniaturas.set(clave, blob);
+          }
+          const url = URL.createObjectURL(blob);
+          urlsMiniaturas.push(url);
+          mostrarMiniatura(tarjetasPorEstilo[valor].marco, url, `Vista previa del estilo ${ETIQUETA_ESTILO[valor]}`);
+          if (tarjetasPorEstilo[valor].badge) {
+            const personalizado = ajustesEstilo ? esAjustePersonalizado(valor, ajustesEstilo) : false;
+            tarjetasPorEstilo[valor].badge.hidden = !personalizado;
+          }
+        } catch {
+          // una miniatura que falla no rompe el resto de la pantalla
+        }
+      })
+    );
   }
 
   await regenerarMiniaturas();
+}
+
+let bitmapEjemploPorDefecto = null;
+/** Sin ningún producto cargado (recién instalada), las miniaturas usan una foto de ejemplo propia
+ * del proyecto en vez de quedar sin foto — assets/ejemplo.jpg (ronda "miniaturas con placeholder",
+ * CREAR-BRIEF.md 2026-09-28). Decodificada una sola vez y reusada. */
+async function fotoDeEjemploPorDefecto() {
+  if (bitmapEjemploPorDefecto) return bitmapEjemploPorDefecto;
+  try {
+    const respuesta = await fetch('assets/ejemplo.jpg');
+    const blob = await respuesta.blob();
+    bitmapEjemploPorDefecto = await createImageBitmap(blob);
+  } catch {
+    bitmapEjemploPorDefecto = null;
+  }
+  return bitmapEjemploPorDefecto;
 }
 
 function seccion(titulo, explicacion) {
@@ -233,28 +295,77 @@ function seccion(titulo, explicacion) {
   return div;
 }
 
-function tarjetaEstilo(valor, activa, onSeleccionar) {
-  const tarjeta = document.createElement('button');
-  tarjeta.type = 'button';
-  tarjeta.className = 'tarjeta-estilo' + (activa ? ' tarjeta-estilo--activa' : '');
-  tarjeta.setAttribute('data-accion', `estilo-${valor}`);
-  tarjeta.setAttribute('aria-pressed', String(activa));
+/**
+ * Tarjeta de un estilo: marco con placeholder "Generando…" (se reemplaza por el <img> recién
+ * cuando hay `src`, nunca antes — así no se ve el ícono de imagen rota mientras se arma la
+ * miniatura, BUGS.md ronda "miniaturas con placeholder") + etiqueta, y si `editable` un pie con
+ * badge "Personalizado" (oculto hasta que corresponda) y botón "Editar".
+ */
+function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar }) {
+  const raiz = document.createElement('div');
+  raiz.className = 'tarjeta-estilo' + (activa ? ' tarjeta-estilo--activa' : '');
 
-  const img = document.createElement('img');
-  img.className = 'tarjeta-estilo__miniatura';
-  img.alt = `Vista previa del estilo ${ETIQUETA_ESTILO[valor]}`;
+  const btnSeleccionar = document.createElement('button');
+  btnSeleccionar.type = 'button';
+  btnSeleccionar.className = 'tarjeta-estilo__seleccionar';
+  btnSeleccionar.setAttribute('data-accion', `estilo-${valor}`);
+  btnSeleccionar.setAttribute('aria-pressed', String(activa));
+
+  const marco = document.createElement('div');
+  marco.className = 'tarjeta-estilo__marco';
+  const placeholder = document.createElement('div');
+  placeholder.className = 'tarjeta-estilo__placeholder skeleton';
+  placeholder.setAttribute('aria-hidden', 'true');
+  const textoPlaceholder = document.createElement('span');
+  textoPlaceholder.className = 'tarjeta-estilo__placeholder-texto';
+  textoPlaceholder.textContent = 'Generando…';
+  placeholder.append(textoPlaceholder);
+  marco.append(placeholder);
 
   const etiqueta = document.createElement('span');
   etiqueta.className = 'tarjeta-estilo__etiqueta';
   etiqueta.textContent = ETIQUETA_ESTILO[valor];
 
-  tarjeta.append(img, etiqueta);
-  tarjeta.addEventListener('click', async () => {
-    document.querySelectorAll('.tarjeta-estilo').forEach((t) => t.setAttribute('aria-pressed', 'false'));
-    tarjeta.setAttribute('aria-pressed', 'true');
+  btnSeleccionar.append(marco, etiqueta);
+  btnSeleccionar.addEventListener('click', async () => {
+    document.querySelectorAll('.tarjeta-estilo').forEach((t) => t.classList.remove('tarjeta-estilo--activa'));
+    document.querySelectorAll('.tarjeta-estilo__seleccionar').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+    raiz.classList.add('tarjeta-estilo--activa');
+    btnSeleccionar.setAttribute('aria-pressed', 'true');
     await onSeleccionar();
   });
-  return { tarjeta, img };
+  raiz.append(btnSeleccionar);
+
+  let badge = null;
+  if (editable) {
+    const pie = document.createElement('div');
+    pie.className = 'tarjeta-estilo__pie';
+    badge = document.createElement('span');
+    badge.className = 'tarjeta-estilo__badge';
+    badge.textContent = 'Personalizado';
+    badge.hidden = true;
+    const btnEditar = document.createElement('button');
+    btnEditar.type = 'button';
+    btnEditar.className = 'boton boton--chico boton--fantasma';
+    btnEditar.setAttribute('data-accion', `editar-estilo-${valor}`);
+    btnEditar.textContent = 'Editar';
+    btnEditar.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      onEditar();
+    });
+    pie.append(badge, btnEditar);
+    raiz.append(pie);
+  }
+
+  return { raiz, marco, btnSeleccionar, badge };
+}
+
+function mostrarMiniatura(marco, url, alt) {
+  const img = document.createElement('img');
+  img.className = 'tarjeta-estilo__miniatura';
+  img.alt = alt;
+  img.src = url;
+  marco.replaceChildren(img);
 }
 
 function limpiarUrls() {

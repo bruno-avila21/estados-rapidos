@@ -1,6 +1,20 @@
 // Ajustes: tarjetas de estilo con miniatura en vivo, editor de plantilla siempre accesible,
-// descripción modelo (CREAR-BRIEF.md, rondas 2026-09-27).
+// descripción modelo (CREAR-BRIEF.md, rondas 2026-09-27; "ajustes por estilo" 2026-09-28).
 import { test, expect } from '@playwright/test';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const AQUI = path.dirname(fileURLToPath(import.meta.url));
+const FOTO = path.join(AQUI, 'fixtures', 'producto.png');
+
+async function crearProducto(page) {
+  await page.locator('[data-accion="agregar"]').click();
+  await page.locator('#campo-nombre').fill('Producto ajustes');
+  await page.locator('#campo-precio').fill('5000');
+  await page.locator('[data-accion-input="elegir-galeria"]').setInputFiles(FOTO);
+  await page.locator('[data-accion="guardar"]').click();
+  await expect(page.locator('[data-accion="editar"]')).toBeVisible();
+}
 
 test('Plantilla no está en la navegación principal, pero el editor se abre desde Ajustes', async ({ page }) => {
   await page.goto('/');
@@ -39,6 +53,44 @@ test('la descripción modelo se guarda y se ve en el ejemplo', async ({ page }) 
 
   await page.reload();
   await expect(page.locator('#campo-descripcion-modelo')).toHaveValue('{nombre} — {precio}, escribinos');
+});
+
+// --- "Editar" por tarjeta + badge "Personalizado" (ronda "ajustes por estilo", 2026-09-28) ---
+
+test('"Solo la foto" no tiene botón Editar (no es editable); los otros 3 sí', async ({ page }) => {
+  await page.goto('/#/ajustes');
+  await expect(page.locator('[data-accion="editar-estilo-solo-foto"]')).toHaveCount(0);
+  for (const estilo of ['foto-precio', 'foto-descripcion', 'mi-plantilla']) {
+    await expect(page.locator(`[data-accion="editar-estilo-${estilo}"]`)).toBeVisible();
+  }
+});
+
+test('"Editar" de una tarjeta abre el editor en ESE estilo', async ({ page }) => {
+  await page.goto('/#/ajustes');
+  await page.locator('[data-accion="editar-estilo-foto-descripcion"]').click();
+  await expect(page).toHaveURL(/#\/plantilla\?estilo=foto-descripcion/);
+  await expect(page.locator('#editor-vista-previa-estilo')).toHaveValue('foto-descripcion');
+});
+
+test('badge "Personalizado" en la tarjeta de Ajustes aparece después de editar ese estilo', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/ajustes');
+  const tarjetaFotoPrecio = page.locator('.tarjeta-estilo', { has: page.locator('[data-accion="estilo-foto-precio"]') });
+  await expect(tarjetaFotoPrecio.locator('.tarjeta-estilo__badge')).toBeHidden();
+
+  await page.locator('[data-accion="editar-estilo-foto-precio"]').click();
+  await expect(page).toHaveURL(/estilo=foto-precio/);
+  const caja = await page.locator('[data-elemento="nombre"]').boundingBox();
+  await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2 + 100, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.locator('.editor-plantilla__badge')).toBeVisible();
+  await page.waitForTimeout(100); // deja que la escritura a IndexedDB (persistir) termine antes de navegar
+
+  await page.locator('[data-accion="ir-ajustes"]').first().click();
+  await expect(tarjetaFotoPrecio.locator('.tarjeta-estilo__badge')).toBeVisible();
 });
 
 // --- Encuadre de la foto (ronda "foto entera") ---

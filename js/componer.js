@@ -4,11 +4,15 @@
 //     preparado (fuentes cargadas de antemano). La usa el editor para pintar directo en el canvas
 //     visible en cada frame (requestAnimationFrame), y también la exportación de abajo.
 //   - `componerSegunEstilo(datos)` — async: crea un lienzo 1080×1920 fuera de pantalla, llama a la
-//     función de arriba y exporta un Blob PNG. La usan Publicar y las miniaturas de Ajustes.
-// Nombre, precio y descripción comparten UN solo conjunto de ajustes (ver AJUSTES_POR_DEFECTO en
-// modelo.js) usado por "Foto con precio", "Foto con descripción" y "Mi plantilla"; `foto` solo
-// aplica a "Mi plantilla" (los otros van siempre a pantalla completa, con el encuadre elegido en
-// Ajustes: "Entera"/contain por defecto, o "Llenar la pantalla"/cover).
+//     función de arriba y exporta un Blob JPEG (calidad 0.9: lo que se comparte). La usan Publicar
+//     y la hoja de revisión para el archivo final.
+//   - `componerMiniatura(datos)` — async: igual, pero a 270×480 para vista previa (Ajustes,
+//     carrusel de la hoja de revisión): no hace falta resolución completa para una miniatura.
+// Cada estilo con texto ("Foto con precio", "Foto con descripción", "Mi plantilla") tiene su PROPIO
+// juego de ajustes (`ajustesPorEstilo` en modelo.js/repositorio.js, ronda "ajustes por estilo",
+// 2026-09-28) — acá solo se dibuja con el que llega en `datos.ajustes`, sin saber de dónde salió.
+// `foto` solo aplica a "Mi plantilla" (los otros van siempre a pantalla completa, con el encuadre
+// elegido en Ajustes: "Entera"/contain por defecto, o "Llenar la pantalla"/cover).
 import { calcularLineas, calcularRecorteCover } from './layout.js';
 import { formatearPrecio } from './modelo.js';
 import { cargarFuentes, familiaCanvas } from './fuentes.js';
@@ -59,16 +63,39 @@ export function dibujarSegunEstilo(ctx, datos) {
 
 /**
  * Versión "de exportación": crea un lienzo 1080×1920 fuera de pantalla, carga las fuentes que
- * hagan falta y devuelve el PNG ya compuesto. La usan Publicar, la hoja de revisión y las
- * miniaturas de Ajustes/editor (donde sí hace falta un Blob, a diferencia de la vista previa en
- * vivo del editor que dibuja directo en su propio canvas con `dibujarSegunEstilo`).
+ * hagan falta y devuelve la imagen ya compuesta. La usa Publicar/la hoja de revisión para el
+ * archivo FINAL que se comparte.
+ *
+ * JPEG calidad 0.9 por defecto (no PNG): WhatsApp recomprime igual las imágenes que llegan por
+ * `Intent.ACTION_SEND`/`navigator.share`, así que el PNG sin pérdida solo hacía más lento
+ * comprimir y más pesado el archivo que había que pasarle al puente nativo (ronda "publicar más
+ * rápido", CREAR-BRIEF.md 2026-09-28). Sigue en 1080×1920: el tamaño no cambia, solo el formato.
  * @returns {Promise<Blob>}
  */
-export async function componerSegunEstilo(datos) {
+export async function componerSegunEstilo(datos, { formato = 'image/jpeg', calidad = 0.9 } = {}) {
   if (datos.estilo !== 'solo-foto') await cargarFuentes();
   const { canvas, ctx } = lienzoNuevo();
   dibujarSegunEstilo(ctx, datos);
-  return exportarBlob(canvas);
+  return exportarBlob(canvas, formato, calidad);
+}
+
+/**
+ * Miniatura LIVIANA (por defecto 270×480, un cuarto del lienzo real): mismo dibujo que la
+ * exportación, pero en un lienzo chico escalado con `setTransform` en vez de rasterizar a
+ * 1080×1920 y después achicar con CSS — las miniaturas de Ajustes y el carrusel de la hoja de
+ * revisión no necesitan más resolución que esa (ronda "publicar más rápido"/"miniaturas con
+ * placeholder"). JPEG de calidad media: son solo vista previa, no el archivo que se comparte.
+ * @returns {Promise<Blob>}
+ */
+export async function componerMiniatura(datos, { ancho = 270, alto = 480 } = {}) {
+  if (datos.estilo !== 'solo-foto') await cargarFuentes();
+  const canvas = document.createElement('canvas');
+  canvas.width = ancho;
+  canvas.height = alto;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(ancho / ANCHO, 0, 0, alto / ALTO, 0, 0);
+  dibujarSegunEstilo(ctx, datos);
+  return exportarBlob(canvas, 'image/jpeg', 0.75);
 }
 
 function limpiarLienzo(ctx) {
@@ -111,9 +138,9 @@ function lienzoNuevo() {
   return { canvas, ctx };
 }
 
-function exportarBlob(canvas) {
+function exportarBlob(canvas, tipo = 'image/png', calidad) {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No se pudo generar la imagen.'))), 'image/png');
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No se pudo generar la imagen.'))), tipo, calidad);
   });
 }
 

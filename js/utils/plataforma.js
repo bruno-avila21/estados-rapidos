@@ -10,15 +10,23 @@ export function enApk() {
 }
 
 /**
- * Compartir uno o varios archivos de imagen. En el APK convierte cada Blob a dataURL (base64)
- * y se los pasa al puente nativo, que arma el Intent.ACTION_SEND(_MULTIPLE) con el chooser de
- * Android. Nunca lanza: si algo falla, el error queda en la consola y quien llama decide el
- * fallback (compartir.js ya sabe caer a `navigator.share` / descarga si esto no aplica).
+ * Compartir uno o varios archivos de imagen. En el APK, cada Blob se pasa al puente nativo APENAS
+ * está listo (`Android.guardarParaCompartir(indice, dataUrl)`, uno por vez, en orden) y recién al
+ * final se dispara el chooser (`Android.compartirPreparadas(texto)`) — no se arma un JSON con el
+ * base64 de TODAS las imágenes juntas en memoria antes de mandar nada (con 10 fotos era una string
+ * de varios MB; ronda "publicar más rápido", CREAR-BRIEF.md 2026-09-28). Nunca lanza: si algo
+ * falla, el error queda en la consola y quien llama decide el fallback (compartir.js ya sabe caer
+ * a `navigator.share` / descarga si esto no aplica).
  * @param {{archivos: File[], texto?: string}} datos
  */
 export async function compartirImagenesApk({ archivos, texto = '' }) {
-  const dataUrls = await Promise.all(archivos.map(archivoADataUrl));
-  window.Android.compartirImagenes(JSON.stringify(dataUrls), texto);
+  for (let i = 0; i < archivos.length; i += 1) {
+    // eslint-disable-next-line no-await-in-loop -- cada archivo se lee y se manda al puente apenas
+    // está listo, uno detrás del otro: es justamente la idea (evitar juntar todo antes de mandar).
+    const dataUrl = await archivoADataUrl(archivos[i]);
+    window.Android.guardarParaCompartir(i, dataUrl);
+  }
+  window.Android.compartirPreparadas(texto);
 }
 
 function archivoADataUrl(archivo) {

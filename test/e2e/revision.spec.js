@@ -103,7 +103,9 @@ test('hoja de revisión con 3 productos: arma 3 imágenes 1080x1920, texto edita
   expect(llamadas[0].cantidad).toBe(3);
   expect(llamadas[0].text).toBe('Texto editado a mano para los 3');
   for (const dim of llamadas[0].dimensiones) {
-    expect(dim).toEqual({ w: 1080, h: 1920, tipo: 'image/png' });
+    // JPEG calidad 0.9 (no PNG): WhatsApp recomprime igual, y así se comparte más rápido/liviano
+    // (ronda "publicar más rápido", CREAR-BRIEF.md 2026-09-28). El tamaño sigue en 1080x1920.
+    expect(dim).toEqual({ w: 1080, h: 1920, tipo: 'image/jpeg' });
   }
 });
 
@@ -157,6 +159,51 @@ test('Atrás cierra la hoja de revisión y no cambia de pantalla', async ({ page
   await expect(page.locator('[data-accion="agregar"]')).toBeVisible();
   await page.locator('[data-accion="agregar"]').click(); // la lista responde: nada la tapa
   await expect(page.locator('#campo-nombre')).toBeVisible();
+});
+
+// --- "Incluir texto" (ronda "compartir sin texto", 2026-09-28): apagado, no se copia al
+// portapapeles ni se manda EXTRA_TEXT/text; se recuerda la última elección. ---
+
+test('"Incluir texto" apagado: no copia al portapapeles, no manda texto, y el textarea queda deshabilitado', async ({ page }) => {
+  await mockearCompartir(page);
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Sin texto', precio: '1000' });
+  await page.evaluate(() => navigator.clipboard.writeText('placeholder-anterior'));
+
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+
+  const check = page.locator('[data-accion="revision-incluir-texto"]');
+  await expect(check).toBeChecked(); // encendido por defecto
+  await expect(page.locator('#revision-descripcion')).toBeEnabled();
+
+  await check.uncheck();
+  await expect(page.locator('#revision-descripcion')).toBeDisabled();
+
+  await page.locator('[data-accion="revision-compartir"]').click();
+  await expect(page.locator('#toast')).toHaveText(/Mi estado/);
+
+  const llamadas = await page.evaluate(() => window.__compartir.llamadas);
+  expect(llamadas[0].text).toBeFalsy(); // sin texto, no undefined con contenido
+
+  const portapapeles = await page.evaluate(() => navigator.clipboard.readText());
+  expect(portapapeles).toBe('placeholder-anterior'); // no se tocó el portapapeles
+});
+
+test('"Incluir texto" se recuerda entre hojas de revisión (ajustes generales)', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Recordar', precio: '1000' });
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+  await page.locator('[data-accion="revision-incluir-texto"]').uncheck();
+  await page.locator('[data-accion="revision-cerrar"]').click();
+
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('[data-accion="revision-incluir-texto"]')).not.toBeChecked();
+
+  await page.reload();
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('[data-accion="revision-incluir-texto"]')).not.toBeChecked();
 });
 
 test('cerrar la hoja con la X no deja un paso de más en el historial', async ({ page }) => {

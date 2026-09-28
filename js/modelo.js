@@ -34,12 +34,13 @@ function cajaTexto(extra) {
   };
 }
 
-// Ajustes COMPARTIDOS (posición, tamaño, tipografía, color, fondo/etiqueta, visibilidad) que
-// se editan una sola vez en el editor de plantilla y valen para los 3 estilos con texto
-// ("Foto con precio", "Foto con descripción" y "Mi plantilla"). `foto` es la excepción: solo
+// Geometría/tipografía de PARTIDA (posición, tamaño, tipografía, color, fondo/etiqueta) para las
+// 4 cajas editables. Hasta la ronda 2026-09-28 esto era el único juego de ajustes y lo compartían
+// los 3 estilos con texto; ahora es solo la base sobre la que se arma `AJUSTES_POR_DEFECTO_POR_ESTILO`
+// (cada estilo con su propia visibilidad de fábrica — ver más abajo). `foto` es la excepción: solo
 // se usa en "Mi plantilla" (en los otros dos la foto siempre ocupa toda la imagen).
 export const AJUSTES_POR_DEFECTO = Object.freeze({
-  foto: { x: 140, y: 130, w: 800, h: 800, modo: 'cover' },
+  foto: { x: 140, y: 130, w: 800, h: 800, modo: 'cover', visible: true },
   nombre: cajaTexto({ y: 1460, h: 120, tamano: 58 }),
   precio: cajaTexto({ y: 1590, h: 130, tamano: 84, color: '#a78bfa', peso: 800 }),
   descripcion: cajaTexto({ y: 1730, h: 150, tamano: 38, peso: 400 }),
@@ -53,6 +54,8 @@ function normalizarCaja(base, guardada) {
   return { ...base, ...guardada };
 }
 
+/** Ajustes "compartidos" normalizados (formato de antes de la ronda "ajustes por estilo"):
+ * se usa solo como paso intermedio de la migración de un respaldo/config viejo. */
 export function normalizarAjustes(ajustesGuardados) {
   const g = ajustesGuardados || {};
   return {
@@ -61,6 +64,99 @@ export function normalizarAjustes(ajustesGuardados) {
     precio: normalizarCaja(AJUSTES_POR_DEFECTO.precio, g.precio),
     descripcion: normalizarCaja(AJUSTES_POR_DEFECTO.descripcion, g.descripcion),
   };
+}
+
+function clonar(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
+/** Arma el juego de ajustes por defecto de UN estilo: la misma geometría de base, con la
+ * visibilidad de fábrica de ese estilo (las demás claves quedan armadas igual, solo ocultas). */
+function ajustesConVisibilidad(clavesVisibles) {
+  const base = clonar(AJUSTES_POR_DEFECTO);
+  for (const clave of ['foto', 'nombre', 'precio', 'descripcion']) {
+    base[clave] = { ...base[clave], visible: clavesVisibles.includes(clave) };
+  }
+  return base;
+}
+
+// --- Ajustes POR ESTILO (ronda 2026-09-28: "configuración por estilo") ---
+// Los 3 estilos con texto dejan de compartir un único juego de ajustes: cada uno tiene su propia
+// configuración (posición/tipografía/color/fondo/visibilidad), con estos defaults de fábrica:
+//   - foto-precio: nombre + precio visibles, descripción oculta.
+//   - foto-descripcion: descripción visible, nombre y precio ocultos (la descripción ya suele
+//     incluirlos, vía {nombre}/{precio} en el modelo de texto).
+//   - mi-plantilla: foto + nombre + precio visibles, descripción oculta.
+// "Solo la foto" no tiene ajustes propios (nunca dibuja texto ni plantilla) y no aparece acá.
+export const ESTILOS_CON_AJUSTES = Object.freeze(['foto-precio', 'foto-descripcion', 'mi-plantilla']);
+
+export const AJUSTES_POR_DEFECTO_POR_ESTILO = Object.freeze({
+  'foto-precio': Object.freeze(ajustesConVisibilidad(['nombre', 'precio'])),
+  'foto-descripcion': Object.freeze(ajustesConVisibilidad(['descripcion'])),
+  'mi-plantilla': Object.freeze(ajustesConVisibilidad(['foto', 'nombre', 'precio'])),
+});
+
+/** Normaliza los ajustes de UN estilo contra sus propios defaults (completa cajas parciales o
+ * ausentes, como `normalizarCaja` pero por estilo). */
+function normalizarAjustesDeEstilo(estilo, guardado) {
+  const base = AJUSTES_POR_DEFECTO_POR_ESTILO[estilo] || AJUSTES_POR_DEFECTO_POR_ESTILO['foto-precio'];
+  const g = guardado || {};
+  return {
+    foto: normalizarCaja(base.foto, g.foto),
+    nombre: normalizarCaja(base.nombre, g.nombre),
+    precio: normalizarCaja(base.precio, g.precio),
+    descripcion: normalizarCaja(base.descripcion, g.descripcion),
+  };
+}
+
+/** Normaliza el objeto `ajustesPorEstilo` completo: cada estilo contra sus propios defaults, así
+ * un config nuevo pero con un estilo faltante (o con cajas parciales) queda completo igual. */
+export function normalizarAjustesPorEstilo(guardadoPorEstilo) {
+  const g = guardadoPorEstilo || {};
+  const resultado = {};
+  for (const estilo of ESTILOS_CON_AJUSTES) {
+    resultado[estilo] = normalizarAjustesDeEstilo(estilo, g[estilo]);
+  }
+  return resultado;
+}
+
+/** ¿Lo guardado tiene la forma VIEJA (ajustes compartidos, de antes de esta ronda)? Esas 4 claves
+ * de caja directamente en el objeto (no anidadas bajo 'foto-precio'/'foto-descripcion'/'mi-plantilla')
+ * son la señal de un config de antes de 2026-09-28. */
+function esFormatoAjustesCompartidoViejo(objeto) {
+  if (!objeto || typeof objeto !== 'object') return false;
+  return ['foto', 'nombre', 'precio', 'descripcion'].some((clave) => clave in objeto);
+}
+
+/**
+ * Migra lo guardado de plantilla (todo el registro `config.plantilla`, o la sección `plantilla`
+ * de un respaldo) al formato nuevo `ajustesPorEstilo`:
+ *   - ya viene en formato nuevo (`ajustesPorEstilo`) → se normaliza cada estilo.
+ *   - formato VIEJO (`ajustes` compartido, de antes de esta ronda) → se copia lo que el usuario
+ *     ya armó a los 3 estilos por igual (se conserva su trabajo, no se pierde nada).
+ *   - nada guardado → los defaults de cada estilo.
+ */
+export function migrarAjustesPorEstilo(configGuardada) {
+  if (!configGuardada) return normalizarAjustesPorEstilo(null);
+  if (configGuardada.ajustesPorEstilo) return normalizarAjustesPorEstilo(configGuardada.ajustesPorEstilo);
+  if (esFormatoAjustesCompartidoViejo(configGuardada.ajustes)) {
+    const compartido = normalizarAjustes(configGuardada.ajustes);
+    return {
+      'foto-precio': clonar(compartido),
+      'foto-descripcion': clonar(compartido),
+      'mi-plantilla': clonar(compartido),
+    };
+  }
+  return normalizarAjustesPorEstilo(null);
+}
+
+/** ¿Los ajustes de este estilo son distintos de sus defaults de fábrica? Maneja el badge
+ * "Personalizado" (editor y tarjeta de Ajustes) y si corresponde ofrecer "Volver al original". */
+export function esAjustePersonalizado(estilo, ajustesDelEstilo) {
+  const defaults = AJUSTES_POR_DEFECTO_POR_ESTILO[estilo];
+  if (!defaults || !ajustesDelEstilo) return false;
+  const normalizado = normalizarAjustesDeEstilo(estilo, ajustesDelEstilo);
+  return JSON.stringify(normalizado) !== JSON.stringify(defaults);
 }
 
 export const FORMATO_PRECIO_POR_DEFECTO = Object.freeze({
@@ -243,6 +339,8 @@ export function validarRespaldo(objeto) {
       return { ok: false, error: 'Descripción modelo inválida en el respaldo.' };
     if (objeto.general.encuadreFoto != null && !ENCUADRES_FOTO.includes(objeto.general.encuadreFoto))
       return { ok: false, error: 'Encuadre de foto inválido en el respaldo.' };
+    if (objeto.general.incluirTextoAlCompartir != null && typeof objeto.general.incluirTextoAlCompartir !== 'boolean')
+      return { ok: false, error: '"Incluir texto" inválido en el respaldo.' };
   }
 
   if (objeto.plantilla != null) {
@@ -278,7 +376,7 @@ export function construirRespaldo({ productos, plantilla, general }) {
     plantilla: plantilla
       ? {
           imagenBase64: plantilla.imagenBase64 ?? null,
-          ajustes: plantilla.ajustes ?? AJUSTES_POR_DEFECTO,
+          ajustesPorEstilo: plantilla.ajustesPorEstilo ?? AJUSTES_POR_DEFECTO_POR_ESTILO,
           formatoPrecio: plantilla.formatoPrecio ?? FORMATO_PRECIO_POR_DEFECTO,
         }
       : null,
@@ -287,6 +385,7 @@ export function construirRespaldo({ productos, plantilla, general }) {
           estiloGeneral: general.estiloGeneral ?? ESTILO_POR_DEFECTO,
           descripcionModelo: general.descripcionModelo ?? DESCRIPCION_MODELO_POR_DEFECTO,
           encuadreFoto: general.encuadreFoto ?? ENCUADRE_FOTO_POR_DEFECTO,
+          incluirTextoAlCompartir: general.incluirTextoAlCompartir ?? true,
         }
       : null,
   };

@@ -521,6 +521,11 @@ details.grupo > .campo {
   outline: none;
   border-color: var(--color-acento);
 }
+.campo input:disabled,
+.campo textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .campo__error {
   color: var(--color-peligro);
   font-size: var(--tamano-14);
@@ -567,39 +572,88 @@ details.grupo > .campo {
 .tarjeta-estilo {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 8px;
   padding: 10px;
   background: var(--color-superficie-alta);
   border: 2px solid var(--color-borde);
   border-radius: var(--radio);
-  cursor: pointer;
-  transition: border-color var(--duracion) var(--ease), transform var(--duracion) var(--ease);
-}
-.tarjeta-estilo:hover {
-  border-color: var(--color-texto-tenue);
-}
-.tarjeta-estilo:active {
-  transform: scale(0.98);
-}
-.tarjeta-estilo:focus-visible {
-  outline: 2px solid var(--color-primario);
-  outline-offset: 2px;
+  transition: border-color var(--duracion) var(--ease);
 }
 .tarjeta-estilo--activa {
   border-color: var(--color-primario);
 }
-.tarjeta-estilo__miniatura {
+/* El área seleccionable (miniatura + etiqueta) es un <button> propio; el pie (badge + Editar) es
+   otro control aparte — un <button> no puede anidar otro <button> (BUGS.md, ronda "ajustes por
+   estilo"). */
+.tarjeta-estilo__seleccionar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: transform var(--duracion) var(--ease);
+}
+.tarjeta-estilo__seleccionar:active {
+  transform: scale(0.98);
+}
+.tarjeta-estilo__seleccionar:focus-visible {
+  outline: 2px solid var(--color-primario);
+  outline-offset: 2px;
+  border-radius: var(--radio-chico);
+}
+.tarjeta-estilo__marco {
   width: 100%;
   aspect-ratio: 1080 / 1920;
-  object-fit: cover;
   border-radius: var(--radio-chico);
   background: var(--color-fondo);
+  overflow: hidden;
+}
+.tarjeta-estilo__miniatura {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Miniatura todavía no lista: skeleton animado (respeta prefers-reduced-motion, media query
+   general al final del archivo) en vez del ícono de imagen rota — nunca se pone el <img> hasta
+   tener `src` (ronda "miniaturas con placeholder"). */
+.tarjeta-estilo__placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+}
+.tarjeta-estilo__placeholder-texto {
+  font-size: var(--tamano-14);
+  color: var(--color-texto-tenue);
 }
 .tarjeta-estilo__etiqueta {
   font-size: var(--tamano-14);
   font-weight: 600;
   color: var(--color-texto);
+}
+.tarjeta-estilo__pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tarjeta-estilo__badge {
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  color: var(--color-acento);
+  background: rgba(167, 139, 250, 0.16);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.tarjeta-estilo__badge[hidden] {
+  display: none;
 }
 
 .foto-picker {
@@ -830,22 +884,73 @@ details.grupo > .campo {
   bottom: -10px;
   cursor: nwse-resize;
 }
+/* Capas: lista VERTICAL, una fila por capa (nombre a lo ancho + ojo a la derecha), ≥48px de alto,
+   la seleccionada resaltada (ronda "capas verticales", CREAR-BRIEF.md 2026-09-28: antes era una
+   grilla de chips que en pantallas angostas quedaba difícil de escanear). */
 .editor-plantilla__capas {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
 }
 .editor-plantilla__fila-capa {
   display: flex;
+  align-items: stretch;
+  min-height: 48px;
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie);
+  overflow: hidden;
+  transition: border-color var(--duracion) var(--ease), background var(--duracion) var(--ease);
+}
+.editor-plantilla__fila-capa--activa {
+  border-color: var(--color-primario);
+  background: rgba(79, 70, 229, 0.14);
+}
+.editor-plantilla__fila-capa__nombre {
+  flex: 1;
+  min-height: 48px;
+  min-width: 0;
+  display: flex;
   align-items: center;
-  gap: 4px;
+  padding: 0 14px;
+  background: transparent;
+  border: none;
+  color: var(--color-texto);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-16);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-plantilla__fila-capa__nombre:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: -2px;
 }
 .editor-plantilla__ojo {
-  min-width: var(--toque-min);
+  flex-shrink: 0;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 0;
+  border: none;
+  border-left: 1px solid var(--color-borde);
+  background: transparent;
 }
 .editor-plantilla__panel {
   margin-top: 0;
+}
+.editor-plantilla__badge {
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  color: var(--color-acento);
+  background: rgba(167, 139, 250, 0.16);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.editor-plantilla__badge[hidden] {
+  display: none;
 }
 .editor-plantilla__panel-encabezado {
   align-items: center;
@@ -965,11 +1070,24 @@ details.grupo > .campo {
   }
 }
 
-/* Deshacer / Rehacer / Restablecer: pegados arriba del lienzo mientras se scrollea el editor. */
+/* Deshacer / Rehacer / Acomodar / Restablecer: pegados arriba del lienzo mientras se scrollea el
+   editor. Grilla 2×2 (no una fila de 4) para que entre siempre en 360-412px de ancho (celular real)
+   sin scroll horizontal — con `display:flex` los 4 botones de texto largo se salían a la derecha
+   ("Restablecer" quedaba cortado, BUGS.md ronda "editor en el celular"). */
 .editor-plantilla__barra {
   position: sticky;
   top: 0;
   z-index: 5;
   padding-block: 8px;
   background: var(--color-fondo);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.editor-plantilla__barra .boton {
+  width: 100%;
+  padding-inline: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

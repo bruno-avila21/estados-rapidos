@@ -1,9 +1,14 @@
 // Editor de plantilla: inspector visual con selección/arrastre/redimensión sobre la vista previa,
-// panel de propiedades, capas (con ojo mostrar/ocultar), deshacer/rehacer, "Acomodar
-// automáticamente", "Centrar horizontal" y restablecer. Los ajustes que edita acá (posición,
-// tipografía, color, fondo/etiqueta, visibilidad de nombre/precio/descripción) son COMPARTIDOS por
-// "Foto con precio", "Foto con descripción" y "Mi plantilla" — `foto` solo aplica a "Mi plantilla".
-// CREAR-BRIEF.md, ronda 2026-09-27 ("editor de plantilla tipo inspector") y ronda de distribución.
+// panel de propiedades, capas (con ojo mostrar/ocultar), deshacer/rehacer, "Acomodar" y "Volver al
+// original de este estilo". CREAR-BRIEF.md, ronda 2026-09-27 ("editor de plantilla tipo
+// inspector"), ronda de distribución, y ronda "ajustes por estilo" (2026-09-28).
+//
+// Ronda "ajustes por estilo": el editor deja de compartir UN juego de ajustes entre los 3 estilos
+// con texto — edita SIEMPRE un solo estilo a la vez (`estiloEditando`, elegido por `?estilo=` en
+// el hash o, si no vino, el estilo general si es editable, si no el primero de la lista). El
+// selector ya no es una "vista previa" que no persiste: cambiarlo navega al editor de OTRO estilo
+// (`#/plantilla?estilo=…`), cada uno con su propio historial de deshacer/rehacer. "Solo la foto"
+// no tiene ajustes propios y no aparece en el selector.
 //
 // Vista previa EN VIVO (ronda "vista previa en vivo de verdad"): antes cada `pointermove` armaba
 // un PNG completo (`canvas.toBlob`) y lo mostraba en un `<img>` — en el celu tardaba lo bastante
@@ -17,11 +22,12 @@ import { dibujarSegunEstilo, ANCHO, ALTO } from '../componer.js';
 import { cargarFuentes } from '../fuentes.js';
 import { elementoEnPunto, moverCaja, redimensionarCaja, aplicarSnap, acomodarAutomatico } from '../editor-geometria.js';
 import {
-  ESTILOS_IMAGEN,
+  ESTILOS_CON_AJUSTES,
   ETIQUETA_ESTILO,
   FUENTES_DISPONIBLES,
   ETIQUETA_FUENTE,
-  AJUSTES_POR_DEFECTO,
+  AJUSTES_POR_DEFECTO_POR_ESTILO,
+  esAjustePersonalizado,
   resolverDescripcion,
 } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
@@ -31,12 +37,22 @@ const COLORES_RAPIDOS = ['#ffffff', '#0d0f1a', '#4f46e5', '#a78bfa', '#f5a623', 
 const CLAVES_TEXTO = ['nombre', 'precio', 'descripcion'];
 const HANDLES = ['nw', 'ne', 'sw', 'se'];
 
-export async function render(contenedor, { navegar } = {}) {
+export async function render(contenedor, { navegar, params } = {}) {
   contenedor.textContent = '';
 
   const config = await repo.obtenerPlantillaConfig();
   const general = await repo.obtenerAjustesGenerales();
-  let ajustes = estructuraClonada(config.ajustes);
+
+  // Qué estilo se edita: el de la URL si es válido, si no el general (si es editable), si no el
+  // primero de la lista. "Solo la foto" nunca es editable acá.
+  const estiloParam = params?.query?.get('estilo');
+  const estiloEditando = ESTILOS_CON_AJUSTES.includes(estiloParam)
+    ? estiloParam
+    : ESTILOS_CON_AJUSTES.includes(general.estiloGeneral)
+      ? general.estiloGeneral
+      : ESTILOS_CON_AJUSTES[0];
+
+  let ajustes = estructuraClonada(config.ajustesPorEstilo[estiloEditando]);
   const formatoPrecio = config.formatoPrecio;
 
   const productos = await repo.listarProductos();
@@ -47,7 +63,6 @@ export async function render(contenedor, { navegar } = {}) {
 
   await cargarFuentes(); // una sola vez: dibujarSegunEstilo es síncrona, asume fuentes ya listas
 
-  let estiloPreview = general.estiloGeneral;
   let seleccion = null;
   // Declarados acá (y no más abajo, junto a `solicitarRedibujo`) para que la llamada inicial de
   // más abajo no choque con la zona muerta temporal de `let` (TDZ): las funciones declaradas con
@@ -68,29 +83,38 @@ export async function render(contenedor, { navegar } = {}) {
   btnVolver.textContent = '← Volver a Ajustes';
   btnVolver.addEventListener('click', () => navegar?.('#/ajustes'));
 
-  // --- Selector de qué estilo previsualizar (el editor comparte ajustes entre los 3 con texto) ---
+  // --- Selector de CUÁL estilo se edita (ya no una "vista previa" sin persistir: cada estilo
+  // tiene su propia configuración — cambiarlo navega al editor de ese otro estilo) ---
   const selectorEstilo = document.createElement('div');
   selectorEstilo.className = 'campo';
+  const filaLabelEstilo = document.createElement('div');
+  filaLabelEstilo.className = 'fila';
+  filaLabelEstilo.style.alignItems = 'center';
+  filaLabelEstilo.style.justifyContent = 'space-between';
   const labelEstilo = document.createElement('label');
   labelEstilo.className = 'campo__etiqueta';
   labelEstilo.htmlFor = 'editor-vista-previa-estilo';
-  labelEstilo.textContent = 'Vista previa de';
+  labelEstilo.textContent = 'Estilo que estás editando';
+  const badgePersonalizado = document.createElement('span');
+  badgePersonalizado.className = 'editor-plantilla__badge';
+  badgePersonalizado.textContent = 'Personalizado';
+  badgePersonalizado.hidden = true;
+  filaLabelEstilo.append(labelEstilo, badgePersonalizado);
   const selectEstilo = document.createElement('select');
   selectEstilo.id = 'editor-vista-previa-estilo';
   selectEstilo.setAttribute('data-accion', 'editor-estilo-preview');
-  for (const valor of ESTILOS_IMAGEN) {
+  for (const valor of ESTILOS_CON_AJUSTES) {
     const opcion = document.createElement('option');
     opcion.value = valor;
     opcion.textContent = ETIQUETA_ESTILO[valor];
-    if (valor === estiloPreview) opcion.selected = true;
+    if (valor === estiloEditando) opcion.selected = true;
     selectEstilo.append(opcion);
   }
   selectEstilo.addEventListener('change', () => {
-    estiloPreview = selectEstilo.value;
-    dibujarOverlay();
-    solicitarRedibujo();
+    if (selectEstilo.value === estiloEditando) return;
+    navegar(`#/plantilla?estilo=${selectEstilo.value}`);
   });
-  selectorEstilo.append(labelEstilo, selectEstilo);
+  selectorEstilo.append(filaLabelEstilo, selectEstilo);
 
   // --- Subida de fondo propio (solo relevante para "Mi plantilla") ---
   const grupoSubida = document.createElement('div');
@@ -117,6 +141,7 @@ export async function render(contenedor, { navegar } = {}) {
     solicitarRedibujo();
   });
   grupoSubida.append(btnSubir, inputPlantilla);
+  if (estiloEditando !== 'mi-plantilla') grupoSubida.hidden = true;
 
   // --- Vista previa (canvas en vivo) + overlay interactivo ---
   const previaContenedor = document.createElement('div');
@@ -137,12 +162,14 @@ export async function render(contenedor, { navegar } = {}) {
   panel.className = 'grupo editor-plantilla__panel';
   panel.hidden = true;
 
-  // --- Deshacer / rehacer / Acomodar automáticamente / restablecer ---
-  // Barra fija arriba del lienzo: abajo del panel quedaba a casi dos pantallas, y en el celu un
-  // toque que cae mientras la página todavía se desliza se usa para frenar el scroll y no llega
-  // como click (QA v4, BUGS.md #18). Acá está siempre a mano, al lado de lo que se edita.
+  // --- Deshacer / rehacer / Acomodar / Volver al original de este estilo ---
+  // Barra fija arriba del lienzo, en grilla 2×2 (entra en 360-412px sin scroll horizontal: con
+  // 4 botones en fila el último quedaba cortado a la derecha, BUGS.md ronda "editor en el celular").
+  // Además siempre a mano: abajo del panel quedaba a casi dos pantallas, y en el celu un toque que
+  // cae mientras la página todavía se desliza se usa para frenar el scroll y no llega como click
+  // (QA v4, BUGS.md #18).
   const filaHistorial = document.createElement('div');
-  filaHistorial.className = 'fila editor-plantilla__barra';
+  filaHistorial.className = 'editor-plantilla__barra';
   const btnDeshacer = document.createElement('button');
   btnDeshacer.type = 'button';
   btnDeshacer.className = 'boton boton--chico';
@@ -157,7 +184,7 @@ export async function render(contenedor, { navegar } = {}) {
   btnAcomodar.type = 'button';
   btnAcomodar.className = 'boton boton--chico';
   btnAcomodar.setAttribute('data-accion', 'acomodar-automatico');
-  btnAcomodar.textContent = 'Acomodar automáticamente';
+  btnAcomodar.textContent = 'Acomodar';
   const btnRestablecer = document.createElement('button');
   btnRestablecer.type = 'button';
   btnRestablecer.className = 'boton boton--chico boton--fantasma';
@@ -182,7 +209,7 @@ export async function render(contenedor, { navegar } = {}) {
   // ================= Lógica =================
 
   function clavesVisiblesParaEstilo() {
-    return estiloPreview === 'mi-plantilla' ? ['foto', ...CLAVES_TEXTO] : CLAVES_TEXTO;
+    return estiloEditando === 'mi-plantilla' ? ['foto', ...CLAVES_TEXTO] : CLAVES_TEXTO;
   }
 
   function cajasHitTest() {
@@ -215,7 +242,7 @@ export async function render(contenedor, { navegar } = {}) {
 
   function pintarLienzo() {
     dibujarSegunEstilo(ctxPrevia, {
-      estilo: estiloPreview,
+      estilo: estiloEditando,
       plantillaImagen: plantillaImagenActual,
       fotoImagen: fotoEjemplo,
       producto: productoEjemplo,
@@ -230,7 +257,7 @@ export async function render(contenedor, { navegar } = {}) {
     // píxeles (frágil por antialiasing/fuentes). `revision` sube en cada dibujo real.
     window.__editorDebugPlantilla = {
       revision: contadorDibujos,
-      estilo: estiloPreview,
+      estilo: estiloEditando,
       ajustes: estructuraClonada(ajustes),
     };
   }
@@ -273,12 +300,14 @@ export async function render(contenedor, { navegar } = {}) {
       }
       overlay.append(div);
 
+      // Capas: lista VERTICAL, una fila por capa (nombre a lo ancho + ojo a la derecha), ≥48px de
+      // alto, la seleccionada resaltada (ronda "capas verticales", CREAR-BRIEF.md 2026-09-28).
       const filaCapa = document.createElement('div');
-      filaCapa.className = 'editor-plantilla__fila-capa';
+      filaCapa.className = 'editor-plantilla__fila-capa' + (seleccion === clave ? ' editor-plantilla__fila-capa--activa' : '');
 
       const btnCapa = document.createElement('button');
       btnCapa.type = 'button';
-      btnCapa.className = 'boton boton--chico' + (seleccion === clave ? ' tarjeta-estilo--activa' : '');
+      btnCapa.className = 'editor-plantilla__fila-capa__nombre';
       btnCapa.setAttribute('data-accion', `capa-${clave}`);
       btnCapa.textContent = etiquetaCaja(clave) + (oculto ? ' (oculto)' : '');
       btnCapa.addEventListener('click', () => seleccionar(clave));
@@ -300,6 +329,11 @@ export async function render(contenedor, { navegar } = {}) {
     }
 
     if (conPanel) dibujarPanel();
+    actualizarBadgePersonalizado();
+  }
+
+  function actualizarBadgePersonalizado() {
+    badgePersonalizado.hidden = !esAjustePersonalizado(estiloEditando, ajustes);
   }
 
   function etiquetaCaja(clave) {
@@ -558,7 +592,7 @@ export async function render(contenedor, { navegar } = {}) {
   }
 
   function persistir() {
-    repo.guardarAjustesPlantilla(ajustes);
+    repo.guardarAjustesEstilo(estiloEditando, ajustes);
   }
 
   btnDeshacer.addEventListener('click', () => {
@@ -597,16 +631,17 @@ export async function render(contenedor, { navegar } = {}) {
     guardarEnHistorial();
     mostrarToast('Elementos acomodados');
   });
+  // "Volver al original de este estilo": restablece SOLO `estiloEditando`, no los otros 2 (cada
+  // estilo tiene su propia configuración desde la ronda "ajustes por estilo").
   btnRestablecer.addEventListener('click', async () => {
     const ok = await pedirConfirmacion({
-      titulo: 'Restablecer plantilla',
-      mensaje: 'Vuelve la posición, tipografía y color de nombre, precio y descripción a los valores de fábrica. No se puede deshacer con "Deshacer" una vez guardado.',
+      titulo: 'Volver al original de este estilo',
+      mensaje: `Vuelve la posición, tipografía y color de "${ETIQUETA_ESTILO[estiloEditando]}" a los valores de fábrica. No se puede deshacer con "Deshacer" una vez guardado.`,
       textoConfirmar: 'Restablecer',
     });
     if (!ok) return;
-    ajustes = estructuraClonada(AJUSTES_POR_DEFECTO);
+    ajustes = estructuraClonada(AJUSTES_POR_DEFECTO_POR_ESTILO[estiloEditando]);
     seleccion = null;
-    persistir();
     guardarEnHistorial();
     dibujarOverlay();
     solicitarRedibujo();

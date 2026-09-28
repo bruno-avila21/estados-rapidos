@@ -48,7 +48,11 @@ export async function compartirArchivos({ archivos, texto = '', timeoutMs = TIME
     }
   }
 
-  const compartiendo = navigator.share({ files: archivos, text: texto });
+  // Sin texto (interruptor "Incluir texto" apagado, ronda "compartir sin texto"): no se manda la
+  // clave `text` del todo, en vez de mandarla vacía — algunas apps destino igual muestran un
+  // renglón de texto vacío si la clave está presente aunque valga ''.
+  const opciones = texto ? { files: archivos, text: texto } : { files: archivos };
+  const compartiendo = navigator.share(opciones);
   let idTimeout;
   const timeout = new Promise((resolve) => {
     idTimeout = setTimeout(() => resolve('tardando'), timeoutMs);
@@ -71,13 +75,13 @@ export async function compartirArchivos({ archivos, texto = '', timeoutMs = TIME
 }
 
 /** Atajo para publicar una sola imagen (uso: Publicar de una tarjeta de la lista). */
-export async function publicarImagen({ blob, nombreArchivo = 'estado.png', texto = '' }) {
+export async function publicarImagen({ blob, nombreArchivo = 'estado.jpg', texto = '' }) {
   await copiarDescripcion(texto);
-  const archivo = new File([blob], nombreArchivo, { type: 'image/png' });
+  const archivo = new File([blob], nombreArchivo, { type: 'image/jpeg' });
   return await compartirArchivos({ archivos: [archivo], texto });
 }
 
-export function descargarImagen(blob, nombreArchivo = 'estado.png') {
+export function descargarImagen(blob, nombreArchivo = 'estado.jpg') {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

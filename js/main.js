@@ -18,8 +18,9 @@ const RUTAS = [
   { patron: /^#\/$/, modulo: lista, titulo: 'Productos', ruta: '#/' },
   { patron: /^#\/producto\/(.+)$/, modulo: detalle, titulo: 'Producto', ruta: null },
   { patron: /^#\/ajustes$/, modulo: ajustes, titulo: 'Ajustes', ruta: '#/ajustes' },
-  // "Plantilla" ya no está en la navegación principal: solo se llega desde Ajustes cuando el
-  // estilo elegido es "Mi plantilla" (CREAR-BRIEF.md, cambio 2026-09-27).
+  // "Plantilla" ya no está en la navegación principal: se llega desde Ajustes (botón "Abrir
+  // editor de plantilla" o "Editar" de una tarjeta de estilo). `?estilo=` (ronda "ajustes por
+  // estilo", 2026-09-28) dice CUÁL de los 3 estilos con texto edita — se lee de `params.query`.
   { patron: /^#\/plantilla$/, modulo: plantilla, titulo: 'Plantilla', ruta: null },
   { patron: /^#\/respaldo$/, modulo: respaldo, titulo: 'Respaldo', ruta: '#/respaldo' },
 ];
@@ -33,10 +34,11 @@ function navegar(hash) {
 }
 
 async function enrutar() {
-  const hash = location.hash || '#/';
+  const hashCompleto = location.hash || '#/';
+  const [hash, queryString] = hashCompleto.split('?');
   const encontrada = RUTAS.find((r) => r.patron.test(hash)) || RUTAS[0];
   const match = hash.match(encontrada.patron);
-  const params = { id: match?.[1] };
+  const params = { id: match?.[1], query: new URLSearchParams(queryString || '') };
 
   titulo.textContent = encontrada.titulo;
   navBotones.forEach((b) => b.classList.toggle('activo', b.dataset.ruta === encontrada.ruta));

@@ -179,6 +179,7 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** pendiente; el test sigue con `retries: 2`. La app sí abre sin red (verificado a mano y en QA).
 - **Seguimiento 2026-09-28 (ronda "vista previa en vivo + distribución + instalar/compartir"):** volvió a aparecer varias veces al correr la suite completa (52 specs) después de sumar `js/utils/qr.js`, `js/utils/instalacion.js` y los cambios de `sw.js` (VERSION `v8`, nuevos archivos en `NUCLEO`) — y también aislado, sin relación con esos archivos. De 3 corridas de la suite completa: 2 pasaron en el **retry #1** (queda "flaky", no "failed" — Playwright cuenta un test que pasa en un retry como éxito del run) y 1 agotó los 3 intentos y quedó roja. Nada de esto se tocó: sigue siendo el mismo timing conocido de `page.route` + Service Worker (BUGS.md #10/#19), no una regresión de esta ronda; si vuelve a darse roja, correr de nuevo (`npx playwright test test/e2e/sw.spec.js`) alcanza para confirmarlo.
 - **Seguimiento 2026-09-28 (ronda "APK autónomo"):** agotó los 3 intentos y quedó roja en `npm run test:e2e` corriendo la suite completa (52 specs, 50 pasaron) después de sumar `js/utils/plataforma.js` y los cambios de `compartir.js`/`respaldo.js`/`ajustes-la-app.js`/`main.js` para el puente Android. Mismo síntoma exacto (`net::ERR_FAILED at http://127.0.0.1:8991/`), y esos archivos no tocan `sw.js` ni el registro del SW: no es una regresión de esta ronda.
+- **Seguimiento 2026-09-28 (ronda "APK 1.1" — ajustes por estilo/barra responsive/miniaturas/compartir sin texto/perf JPEG/capas verticales):** en 3 corridas completas de `npx playwright test -c test/e2e/playwright.config.js` (64 specs, todo lo demás verde): una pasó en el **retry #1** (flaky, no failed) y dos agotaron los 3 intentos (`net::ERR_FAILED at http://127.0.0.1:8991/`, mismo síntoma de siempre, incluida la corrida final después del fix de `base64ABlob` y las capturas en emulador). Ninguno de los cambios de esta ronda toca `sw.js` más allá de subir `VERSION` a `v9` y sumar `./assets/ejemplo.jpg` a `NUCLEO` (un archivo estático más en la lista, mismo patrón que los íconos): no es una regresión. Se deja documentado y se sigue: es el comportamiento esperado que ya avisó Bruno en el brief ("sw.spec intermitente conocido #19").
 
 ### 20. La hoja de revisión quedaba abierta encima de otra pantalla
 - **Paso:** verificación en vivo de la v5: abrir la hoja (Publicar) y cambiar de pantalla (Atrás de Android / cambio de hash).
@@ -203,3 +204,52 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Causa:** sin archivo de configuración, wrangler usa la raíz del repo como carpeta de assets.
 - **Arreglo:** `wrangler.jsonc` versionado con `assets.directory: "./_sitio"` (lo arma `scripts/armar-sitio.mjs`, el mismo que usa GitHub Pages).
 - **Resuelto:** pendiente de confirmar con el próximo deploy.
+
+### 23. `node --test` sin argumentos corre también los specs de Playwright y explota
+- **Paso:** durante la ronda "APK 1.1" (configuración por estilo/perf/capas), correr `node --test` a secas (sin lista de archivos) para chequear rápido los tests unitarios después de tocar `js/modelo.js`.
+- **Error exacto:**
+  ```
+  not ok 2 - test\e2e\ajustes.spec.js
+  Error: Playwright Test did not expect test() to be called here.
+  ```
+  (y lo mismo para los otros 8 archivos de `test/e2e/*.spec.js`).
+- **Reproducir:** `node --test` en la raíz del proyecto: el runner nativo de Node barre TODO `test/**/*.test.js` y también entra a `test/e2e/*.spec.js`, que usan `test`/`test.beforeEach`/`test.use` de `@playwright/test`, no de `node:test` — chocan.
+- **Causa:** no es un bug del código: `package.json` ya define `"test": "node --test test/modelo.test.js test/layout.test.js ..."` con la lista explícita de archivos unitarios (sin tocar `test/e2e/`) precisamente para evitar esto; invocar `node --test` directo, sin esa lista, se salta esa protección.
+- **Arreglo:** ninguno en el código. Correr siempre `npm test` (unitarios) y `npm run test:e2e` (Playwright) por separado, nunca `node --test` a secas en este repo.
+- **Resuelto:** sí — confirmado con `npm test` (mismos archivos, todos verdes).
+- ¿Se repetiría en otro proyecto? Sí, en cualquier repo que mezcle `node:test` y Playwright en la misma carpeta `test/`: nota para la receta compartida `~/.claude/crear-kit/recetas/e2e.md` ("nunca `node --test` a secas si convive con specs de Playwright; usar siempre el script de `package.json`").
+
+### 24. E2E nuevo de "capas verticales" (ronda 2026-09-28): `count()` de 0 filas apenas navegado
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js -g "las capas se apilan verticalmente"`.
+- **Error exacto:**
+  ```
+  Error: expect(received).toBeGreaterThanOrEqual(expected)
+  Expected: >= 3
+  Received:    0
+  ```
+- **Reproducir:** `page.goto('/#/plantilla?estilo=mi-plantilla')` y de inmediato `page.locator('.editor-plantilla__fila-capa').count()` (sin esperar nada antes).
+- **Causa:** `count()` no es una aserción que reintenta (a diferencia de `expect(locator).toHaveCount(...)`): devuelve lo que hay en el DOM en ESE instante. `render()` de `plantilla.js` es `async` (espera `repo.obtenerPlantillaConfig()`, decodificar imágenes, etc.) y todavía no había terminado de armar `.editor-plantilla__capas` cuando el test ya estaba contando. Verificado con un spec de depuración: el HTML final SÍ tiene las 4 filas: el problema era 100% el timing del test, no la app (confirmado leyendo `#vista` con `page.waitForTimeout(1000)` antes de contar).
+- **Arreglo:** `test/e2e/editor.spec.js` — se espera `await expect(filas.first()).toBeVisible()` antes de `count()`.
+- **Resuelto:** sí — verde en la corrida siguiente.
+- ¿Se repetiría en otro proyecto? Sí: "`count()`/`.all()` no esperan nada, usar siempre una aserción `expect(locator).toHave*` (que sí reintenta) antes de leer una colección recién armada de forma async" ya está en la receta `e2e.md`; no hace falta una fila nueva, es el mismo patrón de siempre.
+
+### 25. `movil\build-apk.ps1`: el PRIMER `assembleRelease` de cada sesión falla con `classes.dex` en uso
+- **Paso:** ronda "APK 1.1" — corrí `movil\build-apk.ps1` tres veces en la misma sesión (build de 1.1, después de un `git stash`/rebuild de 1.0, después de un `git stash pop`/rebuild de 1.1 otra vez). Las 3 veces, el PRIMER intento de cada tanda falló igual.
+- **Error exacto:**
+  ```
+  Execution failed for task ':app:mergeDexRelease'.
+  > D:\...\movil\app\build\intermediates\dex\release\mergeDexRelease\classes.dex: El proceso no tiene acceso al archivo porque está siendo utilizado por otro proceso
+  ```
+- **Reproducir:** correr `assembleRelease` (vía `build-apk.ps1`) poco después de que Gradle terminó de escribir el `classes.dex` de una corrida anterior — el segundo intento, inmediato, siempre pasa.
+- **Causa:** algo en Windows (el patrón más probable es Windows Defender/antivirus escaneando el `.dex` recién escrito) tiene el archivo abierto un instante justo cuando el próximo build quiere reescribirlo — carrera de archivo, no un error de Gradle ni del proyecto.
+- **Arreglo:** ninguno en el código; correr `build-apk.ps1` de nuevo apenas falla con este mensaje resuelve siempre. Si se vuelve tedioso, se podría sumar un reintento automático al script (1 retry con esperar 2s) — no se hizo en esta ronda para no tocar el script de build sin pedido explícito.
+- **Resuelto:** sí (con el reintento manual).
+- ¿Se repetiría en otro proyecto? Sí, en cualquier build Android en Windows con Defender activo: nota para la receta `crear-apk` ("si `assembleRelease` falla una sola vez con `classes.dex ... en uso por otro proceso`, correr de nuevo sin diagnosticar más — es una carrera de archivo del antivirus, no del build").
+
+### 26. (falsa alarma) "La foto importada no se ve" — en realidad la foto de prueba ES el logo de la app
+- **Paso:** verificación en emulador (AVD `docuvoz`) de la ronda "APK 1.1" — armé un respaldo `.json` de prueba (10 productos con `fotoBase64` de `test/e2e/fixtures/producto.png`) y lo importé desde Respaldo → Elegir archivo, primero en el APK 1.0 y de nuevo tras actualizar a 1.1.
+- **Lo que pareció un error:** la miniatura de los 10 productos (lista, detalle) mostraba el logo de estados-rapidos (anillo segmentado + rayo), y lo leí como el ícono genérico "sin foto" (`tarjeta__foto--vacia`) — es decir, pensé que la foto no se había importado.
+- **Causa real: NO había ningún bug.** `test/e2e/fixtures/producto.png` — el fixture que usan TODOS los E2E de este repo para "la foto de un producto" — es, a propósito, el propio logo de la app (`assets/logo.svg` rasterizado), no una foto de producto de verdad. La miniatura mostrada era la foto de prueba real, correctamente importada y decodificada; se veía igual al placeholder "sin foto" solo porque a simple vista, en una miniatura chica, un logo con círculo+rayo sobre fondo oscuro se parece al propio ícono vacío de la app (que usa la misma identidad visual). Confirmado abriendo `test/e2e/fixtures/producto.png` directo: es el logo, pixel a pixel igual a lo que se vio en el emulador.
+- **De más queda:** por las dudas, `js/utils/imagen.js` (`base64ABlob`) se cambió igual de `fetch(dataUrl).then(r => r.blob())` a decodificar el base64 a mano (`atob` + `Uint8Array` + `new Blob(...)`) — no porque hiciera falta (no había bug), sino porque de paso queda testeable sin mocks (`test/imagen.test.js`, nuevo) y no depende de que el motor soporte `fetch` sobre esquema `data:`. Cambio de bajo riesgo, cero comportamiento distinto observado, pero se deja documentado para no confundir el porqué si alguien lo lee después.
+- **Resuelto:** sí — no había nada que resolver; verificado con capturas nuevas (`docs/apk11-*.png`) usando un producto con una foto de GALERÍA real (no el fixture-logo) para las capturas que sí importaba distinguir visualmente.
+- ¿Se repetiría en otro proyecto? Lección para QA propio, no para el ecosistema: si el fixture de "foto de producto" de los tests es el logo de la marca, un vistazo rápido en el emulador puede confundirse con el estado vacío — para verificar visualmente a ojo, usar una foto de galería real, no el fixture de los E2E.

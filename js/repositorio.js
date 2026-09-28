@@ -1,13 +1,14 @@
 // Capa de datos: une db.js (IndexedDB) con el modelo. Único punto que conoce los "stores".
 import * as db from './db.js';
 import {
-  AJUSTES_POR_DEFECTO,
+  AJUSTES_POR_DEFECTO_POR_ESTILO,
   FORMATO_PRECIO_POR_DEFECTO,
   ESTILO_POR_DEFECTO,
   DESCRIPCION_MODELO_POR_DEFECTO,
   ENCUADRE_FOTO_POR_DEFECTO,
   construirRespaldo,
-  normalizarAjustes,
+  migrarAjustesPorEstilo,
+  normalizarAjustesPorEstilo,
   generarId,
 } from './modelo.js';
 import { achicarFoto, blobABase64, base64ABlob } from './utils/imagen.js';
@@ -107,12 +108,11 @@ export async function obtenerFotoBlob(fotoId) {
 
 export async function obtenerPlantillaConfig() {
   const guardada = await db.obtener('config', 'plantilla');
-  if (guardada) return { ...guardada, ajustes: normalizarAjustes(guardada.ajustes) };
   return {
     id: 'plantilla',
-    imagenId: null,
-    ajustes: AJUSTES_POR_DEFECTO,
-    formatoPrecio: FORMATO_PRECIO_POR_DEFECTO,
+    imagenId: guardada?.imagenId ?? null,
+    ajustesPorEstilo: migrarAjustesPorEstilo(guardada),
+    formatoPrecio: guardada?.formatoPrecio ?? FORMATO_PRECIO_POR_DEFECTO,
   };
 }
 
@@ -134,11 +134,21 @@ export async function guardarImagenPlantilla(archivo) {
   return config;
 }
 
-export async function guardarAjustesPlantilla(ajustes) {
+/** Guarda los ajustes de UN estilo (posición/tipografía/color/fondo/visibilidad): cada estilo se
+ * edita y persiste por separado (ronda "ajustes por estilo", 2026-09-28). */
+export async function guardarAjustesEstilo(estilo, ajustes) {
   const config = await obtenerPlantillaConfig();
-  config.ajustes = ajustes;
+  config.ajustesPorEstilo = { ...config.ajustesPorEstilo, [estilo]: ajustes };
   await db.guardar('config', config);
   return config;
+}
+
+/** "Volver al original de este estilo": restablece SOLO el estilo indicado a sus defaults de
+ * fábrica, sin tocar los otros 2. */
+export async function restablecerAjustesEstilo(estilo) {
+  const defaults = AJUSTES_POR_DEFECTO_POR_ESTILO[estilo];
+  if (!defaults) return null;
+  return await guardarAjustesEstilo(estilo, JSON.parse(JSON.stringify(defaults)));
 }
 
 export async function guardarFormatoPrecio(formatoPrecio) {
@@ -159,6 +169,9 @@ export async function obtenerAjustesGenerales() {
     estiloGeneral: ESTILO_POR_DEFECTO,
     descripcionModelo: DESCRIPCION_MODELO_POR_DEFECTO,
     encuadreFoto: ENCUADRE_FOTO_POR_DEFECTO,
+    // "Incluir texto" de la hoja de revisión (ronda "compartir sin texto", 2026-09-28): se recuerda
+    // la última elección; por defecto encendido (copiar/mandar el texto es lo de siempre).
+    incluirTextoAlCompartir: true,
   };
   return guardado ? { ...base, ...guardado } : base;
 }
@@ -185,6 +198,15 @@ export async function guardarEncuadreFoto(encuadreFoto) {
   return config;
 }
 
+/** "Incluir texto" de la hoja de revisión: se recuerda la última elección (ronda "compartir sin
+ * texto"). */
+export async function guardarIncluirTextoAlCompartir(incluirTextoAlCompartir) {
+  const config = await obtenerAjustesGenerales();
+  config.incluirTextoAlCompartir = !!incluirTextoAlCompartir;
+  await db.guardar('config', config);
+  return config;
+}
+
 export async function exportarRespaldo() {
   const productos = await listarProductos();
   const productosConFoto = await Promise.all(
@@ -201,11 +223,12 @@ export async function exportarRespaldo() {
 
   return construirRespaldo({
     productos: productosConFoto,
-    plantilla: { imagenBase64, ajustes: config.ajustes, formatoPrecio: config.formatoPrecio },
+    plantilla: { imagenBase64, ajustesPorEstilo: config.ajustesPorEstilo, formatoPrecio: config.formatoPrecio },
     general: {
       estiloGeneral: general.estiloGeneral,
       descripcionModelo: general.descripcionModelo,
       encuadreFoto: general.encuadreFoto,
+      incluirTextoAlCompartir: general.incluirTextoAlCompartir,
     },
   });
 }
@@ -245,17 +268,24 @@ export async function importarRespaldo(respaldo) {
     await db.guardar('config', {
       id: 'plantilla',
       imagenId,
-      ajustes: normalizarAjustes(respaldo.plantilla.ajustes),
+      // migrarAjustesPorEstilo acepta tanto el formato nuevo (ajustesPorEstilo) como el viejo
+      // (ajustes compartido, de un respaldo de antes de 2026-09-28): en ambos casos se conserva
+      // lo que el usuario ya armó (CREAR-BRIEF.md, ronda "ajustes por estilo").
+      ajustesPorEstilo: migrarAjustesPorEstilo({
+        ajustesPorEstilo: respaldo.plantilla.ajustesPorEstilo,
+        ajustes: respaldo.plantilla.ajustes,
+      }),
       formatoPrecio: respaldo.plantilla.formatoPrecio || FORMATO_PRECIO_POR_DEFECTO,
     });
   }
 
-  // respaldos viejos (antes de 2026-09-27, o de antes del campo `encuadreFoto`) no tienen
-  // "general" completo: quedan los valores por defecto.
+  // respaldos viejos (antes de 2026-09-27, o de antes de los campos `encuadreFoto`/
+  // `incluirTextoAlCompartir`) no tienen "general" completo: quedan los valores por defecto.
   await db.guardar('config', {
     id: 'general',
     estiloGeneral: respaldo.general?.estiloGeneral || ESTILO_POR_DEFECTO,
     descripcionModelo: respaldo.general?.descripcionModelo || DESCRIPCION_MODELO_POR_DEFECTO,
     encuadreFoto: respaldo.general?.encuadreFoto || ENCUADRE_FOTO_POR_DEFECTO,
+    incluirTextoAlCompartir: respaldo.general?.incluirTextoAlCompartir ?? true,
   });
 }

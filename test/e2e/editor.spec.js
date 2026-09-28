@@ -263,16 +263,70 @@ test('el ojo de una capa la oculta: se ve punteado tenue con "(oculto)", no se d
   await expect(page.locator('[data-elemento="nombre"]')).not.toHaveClass(/editor-plantilla__caja--oculta/);
 });
 
-test('"Foto con descripción" con el nombre oculto no dibuja el nombre (caso: solo descripción)', async ({ page }) => {
+// Ronda "ajustes por estilo" (2026-09-28): el selector ya no es una "vista previa" que no
+// persiste — cambiarlo NAVEGA a editar ese otro estilo (su propia configuración, su propio
+// historial). Cada estilo tiene sus propios defaults de visibilidad.
+test('cambiar el selector navega a editar ese estilo, cada uno con sus propios defaults de visibilidad', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page);
-  await page.goto('/#/plantilla');
+  await page.goto('/#/plantilla?estilo=foto-precio');
+  // foto-precio: nombre y precio visibles, descripción oculta.
+  await expect(page.locator('[data-accion="capa-ojo-nombre"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-accion="capa-ojo-descripcion"]')).toHaveAttribute('aria-pressed', 'false');
+
   await page.locator('#editor-vista-previa-estilo').selectOption('foto-descripcion');
+  await expect(page).toHaveURL(/estilo=foto-descripcion/);
+  // foto-descripcion: SOLO la descripción visible (nombre y precio ocultos de fábrica).
+  await expect(page.locator('[data-accion="capa-ojo-nombre"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('[data-accion="capa-ojo-precio"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('[data-accion="capa-ojo-descripcion"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla?.estilo)).toBe('foto-descripcion');
+});
+
+test('"Foto con descripción": mostrar el nombre (oculto de fábrica) lo dibuja', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=foto-descripcion');
+  await expect(page.locator('[data-accion="capa-ojo-nombre"]')).toHaveAttribute('aria-pressed', 'false');
   await page.locator('[data-accion="capa-ojo-nombre"]').click();
   await expect
     .poll(() => page.evaluate(() => window.__editorDebugPlantilla?.ajustes?.nombre?.visible))
-    .toBe(false);
+    .toBe(true);
   await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla?.estilo)).toBe('foto-descripcion');
+});
+
+// --- Badge "Personalizado" + "Volver al original de este estilo" (ronda "ajustes por estilo") ---
+
+test('badge "Personalizado" aparece al mover un elemento y desaparece al restablecer', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=foto-precio');
+  await editorListo(page);
+
+  const badge = page.locator('.editor-plantilla__badge');
+  await expect(badge).toBeHidden();
+
+  await arrastrar(page, 'nombre', 0, 120);
+  await expect(badge).toBeVisible();
+
+  await page.locator('[data-accion="restablecer-plantilla"]').click();
+  await page.locator('[data-accion="confirmar-borrar"]').click();
+  await expect(page.locator('#toast')).toHaveText(/restablecida/i);
+  await expect(badge).toBeHidden();
+});
+
+test('"Volver al original de este estilo" no toca los otros 2 estilos', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=foto-precio');
+  await editorListo(page);
+  await arrastrar(page, 'nombre', 0, 120);
+  await page.locator('[data-accion="restablecer-plantilla"]').click();
+  await page.locator('[data-accion="confirmar-borrar"]').click();
+
+  // el otro estilo (mi-plantilla) nunca se tocó: sigue sin el badge de personalizado.
+  await page.goto('/#/plantilla?estilo=mi-plantilla');
+  await expect(page.locator('.editor-plantilla__badge')).toBeHidden();
 });
 
 // --- Distribución: "Acomodar automáticamente" y "Centrar horizontal" ---
@@ -280,8 +334,11 @@ test('"Foto con descripción" con el nombre oculto no dibuja el nombre (caso: so
 test('Acomodar automáticamente apila los elementos visibles centrados, de abajo hacia arriba', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page);
-  await page.goto('/#/plantilla');
+  await page.goto('/#/plantilla?estilo=foto-precio');
 
+  // foto-precio arranca con la descripción oculta (ronda "ajustes por estilo"): se muestra para
+  // probar el acomodo con los 3 elementos, igual que antes de esa ronda.
+  await page.locator('[data-accion="capa-ojo-descripcion"]').click();
   // Se descentra el nombre a propósito para verificar que el botón lo vuelve a centrar.
   await arrastrar(page, 'nombre', 200, 0);
 
@@ -319,4 +376,48 @@ test('Centrar horizontal (panel) centra el elemento seleccionado sin tocar los d
   await expect
     .poll(() => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.x + window.__editorDebugPlantilla.ajustes.nombre.w / 2))
     .toBeCloseTo(540, 0);
+});
+
+// --- Capas: lista VERTICAL, cada fila = nombre (todo el ancho) + ojo a la derecha, ≥48px de alto,
+// la seleccionada resaltada (ronda "capas verticales", CREAR-BRIEF.md 2026-09-28) ---
+
+test('las capas se apilan verticalmente, cada fila ocupa el ancho y mide al menos 48px de alto', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=mi-plantilla'); // el estilo con más capas (foto+nombre+precio+descripción)
+
+  const filas = page.locator('.editor-plantilla__fila-capa');
+  // `count()` no espera a que la pantalla termine de armarse (a diferencia de `expect(...).toHave*`,
+  // que sí reintenta): se espera la primera fila antes de contar todas.
+  await expect(filas.first()).toBeVisible();
+  const cantidad = await filas.count();
+  expect(cantidad).toBeGreaterThanOrEqual(3);
+
+  const cajas = [];
+  for (const fila of await filas.all()) {
+    const caja = await fila.boundingBox();
+    expect(caja.height).toBeGreaterThanOrEqual(48);
+    cajas.push(caja);
+  }
+  // apiladas una debajo de la otra: cada una empieza más abajo que la anterior, sin superponerse.
+  for (let i = 1; i < cajas.length; i += 1) {
+    expect(cajas[i].y).toBeGreaterThanOrEqual(cajas[i - 1].y + cajas[i - 1].height - 1);
+  }
+
+  // el botón ojo queda a la derecha del nombre de la capa, dentro de la misma fila.
+  const primeraFila = filas.first();
+  const nombreBox = await primeraFila.locator('.editor-plantilla__fila-capa__nombre').boundingBox();
+  const ojoBox = await primeraFila.locator('.editor-plantilla__ojo').boundingBox();
+  expect(ojoBox.x).toBeGreaterThan(nombreBox.x);
+});
+
+test('la capa seleccionada queda resaltada', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=foto-precio');
+
+  const filaNombre = page.locator('.editor-plantilla__fila-capa', { has: page.locator('[data-accion="capa-nombre"]') });
+  await expect(filaNombre).not.toHaveClass(/editor-plantilla__fila-capa--activa/);
+  await page.locator('[data-accion="capa-nombre"]').click();
+  await expect(filaNombre).toHaveClass(/editor-plantilla__fila-capa--activa/);
 });

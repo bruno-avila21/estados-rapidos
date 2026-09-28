@@ -27,7 +27,21 @@ export function blobABase64(blob) {
   });
 }
 
+/**
+ * Decodifica un data URL ("data:image/png;base64,....") a Blob a mano, con `atob`, en vez de
+ * `fetch(dataUrl)` — BUGS.md #26: dentro del WebView empaquetado del APK, importar un respaldo con
+ * `fotoBase64` armado a mano dejaba el producto sin foto (silencioso: ni el import ni el `<img>`
+ * tiraban error visible). `fetch` sobre esquema `data:` depende del motor; decodificar el base64
+ * directo es portable en cualquier entorno con `atob`/`Uint8Array` (navegador, WebView y Node 18+).
+ */
 export async function base64ABlob(dataUrl) {
-  const respuesta = await fetch(dataUrl);
-  return await respuesta.blob();
+  const separador = dataUrl.indexOf(',');
+  const encabezado = separador >= 0 ? dataUrl.slice(0, separador) : '';
+  const base64 = separador >= 0 ? dataUrl.slice(separador + 1) : dataUrl;
+  const tipo = /data:([^;,]+)/.exec(encabezado)?.[1] || 'application/octet-stream';
+
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i += 1) bytes[i] = binario.charCodeAt(i);
+  return new Blob([bytes], { type: tipo });
 }

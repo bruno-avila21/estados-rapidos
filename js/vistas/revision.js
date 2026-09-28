@@ -1,14 +1,42 @@
-// Hoja de revisión: antes de compartir (1 o N productos), arma las imágenes en secuencia con
-// progreso, deja editar la descripción y elegir el estilo, y comparte todo junto (o de a uno si
-// el navegador no soporta compartir varios archivos), con descarga como último recurso.
-// CREAR-BRIEF.md, cambio de producto 2026-09-27.
+// Hoja de revisión: antes de compartir (1 o N productos), arma las imágenes con progreso, deja
+// editar la descripción y elegir el estilo, un interruptor para compartir SIN texto, y comparte
+// todo junto (o de a uno si el navegador no soporta compartir varios archivos), con descarga como
+// último recurso. CREAR-BRIEF.md, cambio de producto 2026-09-27; ronda "publicar más rápido" y
+// "compartir sin texto" 2026-09-28.
+//
+// Ronda "publicar más rápido" (con 3-10 productos tardaba bastante en el celu, medido en PERF.md):
+//   - El carrusel muestra MINIATURAS livianas (270×480, `componerMiniatura`), no el archivo final:
+//     antes se armaba directo el PNG 1080×1920 y se mostraba achicado por CSS, siendo el mismo
+//     trabajo pesado que después se re-hacía para compartir.
+//   - Los archivos FINALES (1080×1920, JPEG 0.9) se pre-generan en SEGUNDO PLANO apenas se abre la
+//     hoja (mientras el usuario todavía está mirando/editando), en paralelo acotado — no al tocar
+//     "Compartir": ese botón solo espera a que terminen (si ya terminaron, es inmediato).
+//   - Cada foto se decodifica UNA vez (`createImageBitmap`, cacheado por `fotoId`) y se reusa tanto
+//     para la miniatura como para el archivo final, y de nuevo si se cambia el estilo de la tanda.
 import * as repo from '../repositorio.js';
-import { componerSegunEstilo } from '../componer.js';
+import { componerSegunEstilo, componerMiniatura } from '../componer.js';
 import { resolverEstilo, resolverDescripcion, ESTILOS_IMAGEN, ETIQUETA_ESTILO } from '../modelo.js';
 import { compartirArchivos, copiarDescripcion, descargarImagen, puedeCompartirArchivos } from '../utils/compartir.js';
 import { mostrarToast } from '../utils/toast.js';
 
 export const LIMITE_IMAGENES = 30;
+const CONCURRENCIA_EXPORTACION = 3; // "en paralelo ACOTADO": no decodificar/comprimir todo a la vez
+
+/** Corre `tarea` sobre `items` con como mucho `limite` en simultáneo, en orden de `items`. */
+async function enParaleloAcotado(items, limite, tarea) {
+  const resultados = new Array(items.length);
+  let siguiente = 0;
+  async function trabajador() {
+    while (siguiente < items.length) {
+      const i = siguiente;
+      siguiente += 1;
+      // eslint-disable-next-line no-await-in-loop -- es justamente el trabajador de un pool acotado
+      resultados[i] = await tarea(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limite, items.length) }, trabajador));
+  return resultados;
+}
 
 export async function abrirHojaRevision({ ids }) {
   if (!ids?.length) return;
@@ -28,7 +56,51 @@ export async function abrirHojaRevision({ ids }) {
   const general = await repo.obtenerAjustesGenerales();
   const plantillaConfig = await repo.obtenerPlantillaConfig();
   let estiloSesion = null; // si se elige acá, se usa para TODAS las imágenes de esta hoja
-  let imagenes = []; // [{ producto, blob, url }]
+
+  // Decodificar cada foto UNA sola vez y reusarla (miniatura + final + si cambia el estilo).
+  const bitmapsFoto = new Map(); // fotoId -> Promise<ImageBitmap|null>
+  let bitmapPlantillaPromesa = null;
+  let urlsMiniatura = [];
+  let finales = []; // [{producto, blob}] — archivos FINALES (1080x1920 JPEG), pre-generados
+  let promesaFinales = Promise.resolve();
+  let generacion = 0; // se incrementa cada vez que se rearma todo (cambia el estilo de la tanda)
+
+  function bitmapDeFoto(producto) {
+    if (!producto.fotoId) return Promise.resolve(null);
+    if (!bitmapsFoto.has(producto.fotoId)) {
+      bitmapsFoto.set(
+        producto.fotoId,
+        repo.obtenerFotoBlob(producto.fotoId).then((blob) => (blob ? createImageBitmap(blob) : null))
+      );
+    }
+    return bitmapsFoto.get(producto.fotoId);
+  }
+
+  function bitmapDePlantilla() {
+    if (!bitmapPlantillaPromesa) {
+      bitmapPlantillaPromesa = repo.obtenerImagenPlantillaBlob().then((blob) => createImageBitmap(blob));
+    }
+    return bitmapPlantillaPromesa;
+  }
+
+  async function datosParaProducto(producto) {
+    const estilo = estiloSesion || resolverEstilo(producto, general);
+    const [fotoImagen, plantillaImagen] = await Promise.all([
+      bitmapDeFoto(producto),
+      estilo === 'mi-plantilla' ? bitmapDePlantilla() : Promise.resolve(null),
+    ]);
+    const descripcion = resolverDescripcion(producto, { ...general, formatoPrecio: plantillaConfig.formatoPrecio });
+    return {
+      estilo,
+      plantillaImagen,
+      fotoImagen,
+      producto,
+      ajustes: plantillaConfig.ajustesPorEstilo?.[estilo] ?? {},
+      formatoPrecio: plantillaConfig.formatoPrecio,
+      descripcion,
+      encuadreFoto: general.encuadreFoto,
+    };
+  }
 
   // --- Overlay y estructura ---
   const overlay = document.createElement('div');
@@ -71,6 +143,20 @@ export async function abrirHojaRevision({ ids }) {
   }
   campoEstilo.append(labelEstilo, selectEstilo);
 
+  // --- "Incluir texto" (ronda "compartir sin texto"): apagado, no se copia al portapapeles ni se
+  // manda como EXTRA_TEXT/text; se recuerda la última elección en Ajustes generales. ---
+  const campoIncluirTexto = document.createElement('label');
+  campoIncluirTexto.className = 'fila';
+  campoIncluirTexto.style.alignItems = 'center';
+  const checkIncluirTexto = document.createElement('input');
+  checkIncluirTexto.type = 'checkbox';
+  checkIncluirTexto.id = 'revision-incluir-texto';
+  checkIncluirTexto.setAttribute('data-accion', 'revision-incluir-texto');
+  checkIncluirTexto.checked = general.incluirTextoAlCompartir !== false;
+  const spanIncluirTexto = document.createElement('span');
+  spanIncluirTexto.textContent = 'Incluir texto';
+  campoIncluirTexto.append(checkIncluirTexto, spanIncluirTexto);
+
   const campoDescripcion = document.createElement('div');
   campoDescripcion.className = 'campo';
   const labelDescripcion = document.createElement('label');
@@ -82,6 +168,15 @@ export async function abrirHojaRevision({ ids }) {
   textareaDescripcion.id = 'revision-descripcion';
   textareaDescripcion.value = productos.map((p) => resolverDescripcion(p, { ...general, formatoPrecio: plantillaConfig.formatoPrecio })).join('\n');
   campoDescripcion.append(labelDescripcion, textareaDescripcion);
+
+  function actualizarEstadoIncluirTexto() {
+    textareaDescripcion.disabled = !checkIncluirTexto.checked;
+  }
+  actualizarEstadoIncluirTexto();
+  checkIncluirTexto.addEventListener('change', async () => {
+    actualizarEstadoIncluirTexto();
+    await repo.guardarIncluirTextoAlCompartir(checkIncluirTexto.checked);
+  });
 
   const acciones = document.createElement('div');
   acciones.className = 'dialogo__acciones';
@@ -97,7 +192,7 @@ export async function abrirHojaRevision({ ids }) {
   btnCompartir.textContent = 'Compartir';
   acciones.append(btnCerrar, btnCompartir);
 
-  caja.append(titulo, progreso, carrusel, campoEstilo, campoDescripcion, acciones);
+  caja.append(titulo, progreso, carrusel, campoEstilo, campoIncluirTexto, campoDescripcion, acciones);
   overlay.append(caja);
   document.body.append(overlay);
 
@@ -120,68 +215,72 @@ export async function abrirHojaRevision({ ids }) {
     if (!overlay.isConnected) return;
     document.removeEventListener('keydown', alEscape);
     window.removeEventListener('popstate', alVolver);
-    imagenes.forEach((im) => im.url && URL.revokeObjectURL(im.url));
+    urlsMiniatura.forEach((u) => URL.revokeObjectURL(u));
     overlay.remove();
     // Cerrada con la X, Escape o al compartir: sacar el paso que se sumó al abrir.
     if (!desdeHistorial && history.state?.hojaRevision) history.back();
   }
 
-  async function generarImagenProducto(producto) {
-    const estilo = estiloSesion || resolverEstilo(producto, general);
-    const fotoBlob = await repo.obtenerFotoBlob(producto.fotoId);
-    const fotoImagen = fotoBlob ? await createImageBitmap(fotoBlob) : null;
-    let plantillaImagen = null;
-    if (estilo === 'mi-plantilla') {
-      plantillaImagen = await createImageBitmap(await repo.obtenerImagenPlantillaBlob());
-    }
-    const descripcion = resolverDescripcion(producto, { ...general, formatoPrecio: plantillaConfig.formatoPrecio });
-    return await componerSegunEstilo({
-      estilo,
-      plantillaImagen,
-      fotoImagen,
-      producto,
-      ajustes: plantillaConfig.ajustes,
-      formatoPrecio: plantillaConfig.formatoPrecio,
-      descripcion,
-      encuadreFoto: general.encuadreFoto,
-    });
-  }
-
-  async function generarTodas() {
-    imagenes.forEach((im) => im.url && URL.revokeObjectURL(im.url));
-    imagenes = [];
+  async function generarMiniaturas(miGeneracion) {
+    urlsMiniatura.forEach((u) => URL.revokeObjectURL(u));
+    urlsMiniatura = [];
     carrusel.textContent = '';
-    btnCompartir.disabled = true;
-    for (let i = 0; i < productos.length; i += 1) {
-      progreso.textContent = `Armando ${i + 1}/${productos.length}`;
-      // eslint-disable-next-line no-await-in-loop -- secuencial a propósito: no congela la UI
-      const blob = await generarImagenProducto(productos[i]);
-      const url = URL.createObjectURL(blob);
-      imagenes.push({ producto: productos[i], blob, url });
+    const imgs = productos.map((producto) => {
       const img = document.createElement('img');
       img.className = 'hoja-revision__miniatura';
-      img.src = url;
-      img.alt = productos[i].nombre;
+      img.alt = producto.nombre;
       carrusel.append(img);
-    }
-    progreso.textContent = '';
+      return img;
+    });
+    progreso.textContent = `Armando ${productos.length === 1 ? 'la vista previa' : `${productos.length} vistas previas`}…`;
+    await enParaleloAcotado(productos, CONCURRENCIA_EXPORTACION, async (producto, i) => {
+      const datos = await datosParaProducto(producto);
+      const blob = await componerMiniatura(datos);
+      if (miGeneracion !== generacion) return; // el usuario cambió el estilo antes de terminar
+      const url = URL.createObjectURL(blob);
+      urlsMiniatura.push(url);
+      imgs[i].src = url;
+    });
+    if (miGeneracion === generacion) progreso.textContent = '';
+  }
+
+  async function generarFinales(miGeneracion) {
+    const resultado = await enParaleloAcotado(productos, CONCURRENCIA_EXPORTACION, async (producto) => {
+      const datos = await datosParaProducto(producto);
+      const blob = await componerSegunEstilo(datos, { formato: 'image/jpeg', calidad: 0.9 });
+      return { producto, blob };
+    });
+    if (miGeneracion === generacion) finales = resultado;
+    return resultado;
+  }
+
+  // Las miniaturas se esperan (son lo que ve el usuario); los archivos finales se disparan en
+  // SEGUNDO PLANO sin bloquear — `promesaFinales` es lo único que espera "Compartir".
+  async function generarTodo() {
+    generacion += 1;
+    const miGeneracion = generacion;
+    btnCompartir.disabled = true;
+    await generarMiniaturas(miGeneracion);
+    if (miGeneracion !== generacion) return;
     btnCompartir.disabled = false;
+    promesaFinales = generarFinales(miGeneracion);
   }
 
   selectEstilo.addEventListener('change', async () => {
     estiloSesion = selectEstilo.value || null;
-    await generarTodas();
+    await generarTodo();
   });
 
   btnCompartir.addEventListener('click', () => compartirOFallback());
 
   async function compartirOFallback() {
     btnCompartir.disabled = true;
-    const texto = textareaDescripcion.value;
-    await copiarDescripcion(texto);
-    const archivos = imagenes.map(
-      (im, i) => new File([im.blob], `estado-${i + 1}.png`, { type: 'image/png' })
-    );
+    const incluirTexto = checkIncluirTexto.checked;
+    const texto = incluirTexto ? textareaDescripcion.value : '';
+    if (incluirTexto) await copiarDescripcion(texto);
+
+    await promesaFinales;
+    const archivos = finales.map((f, i) => new File([f.blob], `estado-${i + 1}.jpg`, { type: 'image/jpeg' }));
 
     if (puedeCompartirArchivos(archivos)) {
       const resultado = await compartirArchivos({ archivos, texto });
@@ -200,9 +299,9 @@ export async function abrirHojaRevision({ ids }) {
       return;
     }
 
-    imagenes.forEach((im, i) => descargarImagen(im.blob, `estado-${i + 1}.png`));
+    finales.forEach((f, i) => descargarImagen(f.blob, `estado-${i + 1}.jpg`));
     mostrarToast(
-      imagenes.length > 1
+      finales.length > 1
         ? 'Tu navegador no comparte varios archivos juntos: se descargaron todas'
         : 'Tu navegador no comparte archivos: se descargó la imagen'
     );
@@ -230,5 +329,5 @@ export async function abrirHojaRevision({ ids }) {
     await compartirActual();
   }
 
-  await generarTodas();
+  await generarTodo();
 }

@@ -87,8 +87,10 @@ test('mínimo del día 1: cargar producto, precio en línea, plantilla y publica
 
   const llamadas = await page.evaluate(() => window.__compartir.llamadas);
   expect(llamadas.length).toBe(1);
-  expect(llamadas[0].tipoArchivo).toBe('image/png');
-  expect(llamadas[0].nombreArchivo).toMatch(/\.png$/);
+  // JPEG calidad 0.9 (no PNG): WhatsApp recomprime igual, y así se comparte más rápido/liviano
+  // (ronda "publicar más rápido", CREAR-BRIEF.md 2026-09-28).
+  expect(llamadas[0].tipoArchivo).toBe('image/jpeg');
+  expect(llamadas[0].nombreArchivo).toMatch(/\.jpg$/);
   expect(llamadas[0].dimensiones).toEqual({ w: 1080, h: 1920 });
   expect(llamadas[0].text).toMatch(/Talles del 38/);
 
@@ -113,6 +115,6 @@ test('publicar sin soporte de compartir archivos cae a descargar', async ({ page
   const descargaPromesa = page.waitForEvent('download');
   await page.locator('[data-accion="revision-compartir"]').click();
   const descarga = await descargaPromesa;
-  expect(descarga.suggestedFilename()).toMatch(/\.png$/);
+  expect(descarga.suggestedFilename()).toMatch(/\.jpg$/);
   await expect(page.locator('#toast')).toHaveText(/se descargó la imagen/);
 });
