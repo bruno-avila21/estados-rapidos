@@ -176,3 +176,11 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Causa:** la hoja es un overlay agregado al `<body>` que no escucha la navegación.
 - **Arreglo:** abrir la hoja suma un paso al historial (`pushState`); `popstate` la cierra, así Atrás cierra la hoja sin cambiar de pantalla. Cerrarla con la X, Escape o al compartir hace `history.back()` para no dejar el paso de más. Tests: Atrás cierra la hoja y la lista queda usable; cerrar con la X no deja el paso.
 - **Resuelto:** sí (ver commit).
+
+### 21. La barra de Deshacer "fija" se iba con el scroll
+- **Paso:** verificación en vivo de la v6: bajar hasta el panel de propiedades del editor.
+- **Error exacto:** `barraVisibleAlScrollear: false` con `scrollY: 597`; único ancestro con overflow: `MAIN.vista:auto`.
+- **Reproducir:** Plantilla → tocar Nombre → bajar hasta los deslizadores: la barra desaparece arriba.
+- **Causa:** `.vista` tenía `overflow-y: auto` sin alto fijo: no scrollea ella (crece y scrollea la ventana) pero igual es el contenedor de referencia del `position: sticky`, que queda anulado.
+- **Arreglo:** `.vista` pasa a `overflow-x: clip` (contiene el desborde horizontal sin crear contenedor de scroll). Test E2E que baja hasta el panel y mide que la barra siga arriba.
+- **Resuelto:** sí (ver commit).

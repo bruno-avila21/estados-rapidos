@@ -190,3 +190,17 @@ test('arrastrar el deslizador de tamaño recorre todo el rango', async ({ page }
   await page.mouse.up();
   expect(Number(await deslizador.inputValue())).toBeGreaterThan(140);
 });
+
+// La barra de Deshacer queda a la vista al bajar hasta el panel de propiedades (BUGS.md #21: un
+// overflow en .vista anulaba el sticky y la barra se iba con el scroll).
+test('la barra de deshacer sigue a la vista al bajar por el panel', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla');
+  await page.locator('[data-elemento="nombre"]').click();
+  await page.locator('.editor-plantilla__panel input[type="range"]').last().scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => scrollY)).toBeGreaterThan(200);
+  const arriba = await page.locator('.editor-plantilla__barra').evaluate((el) => el.getBoundingClientRect().top);
+  expect(arriba).toBeGreaterThanOrEqual(0);
+  expect(arriba).toBeLessThan(120);
+});

@@ -121,7 +121,9 @@ h3 {
 .vista {
   flex: 1;
   padding: 0 16px calc(var(--espacio-nav) + var(--safe-bottom) + 16px);
-  overflow-y: auto;
+  /* clip y no auto: la que scrollea es la ventana, y un contenedor con overflow auto deja sin
+     efecto cualquier position: sticky de adentro (barra de Deshacer del editor, BUGS.md #21). */
+  overflow-x: clip;
 }
 
 /* ---------- Navegación inferior: pulgar abajo, acciones principales accesibles ---------- */
