@@ -3,6 +3,21 @@
 Registro de fallos encontrados durante la construcción, con causa y arreglo (regla de cierre.md /
 seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos resueltos.
 
+### 46. `sw.spec.js` sigue fallando en esta máquina (recurrencia de #45/#39), confirmado ajeno a Fase 3
+- **Paso:** `npm run test:e2e` completo al cerrar Fase 3 (3 funcionalidades "M" del reskin: reordenar
+  con drag/teclado, editar precio en modal desde la grilla, acciones visibles en la grilla). Único
+  fallo, 84/85 specs pasan.
+- **Error exacto:** igual que #45/#39 — `page.goto: net::ERR_FAILED at http://127.0.0.1:8991/` con
+  `page.route('**/*', route.abort())` activo, los 3 intentos (intento + 2 retries).
+- **Reproducir:** `npx playwright test test/e2e/sw.spec.js`. Confirmado con `git stash` (vuelve todo
+  el árbol de trabajo al commit base `786adac`, ANTES de Fase 3) → el mismo test falla IGUAL, 3/3,
+  con el código viejo — cero relación con los cambios de esta ronda (`sw.js` VERSION `v11`→`v12` +
+  `./js/reordenar.js` nuevo en `NUCLEO`).
+- **Causa:** la misma de #39/#45 (pendiente de investigar, fuera de alcance).
+- **Arreglo:** ninguno en esta ronda (mismo criterio que #39/#45).
+- **Resuelto:** no (fuera de alcance, igual que #39/#45).
+- ¿Se repetiría en otro proyecto? No aplica — sigue sin diagnóstico (ver #39).
+
 ### 45. `sw.spec.js` sigue fallando en esta máquina (recurrencia de #39), confirmado ajeno a Fase 2
 - **Paso:** `npm run test:e2e` completo al cerrar Fase 2 (5 funcionalidades "S" del reskin). Único
   fallo restante además de #44 (ya resuelto).

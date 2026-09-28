@@ -91,12 +91,13 @@ enrutar();
 pedirAlmacenamientoPersistente();
 
 // El shell del APK (PantallaPrincipal.kt) pregunta esto antes de decidir si el botón Atrás
-// nativo sale de la app. `true` = "ya hice algo (cerrar la hoja de revisión / volver a la
-// lista)"; `false` = "no hay nada que cerrar, salí de la app". La hoja de revisión (revision.js)
-// ya empuja su propio `history.pushState` y se cierra sola con `popstate`; acá solo hace falta
-// dispararlo, y para el resto de las pantallas, volver a la lista antes de salir.
+// nativo sale de la app. `true` = "ya hice algo (cerrar la hoja de revisión/un modal / volver a la
+// lista)"; `false` = "no hay nada que cerrar, salí de la app". La hoja de revisión (revision.js) y
+// los modales propios (ej. "Editar precio" en la grilla, lista.js, Fase 3 "M" #2) ya empujan su
+// propio `history.pushState` (`hojaRevision`/`modalAbierto`) y se cierran solos con `popstate`;
+// acá solo hace falta dispararlo, y para el resto de las pantallas, volver a la lista antes de salir.
 window.estadosRapidosBack = function estadosRapidosBack() {
-  if (history.state && history.state.hojaRevision) {
+  if (history.state && (history.state.hojaRevision || history.state.modalAbierto)) {
     history.back();
     return true;
   }

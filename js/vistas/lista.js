@@ -3,7 +3,15 @@
 // persistente con la barra "Publicar N". Ronda "secciones" (CREAR-BRIEF.md): un producto puede
 // estar en varias secciones a la vez (etiquetas, no carpetas).
 import * as repo from '../repositorio.js';
-import { formatearPrecio, parsearPrecio, agruparProductosPorSeccion, contarProductosPorSeccion, filtrarProductosPorSeccion, ID_SIN_SECCION } from '../modelo.js';
+import {
+  formatearPrecio,
+  parsearPrecio,
+  validarProducto,
+  agruparProductosPorSeccion,
+  contarProductosPorSeccion,
+  filtrarProductosPorSeccion,
+  ID_SIN_SECCION,
+} from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 import { abrirHojaRevision } from './revision.js';
@@ -458,7 +466,10 @@ function filaCompacta(producto, ctx) {
 }
 
 // --- Vista GRILLA: 3 columnas, solo foto cuadrada + nombre corto abajo + casilla superpuesta;
-// tocar abre edición. ---
+// tocar abre edición. Fase 3 "M" #3 (Interfaz/ANALISIS-STITCH.md, productos_vista_grilla_natural):
+// la grilla YA existía (conmutador lista/grilla persistido en `obtenerPreferenciasLista`/
+// `guardarPreferenciasLista`) — lo que faltaba eran las ACCIONES visibles por tarjeta (acá se suman
+// "Subir a Estado" y "Editar precio", sin tocar la selección persistente que ya funcionaba). ---
 function grilla(productos, ctx) {
   const cont = document.createElement('div');
   cont.className = 'grilla-productos';
@@ -475,12 +486,13 @@ function tarjetaGrilla(producto, ctx) {
   div.tabIndex = 0;
   div.setAttribute('aria-label', `Editar ${producto.nombre}`);
   const abrir = () => ctx.navegar(`#/producto/${producto.id}`);
+  const esControl = (ev) => ev.target.closest('[data-accion="seleccionar"], [data-accion="grilla-precio"], [data-accion="grilla-publicar"]');
   div.addEventListener('click', (ev) => {
-    if (ev.target.closest('[data-accion="seleccionar"]')) return;
+    if (esControl(ev)) return;
     abrir();
   });
   div.addEventListener('keydown', (ev) => {
-    if ((ev.key === 'Enter' || ev.key === ' ') && !ev.target.closest('[data-accion="seleccionar"]')) {
+    if ((ev.key === 'Enter' || ev.key === ' ') && !esControl(ev)) {
       ev.preventDefault();
       abrir();
     }
@@ -515,6 +527,173 @@ function tarjetaGrilla(producto, ctx) {
   nombre.className = 'grilla-item__nombre';
   nombre.textContent = producto.nombre;
 
-  div.append(foto, checkbox, nombre);
+  const precio = document.createElement('div');
+  precio.className = 'grilla-item__precio';
+  precio.textContent = producto.precio != null ? formatearPrecio(producto.precio, formatoPrecioCache) : 'Sin precio';
+
+  const acciones = document.createElement('div');
+  acciones.className = 'grilla-item__acciones';
+
+  const btnPrecio = document.createElement('button');
+  btnPrecio.type = 'button';
+  btnPrecio.className = 'grilla-item__accion';
+  btnPrecio.setAttribute('data-accion', 'grilla-precio');
+  btnPrecio.setAttribute('aria-label', `Editar precio de ${producto.nombre}`);
+  btnPrecio.append(crearIcono('lapiz'));
+  btnPrecio.addEventListener('click', async (ev) => {
+    ev.stopPropagation();
+    const guardado = await abrirModalPrecio(producto);
+    if (guardado) {
+      precio.textContent = producto.precio != null ? formatearPrecio(producto.precio, formatoPrecioCache) : 'Sin precio';
+    }
+  });
+
+  const btnPublicar = document.createElement('button');
+  btnPublicar.type = 'button';
+  btnPublicar.className = 'grilla-item__accion';
+  btnPublicar.setAttribute('data-accion', 'grilla-publicar');
+  btnPublicar.setAttribute('aria-label', `Publicar ${producto.nombre}`);
+  btnPublicar.append(crearIcono('subir'));
+  btnPublicar.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    abrirHojaRevision({ ids: [producto.id] });
+  });
+
+  acciones.append(btnPrecio, btnPublicar);
+  div.append(foto, checkbox, nombre, precio, acciones);
   return div;
+}
+
+// --- Modal rápido de precio (Fase 3 "M" #2): editar el precio desde la lista SIN entrar al
+// detalle. La vista compacta ya tenía un input inline equivalente (con sus propios tests e2e que
+// no hay que romper); este modal es la vía nueva para la grilla, que no tiene lugar para un input
+// en la tarjeta. Valida con `validarProducto` de modelo.js (precio vacío = válido, negativo/0 =
+// error), atrapa el foco, Escape/"Cancelar" cierran, y el botón atrás de Android también la cierra
+// (mismo patrón `history.pushState({modalAbierto:true})` + `popstate` que usa `estadosRapidosBack`
+// en main.js para la hoja de revisión). Devuelve una Promise<boolean> (true = se guardó). ---
+function abrirModalPrecio(producto) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'dialogo-overlay';
+
+    const caja = document.createElement('div');
+    caja.className = 'dialogo';
+    caja.setAttribute('role', 'dialog');
+    caja.setAttribute('aria-modal', 'true');
+    caja.setAttribute('aria-label', `Editar precio de ${producto.nombre}`);
+
+    const titulo = document.createElement('h2');
+    titulo.className = 'dialogo__titulo';
+    titulo.textContent = 'Editar precio';
+
+    const sub = document.createElement('p');
+    sub.className = 'dialogo__mensaje';
+    sub.textContent = producto.nombre;
+
+    const campo = document.createElement('div');
+    campo.className = 'campo';
+    const label = document.createElement('label');
+    label.className = 'campo__etiqueta';
+    label.htmlFor = 'modal-precio-input';
+    label.textContent = 'Precio';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = 'decimal';
+    input.id = 'modal-precio-input';
+    input.placeholder = 'Sin precio';
+    input.setAttribute('data-accion', 'modal-precio-input');
+    input.value = producto.precio != null ? formatearPrecio(producto.precio, formatoPrecioCache) : '';
+    const error = document.createElement('p');
+    error.className = 'campo__error';
+    error.setAttribute('role', 'alert');
+    error.hidden = true;
+    campo.append(label, input, error);
+
+    const acciones = document.createElement('div');
+    acciones.className = 'dialogo__acciones';
+    const btnCancelar = document.createElement('button');
+    btnCancelar.type = 'button';
+    btnCancelar.className = 'boton boton--fantasma';
+    btnCancelar.setAttribute('data-accion', 'modal-precio-cancelar');
+    btnCancelar.textContent = 'Cancelar';
+    const btnGuardar = document.createElement('button');
+    btnGuardar.type = 'button';
+    btnGuardar.className = 'boton boton--primario';
+    btnGuardar.setAttribute('data-accion', 'modal-precio-guardar');
+    btnGuardar.textContent = 'Guardar';
+    acciones.append(btnCancelar, btnGuardar);
+
+    caja.append(titulo, sub, campo, acciones);
+    overlay.append(caja);
+    document.body.append(overlay);
+
+    // Foco atrapado: Tab/Shift+Tab nunca se escapan del diálogo mientras está abierto.
+    const focosDelDialogo = () => Array.from(caja.querySelectorAll('input, button')).filter((el) => !el.disabled);
+    const alTab = (ev) => {
+      if (ev.key !== 'Tab') return;
+      const focos = focosDelDialogo();
+      if (!focos.length) return;
+      const primero = focos[0];
+      const ultimo = focos[focos.length - 1];
+      if (ev.shiftKey && document.activeElement === primero) {
+        ev.preventDefault();
+        ultimo.focus();
+      } else if (!ev.shiftKey && document.activeElement === ultimo) {
+        ev.preventDefault();
+        primero.focus();
+      }
+    };
+    const alEscape = (ev) => {
+      if (ev.key === 'Escape') cerrar(false);
+    };
+    document.addEventListener('keydown', alTab);
+    document.addEventListener('keydown', alEscape);
+    overlay.addEventListener('click', (ev) => {
+      if (ev.target === overlay) cerrar(false);
+    });
+    btnCancelar.addEventListener('click', () => cerrar(false));
+
+    // Atrás de Android cierra el modal en vez de salir de la pantalla de abajo — mismo criterio
+    // que la hoja de revisión (BUGS.md #20); `estadosRapidosBack` (main.js) reconoce
+    // `modalAbierto` igual que reconoce `hojaRevision`.
+    history.pushState({ modalAbierto: true }, '');
+    const alVolver = () => cerrar(false, { desdeHistorial: true });
+    window.addEventListener('popstate', alVolver);
+
+    function cerrar(guardado, { desdeHistorial = false } = {}) {
+      document.removeEventListener('keydown', alTab);
+      document.removeEventListener('keydown', alEscape);
+      window.removeEventListener('popstate', alVolver);
+      overlay.remove();
+      if (!desdeHistorial && history.state?.modalAbierto) history.back();
+      resolve(guardado);
+    }
+
+    const guardar = async () => {
+      const texto = input.value.trim();
+      const nuevoPrecio = texto ? parsearPrecio(texto) : null;
+      const { ok, errores } = validarProducto({ ...producto, precio: nuevoPrecio });
+      if (!ok && errores.precio) {
+        error.textContent = errores.precio;
+        error.hidden = false;
+        input.setAttribute('aria-invalid', 'true');
+        input.focus();
+        return;
+      }
+      producto.precio = nuevoPrecio;
+      await repo.actualizarPrecio(producto.id, nuevoPrecio);
+      mostrarToast(nuevoPrecio != null ? 'Precio actualizado' : 'Precio quitado');
+      cerrar(true);
+    };
+    btnGuardar.addEventListener('click', guardar);
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        guardar();
+      }
+    });
+
+    input.focus();
+    input.select();
+  });
 }

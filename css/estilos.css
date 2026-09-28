@@ -481,13 +481,93 @@ h3 {
   margin-bottom: 12px;
 }
 .hoja-revision__miniatura {
-  flex-shrink: 0;
-  width: 108px;
+  width: 100%;
   aspect-ratio: 1080 / 1920;
   object-fit: cover;
   border-radius: var(--radio-chico);
   border: 1px solid var(--color-borde);
   background: var(--color-superficie-alta);
+}
+
+/* ---------- Reordenar el carrusel (Fase 3 "M" #1): arrastrar con el dedo desde la manija (pointer
+   events — la API HTML5 drag/drop no anda en Android WebView) o los botones accesibles
+   "Mover antes"/"Mover después", operables por teclado igual que cualquier <button>. ---------- */
+.hoja-revision__item {
+  flex-shrink: 0;
+  width: 108px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+.hoja-revision__item--arrastrando {
+  opacity: 0.85;
+  transform: scale(0.96);
+  transition: transform var(--duracion) var(--ease), opacity var(--duracion) var(--ease);
+  z-index: 2;
+}
+.hoja-revision__orden {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 7px;
+  border-radius: var(--radio-chico);
+  background: var(--color-superposicion);
+  color: #fff;
+  font-size: var(--tamano-12);
+  font-weight: 700;
+  pointer-events: none;
+}
+.hoja-revision__manija {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: var(--toque-min);
+  height: var(--toque-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--color-borde);
+  background: var(--color-superficie-alta);
+  color: var(--color-texto);
+  touch-action: none; /* arrastrar con el dedo no hace scroll horizontal del carrusel */
+  cursor: grab;
+}
+.hoja-revision__manija:active {
+  cursor: grabbing;
+}
+.hoja-revision__manija:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.hoja-revision__controles {
+  display: flex;
+  gap: 4px;
+}
+.hoja-revision__mover {
+  flex: 1;
+  min-height: var(--toque-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--color-borde);
+  background: var(--color-superficie);
+  color: var(--color-texto);
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
+}
+.hoja-revision__mover:hover:not(:disabled) {
+  border-color: var(--color-acento);
+}
+.hoja-revision__mover:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.hoja-revision__mover:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* ---------- <select>, opciones avanzadas (<details>/<summary>) ---------- */
@@ -1532,4 +1612,42 @@ details.grupo-seccion > .grilla-productos {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--color-texto);
+}
+
+/* Fase 3 "M" #3 (Interfaz/ANALISIS-STITCH.md, productos_vista_grilla_natural): precio + acciones
+   visibles en cada tarjeta ("Subir a Estado", "Editar precio"), sin depender de abrir la edición
+   completa — mismo criterio de affordance que la fila compacta, adaptado al espacio de la grilla. */
+.grilla-item__precio {
+  font-family: var(--font-datos);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--tamano-12);
+  text-align: center;
+  color: var(--color-texto-tenue);
+}
+.grilla-item__acciones {
+  display: flex;
+  gap: 4px;
+}
+.grilla-item__accion {
+  flex: 1;
+  min-height: var(--toque-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--color-borde);
+  background: var(--color-superficie);
+  color: var(--color-texto);
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
+}
+.grilla-item__accion:hover {
+  border-color: var(--color-acento);
+}
+.grilla-item__accion:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.grilla-item__accion:active {
+  transform: scale(0.94);
 }

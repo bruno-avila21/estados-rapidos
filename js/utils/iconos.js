@@ -85,6 +85,20 @@ const TRAZOS = Object.freeze({
     ['rect', { x: 8, y: 8, width: 12, height: 12, rx: 2 }],
     ['path', { d: 'M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2' }],
   ],
+  // Editar precio en modal (Fase 3 "M" #2) y "Editar" en grilla: lápiz de línea simple.
+  lapiz: [
+    ['path', { d: 'M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z' }],
+    ['line', { x1: 13.5, y1: 6.5, x2: 17, y2: 10 }],
+  ],
+  'flecha-izquierda': [['polyline', { points: '15,6 9,12 15,18' }]],
+  'flecha-derecha': [['polyline', { points: '9,6 15,12 9,18' }]],
+  // Manija de arrastre (Fase 3 "M" #1, reordenar en la hoja de revisión): 2 filas de puntos.
+  arrastrar: [
+    ['circle', { cx: 8, cy: 9, r: 1.4 }],
+    ['circle', { cx: 16, cy: 9, r: 1.4 }],
+    ['circle', { cx: 8, cy: 15, r: 1.4 }],
+    ['circle', { cx: 16, cy: 15, r: 1.4 }],
+  ],
 });
 
 /**
