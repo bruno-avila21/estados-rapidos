@@ -131,3 +131,16 @@ test('el selector de estilo de la hoja regenera las imágenes', async ({ page })
   const segundaImagen = await page.locator('.hoja-revision__miniatura').first().getAttribute('src');
   expect(segundaImagen).not.toBe(primeraImagen);
 });
+
+// La hoja tenía su propia copia de las etiquetas y le faltaba el 4º estilo: la opción salía en
+// blanco (QA v4, BUGS.md). Ahora usa la tabla de modelo.js; esto cuida que ninguna quede vacía.
+test('el selector de estilo de la hoja tiene etiqueta en todas sus opciones', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Etiquetas', precio: '1000' });
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('#revision-estilo option')).toHaveCount(5); // la hoja se arma async
+  const textos = await page.locator('#revision-estilo option').allTextContents();
+  expect(textos).toHaveLength(5); // "El de cada producto" + los 4 estilos
+  for (const t of textos) expect(t.trim()).not.toBe('');
+  expect(textos).toContain('Foto con descripción');
+});

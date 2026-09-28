@@ -921,3 +921,12 @@ details.grupo > .campo {
     scroll-behavior: auto !important;
   }
 }
+
+/* Deshacer / Rehacer / Restablecer: pegados arriba del lienzo mientras se scrollea el editor. */
+.editor-plantilla__barra {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding-block: 8px;
+  background: var(--color-fondo);
+}

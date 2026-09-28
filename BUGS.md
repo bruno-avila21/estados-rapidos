@@ -144,3 +144,27 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `test/e2e/botones.spec.js` — se reemplazó el loop único por tests explícitos, uno por acción, cada uno navegando a una pantalla conocida antes de clickear y afirmando un efecto concreto (no un diff de `page.content()` genérico). Más verboso, cero estado compartido entre acciones.
 - **Resuelto:** sí — 17/17 E2E verdes, corridos dos veces seguidas sin flakiness.
 - ¿Se repetiría en otro proyecto? Sí — se sumó una nota a la receta compartida `~/.claude/crear-kit/recetas/e2e.md` (sección `botones.spec.js`) para que el próximo proyecto con varias pantallas no arme la misma cadena implícita.
+
+### 17. Editor: Deshacer "no anda" (QA v4), el deslizador se corta al arrastrarlo y la hoja de revisión muestra una opción en blanco
+- **Paso:** QA v4 sobre la URL publicada; después reproducido con Playwright contra la misma URL.
+- **Error exacto:** QA: "Deshacer, Rehacer y Restablecer no funcionan … Rehacer nunca se habilita". Reproducción propia en vivo: Deshacer SÍ revierte (`top 93.75% → 76.0417%`, Rehacer habilitado); lo que sí falla es el deslizador de tamaño: arrastrado de punta a punta pasa de `58` a `64`. Y `#revision-estilo` tiene una `<option>` vacía.
+- **Reproducir:** Plantilla → tocar "Nombre" → arrastrar el deslizador "Tamaño de letra". Hoja de revisión → abrir "Estilo para esta tanda".
+- **Causa:** (1) `actualizarCampo` rehacía el panel de propiedades en cada `input`: el `<input type=range>` que se estaba arrastrando se reemplazaba por uno nuevo y el gesto moría al primer paso. Es probablemente lo que QA vio como "no revierte": el cambio casi no ocurría. (2) `revision.js` tenía su propia copia de `ETIQUETA_ESTILO` sin el 4º estilo. (3) El test de deshacer anterior solo miraba que los botones se habilitaran, no que la posición volviera.
+- **Arreglo:** los cambios continuos (deslizadores, selector de color) redibujan lienzo y capas con `conPanel: false`; los discretos siguen rehaciendo el panel. `revision.js` usa `ETIQUETA_ESTILO` de `modelo.js`. Tests nuevos que miden el resultado: deshacer/rehacer/restablecer por posición, deshacer de tipografía, arrastre con el dedo (CDP touch), deslizador arrastrado de punta a punta, y las 5 opciones con texto.
+- **Inestabilidad de los tests nuevos en la suite completa:** el de etiquetas leía las opciones antes de que la hoja (async) se armara y el táctil arrastraba antes de que el editor terminara la primera vista previa. Ahora esperan el estado listo (`toHaveCount(5)` y la `src` de la vista previa).
+- **Resuelto:** sí (ver commit).
+- ¿Se repetiría en otro proyecto? Sí: "no redibujes el control que el usuario está arrastrando" y "un E2E de deshacer tiene que medir el estado, no el botón" van a la receta `e2e.md`.
+
+### 18. En el E2E táctil, tocar Deshacer después de arrastrar no hacía nada
+- **Paso:** `test/e2e/tactil.spec.js` dentro de la suite completa: arrastrar "Nombre" con el dedo (CDP `Input.dispatchTouchEvent`) y hacer `.tap()` en Deshacer.
+- **Error exacto:** `expect.poll(posicion).toEqual(inicial)` → `- "top": "76.0417%"  + "top": "93.75%"`. Registro de eventos: `pointerdown:deshacer | pointerup:deshacer`, **sin `click`**.
+- **Reproducir:** cualquier página, incluso una vacía con un `<div>` y un `<button>`: arrastre táctil por CDP y después `.tap()` → el primer toque no genera `click`, el segundo sí.
+- **Causa:** artefacto de la emulación táctil de Chromium por CDP, no de la app (se reprodujo igual en una página vacía, con y sin `preventDefault`). Es la explicación más probable del "Deshacer no funciona" del QA v4, que automatiza el navegador con el mismo mecanismo.
+- **Arreglo:** el test arrastra con el dedo y toca Deshacer con `.click()`, y deja comentado por qué. Además, como mejora real de uso, Deshacer / Rehacer / Restablecer pasan a una barra `position: sticky` arriba del lienzo (`.editor-plantilla__barra`): antes estaban a casi dos pantallas (y≈1545) debajo de lo que se edita.
+- **Resuelto:** sí. Lección para QA: un "no responde al toque" con automatización táctil se confirma en una página vacía o en un celu real antes de reportarlo como alto.
+
+### 19. (seguimiento de #10) El smoke del SW sigue intermitente
+- **Paso:** `npx playwright test test/e2e/sw.spec.js --retries=0`, 5 corridas aisladas.
+- **Error exacto:** `page.goto: net::ERR_FAILED at http://127.0.0.1:8991/` (3/5 pasan).
+- **Causa:** pendiente. Se descartó que fuera cortar la red con el SW en "activating": ahora espera `state === 'activated'` y sigue igual. Hipótesis siguiente: `page.route` también intercepta el `fetch()` del SW y la caída al caché no encuentra la clave de `/`.
+- **Arreglo:** pendiente; el test sigue con `retries: 2`. La app sí abre sin red (verificado a mano y en QA).

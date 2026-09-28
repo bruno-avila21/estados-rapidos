@@ -124,8 +124,11 @@ export async function render(contenedor, { navegar } = {}) {
   panel.hidden = true;
 
   // --- Deshacer / rehacer / restablecer ---
+  // Barra fija arriba del lienzo: abajo del panel quedaba a casi dos pantallas, y en el celu un
+  // toque que cae mientras la página todavía se desliza se usa para frenar el scroll y no llega
+  // como click (QA v4, BUGS.md #18). Acá está siempre a mano, al lado de lo que se edita.
   const filaHistorial = document.createElement('div');
-  filaHistorial.className = 'fila';
+  filaHistorial.className = 'fila editor-plantilla__barra';
   const btnDeshacer = document.createElement('button');
   btnDeshacer.type = 'button';
   btnDeshacer.className = 'boton boton--chico';
@@ -143,7 +146,7 @@ export async function render(contenedor, { navegar } = {}) {
   btnRestablecer.textContent = 'Restablecer';
   filaHistorial.append(btnDeshacer, btnRehacer, btnRestablecer);
 
-  wrap.append(btnVolver, selectorEstilo, grupoSubida, previaContenedor, capas, panel, filaHistorial);
+  wrap.append(btnVolver, selectorEstilo, grupoSubida, filaHistorial, previaContenedor, capas, panel);
   contenedor.append(wrap);
 
   actualizarBotonesHistorial();
@@ -192,7 +195,10 @@ export async function render(contenedor, { navegar } = {}) {
     }
   }
 
-  function dibujarOverlay() {
+  // `conPanel: false` redibuja el lienzo y las capas pero deja el panel de propiedades como está:
+  // si se rehiciera, el deslizador que el dedo está arrastrando se reemplaza por uno nuevo y el
+  // gesto se corta después del primer paso (QA v4, BUGS.md).
+  function dibujarOverlay({ conPanel = true } = {}) {
     overlay.textContent = '';
     const claves = clavesVisiblesParaEstilo();
 
@@ -229,7 +235,7 @@ export async function render(contenedor, { navegar } = {}) {
       capas.append(btnCapa);
     }
 
-    dibujarPanel();
+    if (conPanel) dibujarPanel();
   }
 
   function etiquetaCaja(clave) {
@@ -322,7 +328,7 @@ export async function render(contenedor, { navegar } = {}) {
     titulo.textContent = `Propiedades — ${etiquetaCaja(seleccion)}`;
     panel.append(titulo);
 
-    panel.append(campoRangoNumero('Tamaño de letra', caja.tamano, 16, 160, (v) => actualizarCampo('tamano', v, true)));
+    panel.append(campoRangoNumero('Tamaño de letra', caja.tamano, 16, 160, (v) => actualizarCampo('tamano', v, true, false)));
 
     const campoFuente = document.createElement('div');
     campoFuente.className = 'campo';
@@ -368,19 +374,19 @@ export async function render(contenedor, { navegar } = {}) {
     }
     panel.append(filaAlineacion);
 
-    panel.append(campoColor('Color del texto', caja.color, (v) => actualizarCampo('color', v, true)));
+    panel.append(campoColor('Color del texto', caja.color, (v, conPanel) => actualizarCampo('color', v, true, conPanel)));
 
     const tituloFondo = document.createElement('div');
     tituloFondo.className = 'grupo__titulo';
     tituloFondo.textContent = 'Fondo / etiqueta';
     panel.append(tituloFondo);
-    panel.append(campoColor('Color de fondo', caja.fondoColor, (v) => actualizarCampo('fondoColor', v, true)));
+    panel.append(campoColor('Color de fondo', caja.fondoColor, (v, conPanel) => actualizarCampo('fondoColor', v, true, conPanel)));
     panel.append(
       campoRangoNumero('Opacidad del fondo', Math.round((caja.fondoOpacidad ?? 0) * 100), 0, 100, (v) =>
-        actualizarCampo('fondoOpacidad', v / 100, true)
+        actualizarCampo('fondoOpacidad', v / 100, true, false)
       )
     );
-    panel.append(campoRangoNumero('Redondeo del fondo', caja.fondoRadio ?? 0, 0, 60, (v) => actualizarCampo('fondoRadio', v, true)));
+    panel.append(campoRangoNumero('Redondeo del fondo', caja.fondoRadio ?? 0, 0, 60, (v) => actualizarCampo('fondoRadio', v, true, false)));
 
     const campoVisible = document.createElement('label');
     campoVisible.className = 'fila';
@@ -450,17 +456,17 @@ export async function render(contenedor, { navegar } = {}) {
     const input = document.createElement('input');
     input.type = 'color';
     input.value = valor || '#ffffff';
-    input.addEventListener('input', () => onCambio(input.value));
+    input.addEventListener('input', () => onCambio(input.value, false));
     fila.append(input);
     div.append(label, fila);
     return div;
   }
 
   let debounceGuardado = null;
-  function actualizarCampo(campo, valor, regenerarInmediato) {
+  function actualizarCampo(campo, valor, regenerarInmediato, conPanel = true) {
     ajustes[seleccion] = { ...ajustes[seleccion], [campo]: valor };
     if (regenerarInmediato) regenerarPrevia();
-    dibujarOverlay();
+    dibujarOverlay({ conPanel });
     clearTimeout(debounceGuardado);
     debounceGuardado = setTimeout(guardarEnHistorial, 400);
   }

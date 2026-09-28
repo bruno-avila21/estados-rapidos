@@ -106,20 +106,87 @@ test('cambiar tamaño, color y tipografía en el panel se ve al instante', async
     .not.toBe(srcTrasFuente);
 });
 
-test('deshacer / rehacer / restablecer están disponibles y no rompen la app', async ({ page }) => {
+// El test anterior solo miraba que los botones se habilitaran y dejó pasar que no revertían
+// nada (QA v4, BUGS.md): estos miden la posición y el tamaño de verdad, antes y después.
+async function editorListo(page) {
+  await expect(page.locator('.editor-plantilla__imagen')).toHaveAttribute('src', /^blob:/);
+}
+
+async function posicion(page, clave) {
+  return page.locator(`[data-elemento="${clave}"]`).evaluate((el) => ({ left: el.style.left, top: el.style.top }));
+}
+
+async function arrastrar(page, clave, dx, dy) {
+  const caja = await page.locator(`[data-elemento="${clave}"]`).boundingBox();
+  const x = caja.x + caja.width / 2;
+  const y = caja.y + caja.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + dx / 2, y + dy / 2, { steps: 4 });
+  await page.mouse.move(x + dx, y + dy, { steps: 4 });
+  await page.mouse.up();
+}
+
+test('deshacer devuelve el elemento a donde estaba y rehacer lo vuelve a mover', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla');
+  await editorListo(page);
+
+  const inicial = await posicion(page, 'nombre');
+  await arrastrar(page, 'nombre', 0, 120);
+  const movido = await posicion(page, 'nombre');
+  expect(movido.top).not.toBe(inicial.top);
+
+  await page.locator('[data-accion="deshacer"]').click();
+  await expect.poll(() => posicion(page, 'nombre')).toEqual(inicial);
+  await expect(page.locator('[data-accion="rehacer"]')).toBeEnabled();
+
+  await page.locator('[data-accion="rehacer"]').click();
+  await expect.poll(() => posicion(page, 'nombre')).toEqual(movido);
+});
+
+test('deshacer revierte la tipografía y el tamaño de letra', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
 
   await page.locator('[data-elemento="nombre"]').click();
-  await page.locator('.editor-plantilla__panel input[type="range"]').first().fill('100');
+  const selectFuente = page.locator('.editor-plantilla__panel select[data-accion="editor-fuente"]');
+  const fuenteInicial = await selectFuente.inputValue();
+  await selectFuente.selectOption('pacifico');
   await page.waitForTimeout(500); // debounce del historial
-
-  await expect(page.locator('[data-accion="deshacer"]')).toBeEnabled();
   await page.locator('[data-accion="deshacer"]').click();
-  await expect(page.locator('[data-accion="rehacer"]')).toBeEnabled();
+  await expect(page.locator('.editor-plantilla__panel select[data-accion="editor-fuente"]')).toHaveValue(fuenteInicial);
+});
 
+test('restablecer vuelve a la posición de fábrica', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla');
+  await editorListo(page);
+
+  const inicial = await posicion(page, 'nombre');
+  await arrastrar(page, 'nombre', 0, 150);
   await page.locator('[data-accion="restablecer-plantilla"]').click();
   await page.locator('[data-accion="confirmar-borrar"]').click();
   await expect(page.locator('#toast')).toHaveText(/restablecida/i);
+  await expect.poll(() => posicion(page, 'nombre')).toEqual(inicial);
+});
+
+// Arrastrar el deslizador de punta a punta tiene que llegar lejos: antes el panel se rehacía en
+// cada paso, el control arrastrado se reemplazaba y el gesto se cortaba (58 → 64, QA v4, BUGS.md).
+test('arrastrar el deslizador de tamaño recorre todo el rango', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla');
+  await page.locator('[data-elemento="nombre"]').click();
+  const deslizador = page.locator('.editor-plantilla__panel input[type="range"]').first();
+  await deslizador.scrollIntoViewIfNeeded();
+  const caja = await deslizador.boundingBox();
+  await page.mouse.move(caja.x + caja.width * 0.3, caja.y + caja.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(caja.x + caja.width * 0.98, caja.y + caja.height / 2, { steps: 15 });
+  await page.mouse.up();
+  expect(Number(await deslizador.inputValue())).toBeGreaterThan(140);
 });

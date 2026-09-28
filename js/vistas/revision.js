@@ -4,17 +4,11 @@
 // CREAR-BRIEF.md, cambio de producto 2026-09-27.
 import * as repo from '../repositorio.js';
 import { componerSegunEstilo } from '../componer.js';
-import { resolverEstilo, resolverDescripcion, ESTILOS_IMAGEN } from '../modelo.js';
+import { resolverEstilo, resolverDescripcion, ESTILOS_IMAGEN, ETIQUETA_ESTILO } from '../modelo.js';
 import { compartirArchivos, copiarDescripcion, descargarImagen, puedeCompartirArchivos } from '../utils/compartir.js';
 import { mostrarToast } from '../utils/toast.js';
 
 export const LIMITE_IMAGENES = 30;
-
-const ETIQUETA_ESTILO = {
-  'solo-foto': 'Solo la foto',
-  'foto-precio': 'Foto con precio',
-  'mi-plantilla': 'Mi plantilla',
-};
 
 export async function abrirHojaRevision({ ids }) {
   if (!ids?.length) return;

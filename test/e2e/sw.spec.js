@@ -13,7 +13,9 @@ test('el SW se instala y, sin red, la app sigue abriendo desde caché', async ({
 
   await page.waitForFunction(async () => {
     const registro = await navigator.serviceWorker.getRegistration();
-    return !!registro?.active;
+    // `active` ya existe mientras el SW está "activating": cortar la red ahí cae antes de que
+    // tome las navegaciones (BUGS.md #10). Hay que esperar "activated".
+    return registro?.active?.state === 'activated';
   }, null, { timeout: 15_000 });
 
   // `context.setOffline(true)` corta la red un nivel más abajo que el SW (CDP): ni siquiera
