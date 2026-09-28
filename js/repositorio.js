@@ -5,6 +5,7 @@ import {
   FORMATO_PRECIO_POR_DEFECTO,
   ESTILO_POR_DEFECTO,
   DESCRIPCION_MODELO_POR_DEFECTO,
+  ENCUADRE_FOTO_POR_DEFECTO,
   construirRespaldo,
   normalizarAjustes,
   generarId,
@@ -150,12 +151,16 @@ export async function guardarFormatoPrecio(formatoPrecio) {
 // --- Ajustes generales: estilo de imagen por defecto y modelo de descripción ---
 export async function obtenerAjustesGenerales() {
   const guardado = await db.obtener('config', 'general');
-  if (guardado) return guardado;
-  return {
+  // Se completa con `encuadreFoto` (agregado en la ronda de distribución) por si el registro
+  // guardado es de antes de que existiera ese campo — igual que `normalizarAjustes` con la
+  // plantilla, un respaldo/uso viejo sigue andando con el valor por defecto.
+  const base = {
     id: 'general',
     estiloGeneral: ESTILO_POR_DEFECTO,
     descripcionModelo: DESCRIPCION_MODELO_POR_DEFECTO,
+    encuadreFoto: ENCUADRE_FOTO_POR_DEFECTO,
   };
+  return guardado ? { ...base, ...guardado } : base;
 }
 
 export async function guardarEstiloGeneral(estiloGeneral) {
@@ -168,6 +173,14 @@ export async function guardarEstiloGeneral(estiloGeneral) {
 export async function guardarDescripcionModelo(descripcionModelo) {
   const config = await obtenerAjustesGenerales();
   config.descripcionModelo = descripcionModelo;
+  await db.guardar('config', config);
+  return config;
+}
+
+/** "Encuadre de la foto" general (Entera/contain por defecto, o Llenar la pantalla/cover). */
+export async function guardarEncuadreFoto(encuadreFoto) {
+  const config = await obtenerAjustesGenerales();
+  config.encuadreFoto = encuadreFoto;
   await db.guardar('config', config);
   return config;
 }
@@ -189,7 +202,11 @@ export async function exportarRespaldo() {
   return construirRespaldo({
     productos: productosConFoto,
     plantilla: { imagenBase64, ajustes: config.ajustes, formatoPrecio: config.formatoPrecio },
-    general: { estiloGeneral: general.estiloGeneral, descripcionModelo: general.descripcionModelo },
+    general: {
+      estiloGeneral: general.estiloGeneral,
+      descripcionModelo: general.descripcionModelo,
+      encuadreFoto: general.encuadreFoto,
+    },
   });
 }
 
@@ -233,10 +250,12 @@ export async function importarRespaldo(respaldo) {
     });
   }
 
-  // respaldos viejos (antes de 2026-09-27) no tienen "general": quedan los valores por defecto.
+  // respaldos viejos (antes de 2026-09-27, o de antes del campo `encuadreFoto`) no tienen
+  // "general" completo: quedan los valores por defecto.
   await db.guardar('config', {
     id: 'general',
     estiloGeneral: respaldo.general?.estiloGeneral || ESTILO_POR_DEFECTO,
     descripcionModelo: respaldo.general?.descripcionModelo || DESCRIPCION_MODELO_POR_DEFECTO,
+    encuadreFoto: respaldo.general?.encuadreFoto || ENCUADRE_FOTO_POR_DEFECTO,
   });
 }

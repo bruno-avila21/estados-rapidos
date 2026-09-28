@@ -81,6 +81,15 @@ export const ETIQUETA_ESTILO = Object.freeze({
 
 export const DESCRIPCION_MODELO_POR_DEFECTO = '{nombre} a {precio} 🔥 Pedilo por privado';
 
+// --- Encuadre de la foto en "Foto con precio"/"Foto con descripción" (ronda distribución) ---
+// 'contain' (defecto): la foto entera, sin recortar, con fondo difuminado de la misma foto (igual
+// que "Solo la foto"). 'cover': la foto llena toda la pantalla, recortada si hace falta (el
+// comportamiento de antes de esta ronda). Ajuste GENERAL (Ajustes → Estilo de las imágenes), no
+// por producto.
+export const ENCUADRES_FOTO = Object.freeze(['contain', 'cover']);
+export const ENCUADRE_FOTO_POR_DEFECTO = 'contain';
+export const ETIQUETA_ENCUADRE_FOTO = Object.freeze({ contain: 'Entera', cover: 'Llenar la pantalla' });
+
 /** Resuelve qué estilo de imagen usa un producto: su override si es válido, si no el general. */
 export function resolverEstilo(producto, config) {
   const override = producto?.estilo;
@@ -232,6 +241,8 @@ export function validarRespaldo(objeto) {
       return { ok: false, error: 'Estilo general inválido en el respaldo.' };
     if (objeto.general.descripcionModelo != null && typeof objeto.general.descripcionModelo !== 'string')
       return { ok: false, error: 'Descripción modelo inválida en el respaldo.' };
+    if (objeto.general.encuadreFoto != null && !ENCUADRES_FOTO.includes(objeto.general.encuadreFoto))
+      return { ok: false, error: 'Encuadre de foto inválido en el respaldo.' };
   }
 
   if (objeto.plantilla != null) {
@@ -275,6 +286,7 @@ export function construirRespaldo({ productos, plantilla, general }) {
       ? {
           estiloGeneral: general.estiloGeneral ?? ESTILO_POR_DEFECTO,
           descripcionModelo: general.descripcionModelo ?? DESCRIPCION_MODELO_POR_DEFECTO,
+          encuadreFoto: general.encuadreFoto ?? ENCUADRE_FOTO_POR_DEFECTO,
         }
       : null,
   };

@@ -1,4 +1,8 @@
 // Bootstrap de la app: router por hash + registro del service worker + aviso de versión nueva.
+// `instalacion.js` se importa primero (aunque no se use acá) para escuchar `beforeinstallprompt`
+// desde el arranque: el navegador lo dispara una sola vez por carga y si no hay nadie escuchando
+// en ese momento se pierde (Ajustes → "La app" lo necesita más tarde, cuando el usuario navegue ahí).
+import './utils/instalacion.js';
 import * as lista from './vistas/lista.js';
 import * as detalle from './vistas/detalle.js';
 import * as ajustes from './vistas/ajustes.js';

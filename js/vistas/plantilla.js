@@ -1,11 +1,21 @@
 // Editor de plantilla: inspector visual con selección/arrastre/redimensión sobre la vista previa,
-// panel de propiedades, capas, deshacer/rehacer y restablecer. Los ajustes que edita acá (posición,
+// panel de propiedades, capas (con ojo mostrar/ocultar), deshacer/rehacer, "Acomodar
+// automáticamente", "Centrar horizontal" y restablecer. Los ajustes que edita acá (posición,
 // tipografía, color, fondo/etiqueta, visibilidad de nombre/precio/descripción) son COMPARTIDOS por
 // "Foto con precio", "Foto con descripción" y "Mi plantilla" — `foto` solo aplica a "Mi plantilla".
-// CREAR-BRIEF.md, ronda 2026-09-27 ("editor de plantilla tipo inspector").
+// CREAR-BRIEF.md, ronda 2026-09-27 ("editor de plantilla tipo inspector") y ronda de distribución.
+//
+// Vista previa EN VIVO (ronda "vista previa en vivo de verdad"): antes cada `pointermove` armaba
+// un PNG completo (`canvas.toBlob`) y lo mostraba en un `<img>` — en el celu tardaba lo bastante
+// como para que el recuadro (que sí se movía al instante) fuera adelante de la imagen. Ahora la
+// vista previa es un `<canvas>` visible donde se dibuja DIRECTO con `dibujarSegunEstilo` (la misma
+// lógica de composición, separada de la exportación en componer.js), coalescido con
+// `requestAnimationFrame` (máximo 1 dibujo por frame) y a resolución de pantalla (ancho CSS ×
+// devicePixelRatio, escalando el contexto — las coordenadas siguen siendo las lógicas 1080×1920).
 import * as repo from '../repositorio.js';
-import { componerSegunEstilo, ANCHO, ALTO } from '../componer.js';
-import { elementoEnPunto, moverCaja, redimensionarCaja, aplicarSnap } from '../editor-geometria.js';
+import { dibujarSegunEstilo, ANCHO, ALTO } from '../componer.js';
+import { cargarFuentes } from '../fuentes.js';
+import { elementoEnPunto, moverCaja, redimensionarCaja, aplicarSnap, acomodarAutomatico } from '../editor-geometria.js';
 import {
   ESTILOS_IMAGEN,
   ETIQUETA_ESTILO,
@@ -35,11 +45,15 @@ export async function render(contenedor, { navegar } = {}) {
   const fotoEjemplo = fotoEjemploBlob ? await createImageBitmap(fotoEjemploBlob) : null;
   const descripcionEjemplo = resolverDescripcion(productoEjemplo, { ...general, formatoPrecio });
 
+  await cargarFuentes(); // una sola vez: dibujarSegunEstilo es síncrona, asume fuentes ya listas
+
   let estiloPreview = general.estiloGeneral;
   let seleccion = null;
-  let urlPreviaActual = null;
-  let regenerando = false;
-  let pendienteRegenerar = false;
+  // Declarados acá (y no más abajo, junto a `solicitarRedibujo`) para que la llamada inicial de
+  // más abajo no choque con la zona muerta temporal de `let` (TDZ): las funciones declaradas con
+  // `function` se hoistean enteras, pero un `let` no se puede leer antes de su propia línea.
+  let rafPendiente = false;
+  let contadorDibujos = 0;
 
   const historial = [estructuraClonada(ajustes)];
   let indiceHistorial = 0;
@@ -74,7 +88,7 @@ export async function render(contenedor, { navegar } = {}) {
   selectEstilo.addEventListener('change', () => {
     estiloPreview = selectEstilo.value;
     dibujarOverlay();
-    regenerarPrevia();
+    solicitarRedibujo();
   });
   selectorEstilo.append(labelEstilo, selectEstilo);
 
@@ -100,19 +114,19 @@ export async function render(contenedor, { navegar } = {}) {
     await repo.guardarImagenPlantilla(archivo);
     plantillaImagenActual = await createImageBitmap(archivo);
     mostrarToast('Fondo actualizado');
-    regenerarPrevia();
+    solicitarRedibujo();
   });
   grupoSubida.append(btnSubir, inputPlantilla);
 
-  // --- Vista previa + overlay interactivo ---
+  // --- Vista previa (canvas en vivo) + overlay interactivo ---
   const previaContenedor = document.createElement('div');
   previaContenedor.className = 'previa-plantilla editor-plantilla__lienzo';
-  const previa = document.createElement('img');
-  previa.className = 'editor-plantilla__imagen';
-  previa.alt = 'Vista previa editable';
+  const previaCanvas = document.createElement('canvas');
+  previaCanvas.className = 'editor-plantilla__imagen';
+  const ctxPrevia = previaCanvas.getContext('2d');
   const overlay = document.createElement('div');
   overlay.className = 'editor-plantilla__overlay';
-  previaContenedor.append(previa, overlay);
+  previaContenedor.append(previaCanvas, overlay);
 
   // --- Capas ---
   const capas = document.createElement('div');
@@ -123,7 +137,7 @@ export async function render(contenedor, { navegar } = {}) {
   panel.className = 'grupo editor-plantilla__panel';
   panel.hidden = true;
 
-  // --- Deshacer / rehacer / restablecer ---
+  // --- Deshacer / rehacer / Acomodar automáticamente / restablecer ---
   // Barra fija arriba del lienzo: abajo del panel quedaba a casi dos pantallas, y en el celu un
   // toque que cae mientras la página todavía se desliza se usa para frenar el scroll y no llega
   // como click (QA v4, BUGS.md #18). Acá está siempre a mano, al lado de lo que se edita.
@@ -139,19 +153,31 @@ export async function render(contenedor, { navegar } = {}) {
   btnRehacer.className = 'boton boton--chico';
   btnRehacer.setAttribute('data-accion', 'rehacer');
   btnRehacer.textContent = '↷ Rehacer';
+  const btnAcomodar = document.createElement('button');
+  btnAcomodar.type = 'button';
+  btnAcomodar.className = 'boton boton--chico';
+  btnAcomodar.setAttribute('data-accion', 'acomodar-automatico');
+  btnAcomodar.textContent = 'Acomodar automáticamente';
   const btnRestablecer = document.createElement('button');
   btnRestablecer.type = 'button';
   btnRestablecer.className = 'boton boton--chico boton--fantasma';
   btnRestablecer.setAttribute('data-accion', 'restablecer-plantilla');
   btnRestablecer.textContent = 'Restablecer';
-  filaHistorial.append(btnDeshacer, btnRehacer, btnRestablecer);
+  filaHistorial.append(btnDeshacer, btnRehacer, btnAcomodar, btnRestablecer);
 
   wrap.append(btnVolver, selectorEstilo, grupoSubida, filaHistorial, previaContenedor, capas, panel);
   contenedor.append(wrap);
 
   actualizarBotonesHistorial();
   dibujarOverlay();
-  await regenerarPrevia();
+  ajustarResolucionCanvas();
+  solicitarRedibujo();
+
+  const resizeObserver = new ResizeObserver(() => {
+    ajustarResolucionCanvas();
+    solicitarRedibujo();
+  });
+  resizeObserver.observe(previaContenedor);
 
   // ================= Lógica =================
 
@@ -163,41 +189,55 @@ export async function render(contenedor, { navegar } = {}) {
     return clavesVisiblesParaEstilo().map((clave) => ({ clave, ...ajustes[clave] }));
   }
 
-  async function regenerarPrevia() {
-    if (regenerando) {
-      pendienteRegenerar = true;
-      return;
-    }
-    regenerando = true;
-    try {
-      const blob = await componerSegunEstilo({
-        estilo: estiloPreview,
-        plantillaImagen: plantillaImagenActual,
-        fotoImagen: fotoEjemplo,
-        producto: productoEjemplo,
-        ajustes,
-        formatoPrecio,
-        descripcion: descripcionEjemplo,
-      });
-      const url = URL.createObjectURL(blob);
-      const anterior = urlPreviaActual;
-      previa.src = url;
-      urlPreviaActual = url;
-      if (anterior) URL.revokeObjectURL(anterior);
-    } catch (error) {
-      mostrarToast('No se pudo actualizar la vista previa: ' + error.message);
-    } finally {
-      regenerando = false;
-      if (pendienteRegenerar) {
-        pendienteRegenerar = false;
-        regenerarPrevia();
-      }
-    }
+  function ajustarResolucionCanvas() {
+    const rect = previaContenedor.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const dpr = window.devicePixelRatio || 1;
+    const anchoPx = Math.max(1, Math.round(rect.width * dpr));
+    const altoPx = Math.max(1, Math.round(rect.height * dpr));
+    if (previaCanvas.width === anchoPx && previaCanvas.height === altoPx) return;
+    previaCanvas.width = anchoPx;
+    previaCanvas.height = altoPx;
+    ctxPrevia.setTransform(anchoPx / ANCHO, 0, 0, altoPx / ALTO, 0, 0);
   }
 
-  // `conPanel: false` redibuja el lienzo y las capas pero deja el panel de propiedades como está:
-  // si se rehiciera, el deslizador que el dedo está arrastrando se reemplaza por uno nuevo y el
-  // gesto se corta después del primer paso (QA v4, BUGS.md).
+  // Coalescido con requestAnimationFrame: como mucho un dibujo por frame, sin importar cuántos
+  // pointermove lleguen en el medio (antes cada uno armaba un PNG completo — BUGS.md, ronda
+  // "vista previa en vivo").
+  function solicitarRedibujo() {
+    if (rafPendiente) return;
+    rafPendiente = true;
+    requestAnimationFrame(() => {
+      rafPendiente = false;
+      pintarLienzo();
+    });
+  }
+
+  function pintarLienzo() {
+    dibujarSegunEstilo(ctxPrevia, {
+      estilo: estiloPreview,
+      plantillaImagen: plantillaImagenActual,
+      fotoImagen: fotoEjemplo,
+      producto: productoEjemplo,
+      ajustes,
+      formatoPrecio,
+      descripcion: descripcionEjemplo,
+      encuadreFoto: general.encuadreFoto,
+    });
+    contadorDibujos += 1;
+    // Para tests E2E (CREAR-BRIEF.md: "exponer en window para test el último layout dibujado") —
+    // permite verificar que lo dibujado en el canvas coincide con el overlay, sin depender de leer
+    // píxeles (frágil por antialiasing/fuentes). `revision` sube en cada dibujo real.
+    window.__editorDebugPlantilla = {
+      revision: contadorDibujos,
+      estilo: estiloPreview,
+      ajustes: estructuraClonada(ajustes),
+    };
+  }
+
+  // `conPanel: false` redibuja el overlay/capas pero deja el panel de propiedades como está: si se
+  // rehiciera, el deslizador que el dedo está arrastrando se reemplaza por uno nuevo y el gesto se
+  // corta después del primer paso (QA v4, BUGS.md).
   function dibujarOverlay({ conPanel = true } = {}) {
     overlay.textContent = '';
     const claves = clavesVisiblesParaEstilo();
@@ -210,12 +250,19 @@ export async function render(contenedor, { navegar } = {}) {
 
     for (const clave of claves) {
       const caja = ajustes[clave];
+      const oculto = caja.visible === false;
       const div = document.createElement('div');
       div.className = 'editor-plantilla__caja' + (seleccion === clave ? ' editor-plantilla__caja--activa' : '');
-      if (caja.visible === false) div.classList.add('editor-plantilla__caja--oculta');
+      if (oculto) div.classList.add('editor-plantilla__caja--oculta');
       div.setAttribute('data-elemento', clave); // para tests: clic directo sobre el elemento en el lienzo
       posicionarEnPx(div, caja);
       div.addEventListener('pointerdown', (ev) => alPointerDownCaja(ev, clave));
+      if (oculto) {
+        const etiquetaOculta = document.createElement('span');
+        etiquetaOculta.className = 'editor-plantilla__etiqueta-oculta';
+        etiquetaOculta.textContent = '(oculto)';
+        div.append(etiquetaOculta);
+      }
       if (seleccion === clave) {
         for (const manija of HANDLES) {
           const h = document.createElement('div');
@@ -226,13 +273,30 @@ export async function render(contenedor, { navegar } = {}) {
       }
       overlay.append(div);
 
+      const filaCapa = document.createElement('div');
+      filaCapa.className = 'editor-plantilla__fila-capa';
+
       const btnCapa = document.createElement('button');
       btnCapa.type = 'button';
       btnCapa.className = 'boton boton--chico' + (seleccion === clave ? ' tarjeta-estilo--activa' : '');
       btnCapa.setAttribute('data-accion', `capa-${clave}`);
-      btnCapa.textContent = etiquetaCaja(clave) + (caja.visible === false ? ' (oculto)' : '');
+      btnCapa.textContent = etiquetaCaja(clave) + (oculto ? ' (oculto)' : '');
       btnCapa.addEventListener('click', () => seleccionar(clave));
-      capas.append(btnCapa);
+
+      const btnOjo = document.createElement('button');
+      btnOjo.type = 'button';
+      btnOjo.className = 'boton boton--chico boton--fantasma editor-plantilla__ojo';
+      btnOjo.setAttribute('data-accion', `capa-ojo-${clave}`);
+      btnOjo.setAttribute('aria-pressed', String(!oculto)); // "presionado" = visible (ojo abierto)
+      btnOjo.setAttribute('aria-label', oculto ? `Mostrar ${etiquetaCaja(clave)}` : `Ocultar ${etiquetaCaja(clave)}`);
+      btnOjo.textContent = oculto ? '🚫' : '👁';
+      btnOjo.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        actualizarCampo(clave, 'visible', oculto ? true : false, true);
+      });
+
+      filaCapa.append(btnCapa, btnOjo);
+      capas.append(filaCapa);
     }
 
     if (conPanel) dibujarPanel();
@@ -281,7 +345,7 @@ export async function render(contenedor, { navegar } = {}) {
       const { caja: conSnap } = aplicarSnap(nueva, { w: ANCHO, h: ALTO });
       ajustes[clave] = { ...ajustes[clave], x: conSnap.x, y: conSnap.y };
       dibujarOverlay();
-      regenerarPrevia();
+      solicitarRedibujo();
     };
     const alSoltar = () => {
       window.removeEventListener('pointermove', alMover);
@@ -303,7 +367,7 @@ export async function render(contenedor, { navegar } = {}) {
       const nueva = redimensionarCaja(cajaInicial, manija, actual.x - inicio.x, actual.y - inicio.y, { w: ANCHO, h: ALTO });
       ajustes[clave] = { ...ajustes[clave], ...nueva };
       dibujarOverlay();
-      regenerarPrevia();
+      solicitarRedibujo();
     };
     const alSoltar = () => {
       window.removeEventListener('pointermove', alMover);
@@ -322,13 +386,24 @@ export async function render(contenedor, { navegar } = {}) {
     }
     panel.hidden = false;
     const caja = ajustes[seleccion];
+    const oculto = caja.visible === false;
 
+    const encabezado = document.createElement('div');
+    encabezado.className = 'fila editor-plantilla__panel-encabezado';
     const titulo = document.createElement('div');
     titulo.className = 'grupo__titulo';
     titulo.textContent = `Propiedades — ${etiquetaCaja(seleccion)}`;
-    panel.append(titulo);
+    const btnOcultar = document.createElement('button');
+    btnOcultar.type = 'button';
+    btnOcultar.className = 'boton boton--chico boton--fantasma';
+    btnOcultar.setAttribute('data-accion', 'editor-toggle-visible');
+    btnOcultar.setAttribute('aria-pressed', String(oculto));
+    btnOcultar.textContent = oculto ? 'Mostrar' : 'Ocultar';
+    btnOcultar.addEventListener('click', () => actualizarCampo(seleccion, 'visible', oculto ? true : false, true));
+    encabezado.append(titulo, btnOcultar);
+    panel.append(encabezado);
 
-    panel.append(campoRangoNumero('Tamaño de letra', caja.tamano, 16, 160, (v) => actualizarCampo('tamano', v, true, false)));
+    panel.append(campoRangoNumero('Tamaño de letra', caja.tamano, 16, 160, (v) => actualizarCampo(seleccion, 'tamano', v, true, false)));
 
     const campoFuente = document.createElement('div');
     campoFuente.className = 'campo';
@@ -344,7 +419,7 @@ export async function render(contenedor, { navegar } = {}) {
       if (clave === caja.familia) opcion.selected = true;
       selectFuente.append(opcion);
     }
-    selectFuente.addEventListener('change', () => actualizarCampo('familia', selectFuente.value, true));
+    selectFuente.addEventListener('change', () => actualizarCampo(seleccion, 'familia', selectFuente.value, true));
     campoFuente.append(labelFuente, selectFuente);
     panel.append(campoFuente);
 
@@ -356,7 +431,7 @@ export async function render(contenedor, { navegar } = {}) {
       btn.className = 'boton boton--chico' + (caja.peso === valor ? ' tarjeta-estilo--activa' : '');
       btn.textContent = etiqueta;
       btn.setAttribute('data-accion', `editor-peso-${valor}`);
-      btn.addEventListener('click', () => actualizarCampo('peso', valor, true));
+      btn.addEventListener('click', () => actualizarCampo(seleccion, 'peso', valor, true));
       filaPeso.append(btn);
     }
     panel.append(filaPeso);
@@ -369,37 +444,40 @@ export async function render(contenedor, { navegar } = {}) {
       btn.className = 'boton boton--chico' + (caja.alineacion === valor ? ' tarjeta-estilo--activa' : '');
       btn.textContent = etiqueta;
       btn.setAttribute('data-accion', `editor-alineacion-${valor}`);
-      btn.addEventListener('click', () => actualizarCampo('alineacion', valor, true));
+      btn.addEventListener('click', () => actualizarCampo(seleccion, 'alineacion', valor, true));
       filaAlineacion.append(btn);
     }
     panel.append(filaAlineacion);
 
-    panel.append(campoColor('Color del texto', caja.color, (v, conPanel) => actualizarCampo('color', v, true, conPanel)));
+    const btnCentrar = document.createElement('button');
+    btnCentrar.type = 'button';
+    btnCentrar.className = 'boton boton--chico';
+    btnCentrar.setAttribute('data-accion', 'editor-centrar-horizontal');
+    btnCentrar.textContent = 'Centrar horizontal';
+    btnCentrar.addEventListener('click', () => {
+      const x = (ANCHO - caja.w) / 2;
+      ajustes[seleccion] = { ...ajustes[seleccion], x };
+      dibujarOverlay();
+      solicitarRedibujo();
+      guardarEnHistorial();
+    });
+    panel.append(btnCentrar);
+
+    panel.append(campoColor('Color del texto', caja.color, (v, conPanel) => actualizarCampo(seleccion, 'color', v, true, conPanel)));
 
     const tituloFondo = document.createElement('div');
     tituloFondo.className = 'grupo__titulo';
     tituloFondo.textContent = 'Fondo / etiqueta';
     panel.append(tituloFondo);
-    panel.append(campoColor('Color de fondo', caja.fondoColor, (v, conPanel) => actualizarCampo('fondoColor', v, true, conPanel)));
+    panel.append(campoColor('Color de fondo', caja.fondoColor, (v, conPanel) => actualizarCampo(seleccion, 'fondoColor', v, true, conPanel)));
     panel.append(
       campoRangoNumero('Opacidad del fondo', Math.round((caja.fondoOpacidad ?? 0) * 100), 0, 100, (v) =>
-        actualizarCampo('fondoOpacidad', v / 100, true, false)
+        actualizarCampo(seleccion, 'fondoOpacidad', v / 100, true, false)
       )
     );
-    panel.append(campoRangoNumero('Redondeo del fondo', caja.fondoRadio ?? 0, 0, 60, (v) => actualizarCampo('fondoRadio', v, true, false)));
-
-    const campoVisible = document.createElement('label');
-    campoVisible.className = 'fila';
-    campoVisible.style.alignItems = 'center';
-    const checkVisible = document.createElement('input');
-    checkVisible.type = 'checkbox';
-    checkVisible.checked = caja.visible !== false;
-    checkVisible.setAttribute('data-accion', 'editor-visible');
-    checkVisible.addEventListener('change', () => actualizarCampo('visible', checkVisible.checked, true));
-    const spanVisible = document.createElement('span');
-    spanVisible.textContent = 'Visible';
-    campoVisible.append(checkVisible, spanVisible);
-    panel.append(campoVisible);
+    panel.append(
+      campoRangoNumero('Redondeo del fondo', caja.fondoRadio ?? 0, 0, 60, (v) => actualizarCampo(seleccion, 'fondoRadio', v, true, false))
+    );
   }
 
   function campoRangoNumero(etiqueta, valor, min, max, onCambio) {
@@ -463,9 +541,9 @@ export async function render(contenedor, { navegar } = {}) {
   }
 
   let debounceGuardado = null;
-  function actualizarCampo(campo, valor, regenerarInmediato, conPanel = true) {
-    ajustes[seleccion] = { ...ajustes[seleccion], [campo]: valor };
-    if (regenerarInmediato) regenerarPrevia();
+  function actualizarCampo(clave, campo, valor, regenerarInmediato, conPanel = true) {
+    ajustes[clave] = { ...ajustes[clave], [campo]: valor };
+    if (regenerarInmediato) solicitarRedibujo();
     dibujarOverlay({ conPanel });
     clearTimeout(debounceGuardado);
     debounceGuardado = setTimeout(guardarEnHistorial, 400);
@@ -489,7 +567,7 @@ export async function render(contenedor, { navegar } = {}) {
     ajustes = estructuraClonada(historial[indiceHistorial]);
     persistir();
     dibujarOverlay();
-    regenerarPrevia();
+    solicitarRedibujo();
     actualizarBotonesHistorial();
   });
   btnRehacer.addEventListener('click', () => {
@@ -498,8 +576,26 @@ export async function render(contenedor, { navegar } = {}) {
     ajustes = estructuraClonada(historial[indiceHistorial]);
     persistir();
     dibujarOverlay();
-    regenerarPrevia();
+    solicitarRedibujo();
     actualizarBotonesHistorial();
+  });
+  // "Acomodar automáticamente" (ronda distribución, CREAR-BRIEF.md): apila los elementos VISIBLES
+  // centrados, de abajo hacia arriba (función pura `acomodarAutomatico`, testeada aparte).
+  btnAcomodar.addEventListener('click', () => {
+    const visibles = CLAVES_TEXTO.filter((clave) => ajustes[clave].visible !== false);
+    if (!visibles.length) {
+      mostrarToast('No hay elementos visibles para acomodar');
+      return;
+    }
+    const elementos = visibles.map((clave) => ({ clave, w: ajustes[clave].w, h: ajustes[clave].h }));
+    const posiciones = acomodarAutomatico(elementos, { ancho: ANCHO, alto: ALTO });
+    for (const clave of visibles) {
+      ajustes[clave] = { ...ajustes[clave], ...posiciones[clave] };
+    }
+    dibujarOverlay();
+    solicitarRedibujo();
+    guardarEnHistorial();
+    mostrarToast('Elementos acomodados');
   });
   btnRestablecer.addEventListener('click', async () => {
     const ok = await pedirConfirmacion({
@@ -513,7 +609,7 @@ export async function render(contenedor, { navegar } = {}) {
     persistir();
     guardarEnHistorial();
     dibujarOverlay();
-    regenerarPrevia();
+    solicitarRedibujo();
     mostrarToast('Plantilla restablecida');
   });
 

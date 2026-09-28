@@ -73,7 +73,10 @@ test('mínimo del día 1: cargar producto, precio en línea, plantilla y publica
   await page.locator('[data-accion="estilo-mi-plantilla"]').click();
   await page.locator('[data-accion="ir-plantilla"]').click();
   await expect(page.locator('.previa-plantilla')).toBeVisible();
-  await expect(page.locator('.editor-plantilla__imagen')).toHaveAttribute('src', /^blob:/);
+  // La vista previa es un <canvas> dibujado en vivo (sin src): "listo" es que ya se dibujó.
+  await expect
+    .poll(() => page.evaluate(() => window.__editorDebugPlantilla?.revision ?? 0), { timeout: 5_000 })
+    .toBeGreaterThan(0);
 
   // volver a la lista y Publicar: abre la hoja de revisión con la imagen ya armada
   await page.locator('[data-accion="ir-lista"]').click();

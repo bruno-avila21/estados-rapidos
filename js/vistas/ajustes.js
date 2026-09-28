@@ -1,9 +1,17 @@
 // Pantalla "Ajustes": 4 secciones con título + explicación (estilo de imagen con tarjetas de
 // miniatura en vivo, texto que acompaña, tu plantilla, datos). CREAR-BRIEF.md, ronda 2026-09-27.
 import * as repo from '../repositorio.js';
-import { ESTILOS_IMAGEN, ETIQUETA_ESTILO, aplicarPlantillaDescripcion, resolverDescripcion } from '../modelo.js';
+import {
+  ESTILOS_IMAGEN,
+  ETIQUETA_ESTILO,
+  ENCUADRES_FOTO,
+  ETIQUETA_ENCUADRE_FOTO,
+  aplicarPlantillaDescripcion,
+  resolverDescripcion,
+} from '../modelo.js';
 import { componerSegunEstilo } from '../componer.js';
 import { mostrarToast } from '../utils/toast.js';
+import { seccionLaApp } from './ajustes-la-app.js';
 
 let debounce = null;
 let urlsMiniaturas = [];
@@ -42,6 +50,38 @@ export async function render(contenedor, { navegar }) {
     grillaEstilos.append(tarjeta);
   }
   seccionEstilo.append(grillaEstilos);
+
+  // --- Encuadre de la foto (solo afecta "Foto con precio"/"Foto con descripción": "Solo la foto"
+  // y "Mi plantilla" no lo usan) ---
+  const campoEncuadre = document.createElement('div');
+  campoEncuadre.className = 'campo';
+  const labelEncuadre = document.createElement('span');
+  labelEncuadre.className = 'campo__etiqueta';
+  labelEncuadre.textContent = 'Encuadre de la foto';
+  const filaEncuadre = document.createElement('div');
+  filaEncuadre.className = 'fila';
+  for (const valor of ENCUADRES_FOTO) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'boton boton--chico' + (general.encuadreFoto === valor ? ' tarjeta-estilo--activa' : '');
+    btn.setAttribute('data-accion', `encuadre-${valor}`);
+    btn.setAttribute('aria-pressed', String(general.encuadreFoto === valor));
+    btn.textContent = ETIQUETA_ENCUADRE_FOTO[valor] + (valor === 'contain' ? ' (defecto)' : '');
+    btn.addEventListener('click', async () => {
+      await repo.guardarEncuadreFoto(valor);
+      general.encuadreFoto = valor;
+      filaEncuadre.querySelectorAll('button').forEach((b) => {
+        const esEste = b === btn;
+        b.classList.toggle('tarjeta-estilo--activa', esEste);
+        b.setAttribute('aria-pressed', String(esEste));
+      });
+      mostrarToast(`Encuadre: ${ETIQUETA_ENCUADRE_FOTO[valor]}`);
+      regenerarMiniaturas();
+    });
+    filaEncuadre.append(btn);
+  }
+  campoEncuadre.append(labelEncuadre, filaEncuadre);
+  seccionEstilo.append(campoEncuadre);
 
   // --- 2) Texto que acompaña: modelo de descripción + formato de precio ---
   const seccionTexto = seccion(
@@ -144,7 +184,7 @@ export async function render(contenedor, { navegar }) {
   btnRespaldo.addEventListener('click', () => navegar('#/respaldo'));
   seccionDatos.append(resumenDatos, btnRespaldo);
 
-  wrap.append(seccionEstilo, seccionTexto, seccionPlantilla, seccionDatos);
+  wrap.append(seccionEstilo, seccionTexto, seccionPlantilla, seccionDatos, seccionLaApp());
   contenedor.append(wrap);
 
   async function regenerarMiniaturas() {
@@ -165,6 +205,7 @@ export async function render(contenedor, { navegar }) {
           ajustes: config.ajustes,
           formatoPrecio: config.formatoPrecio,
           descripcion: descripcionResuelta,
+          encuadreFoto: general.encuadreFoto,
         });
         const url = URL.createObjectURL(blob);
         urlsMiniaturas.push(url);

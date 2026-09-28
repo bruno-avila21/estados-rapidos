@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { elementoEnPunto, moverCaja, redimensionarCaja, aplicarSnap } from '../js/editor-geometria.js';
+import { elementoEnPunto, moverCaja, redimensionarCaja, aplicarSnap, acomodarAutomatico } from '../js/editor-geometria.js';
 
 const LIMITES = { w: 1080, h: 1920 };
 
@@ -96,4 +96,45 @@ test('aplicarSnap: lejos de cualquier guía no cambia nada', () => {
   const { caja: ajustada, guias } = aplicarSnap(caja, LIMITES, 12);
   assert.deepEqual(ajustada, caja);
   assert.deepEqual(guias, []);
+});
+
+// --- acomodarAutomatico: "Acomodar automáticamente" (distribución, CREAR-BRIEF.md) ---
+
+test('acomodarAutomatico: apila de abajo hacia arriba, centrado, con margen y separación', () => {
+  const elementos = [
+    { clave: 'nombre', w: 960, h: 120 },
+    { clave: 'precio', w: 960, h: 130 },
+    { clave: 'descripcion', w: 960, h: 150 },
+  ];
+  const r = acomodarAutomatico(elementos, { ancho: 1080, alto: 1920, margenInferior: 120, separacion: 24 });
+
+  // descripción (última de la lista) queda más cerca del margen inferior.
+  assert.equal(r.descripcion.y, 1920 - 120 - 150); // 1650
+  assert.equal(r.precio.y, 1650 - 24 - 130); // 1496
+  assert.equal(r.nombre.y, 1496 - 24 - 120); // 1352
+
+  // centrado horizontal: x = (ancho - w) / 2, igual para los tres (mismo w).
+  for (const clave of ['nombre', 'precio', 'descripcion']) {
+    assert.equal(r[clave].x, (1080 - 960) / 2); // 60
+  }
+});
+
+test('acomodarAutomatico: respeta anchos distintos por elemento (cada uno se centra solo)', () => {
+  const elementos = [
+    { clave: 'a', w: 500, h: 100 },
+    { clave: 'b', w: 800, h: 100 },
+  ];
+  const r = acomodarAutomatico(elementos, { ancho: 1080 });
+  assert.equal(r.a.x, (1080 - 500) / 2);
+  assert.equal(r.b.x, (1080 - 800) / 2);
+});
+
+test('acomodarAutomatico: sin elementos, no rompe (objeto vacío)', () => {
+  assert.deepEqual(acomodarAutomatico([], {}), {});
+});
+
+test('acomodarAutomatico: usa los valores por defecto (1080×1920, margen 120, separación 24) sin pasar opciones', () => {
+  const r = acomodarAutomatico([{ clave: 'x', w: 200, h: 100 }]);
+  assert.equal(r.x.y, 1920 - 120 - 100);
+  assert.equal(r.x.x, (1080 - 200) / 2);
 });

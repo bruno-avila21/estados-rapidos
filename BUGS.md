@@ -3,6 +3,15 @@
 Registro de fallos encontrados durante la construcción, con causa y arreglo (regla de cierre.md /
 seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos resueltos.
 
+### 23. Ronda "vista previa en vivo + distribución": el editor de plantilla no cargaba (TDZ) y 2 tests nuevos leían el canvas antes de que se redibujara
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js test/e2e/editor.spec.js` después de cambiar la vista previa del editor de un `<img>` regenerado por Blob a un `<canvas>` dibujado en vivo con `requestAnimationFrame`.
+- **Error exacto:** las 14 pruebas de `editor.spec.js` fallaban por timeout esperando `[data-elemento="nombre"]`; la captura de página mostraba `Ocurrió un error al mostrar esta pantalla: Cannot access 'rafPendiente' before initialization`.
+- **Reproducir:** entrar a `#/plantilla` con `let rafPendiente = false;` declarado DESPUÉS del punto donde `render()` ya llama a `solicitarRedibujo()` (que lee `rafPendiente`) — aunque `function solicitarRedibujo(){}` se hoistea entera, el `let` no: queda en zona muerta temporal hasta que su propia línea se ejecuta.
+- **Causa:** en `js/vistas/plantilla.js`, `let rafPendiente = false; let contadorDibujos = 0;` estaban declarados junto a `solicitarRedibujo()` en la sección "Lógica", MÁS ABAJO de las llamadas iniciales (`dibujarOverlay(); ajustarResolucionCanvas(); solicitarRedibujo();`) que ya corren durante `render()`.
+- **Arreglo:** se movieron `let rafPendiente = false;` y `let contadorDibujos = 0;` arriba, junto a las demás variables de estado de `render()` (antes de `historial`), y se sacó la declaración duplicada de más abajo. Además, 2 tests nuevos ("Acomodar automáticamente" y "Centrar horizontal") leían `window.__editorDebugPlantilla` inmediatamente después del click, sin esperar el próximo `requestAnimationFrame` (coalescido a propósito, máx. 1 dibujo por frame) — se cambiaron a `expect.poll(...)` sobre el valor calculado (centro horizontal) en vez de una lectura única.
+- **Resuelto:** sí — 14/14 verdes (commit de esta ronda, ver `Claude-Session` al pie).
+- ¿Se repetiría en otro proyecto? Sí, la parte del TDZ: declarar variables de estado (`let`/`const`) SIEMPRE arriba de la función que las consume, nunca confiar en que el orden de aparición de `function` declarations hoisteadas "arrastra" también a los `let` que usan — se agregó como comentario en el propio archivo; no amerita una fila aparte en `APRENDIZAJES.md` (es una regla general de JS, no un patrón de este ecosistema).
+
 ### 5. QA.md 2026-09-27 (NO LISTO) — falta "Borrar todos los datos" en Respaldo
 - **Paso:** QA manual (`qa-e2e`) siguiendo el checklist del brief, ítem "Exportar, borrar datos, importar: vuelve todo".
 - **Síntoma:** no existe ningún botón para borrar todos los datos desde la UI; `db.vaciar()` existe (`js/db.js`) y se usa internamente en `importarRespaldo`, pero no está expuesto. La única forma de vaciar era borrar datos del navegador a mano o importar un JSON vacío como truco.
@@ -168,6 +177,7 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Error exacto:** `page.goto: net::ERR_FAILED at http://127.0.0.1:8991/` (3/5 pasan).
 - **Causa:** pendiente. Se descartó que fuera cortar la red con el SW en "activating": ahora espera `state === 'activated'` y sigue igual. Hipótesis siguiente: `page.route` también intercepta el `fetch()` del SW y la caída al caché no encuentra la clave de `/`.
 - **Arreglo:** pendiente; el test sigue con `retries: 2`. La app sí abre sin red (verificado a mano y en QA).
+- **Seguimiento 2026-09-28 (ronda "vista previa en vivo + distribución + instalar/compartir"):** volvió a aparecer varias veces al correr la suite completa (52 specs) después de sumar `js/utils/qr.js`, `js/utils/instalacion.js` y los cambios de `sw.js` (VERSION `v8`, nuevos archivos en `NUCLEO`) — y también aislado, sin relación con esos archivos. De 3 corridas de la suite completa: 2 pasaron en el **retry #1** (queda "flaky", no "failed" — Playwright cuenta un test que pasa en un retry como éxito del run) y 1 agotó los 3 intentos y quedó roja. Nada de esto se tocó: sigue siendo el mismo timing conocido de `page.route` + Service Worker (BUGS.md #10/#19), no una regresión de esta ronda; si vuelve a darse roja, correr de nuevo (`npx playwright test test/e2e/sw.spec.js`) alcanza para confirmarlo.
 
 ### 20. La hoja de revisión quedaba abierta encima de otra pantalla
 - **Paso:** verificación en vivo de la v5: abrir la hoja (Publicar) y cambiar de pantalla (Atrás de Android / cambio de hash).

@@ -143,6 +143,7 @@ export async function abrirHojaRevision({ ids }) {
       ajustes: plantillaConfig.ajustes,
       formatoPrecio: plantillaConfig.formatoPrecio,
       descripcion,
+      encuadreFoto: general.encuadreFoto,
     });
   }
 

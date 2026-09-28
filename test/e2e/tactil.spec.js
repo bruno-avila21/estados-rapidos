@@ -38,7 +38,10 @@ test('con el dedo: arrastrar mueve y deshacer lo devuelve', async ({ page }) => 
   await crearProducto(page);
   await page.goto('/#/plantilla');
   // Esperar la primera vista previa: arrastrar antes compite con el render inicial del editor.
-  await expect(page.locator('.editor-plantilla__imagen')).toHaveAttribute('src', /^blob:/);
+  // La vista previa es un <canvas> dibujado en vivo (sin src): "listo" es que ya se dibujó.
+  await expect
+    .poll(() => page.evaluate(() => window.__editorDebugPlantilla?.revision ?? 0), { timeout: 5_000 })
+    .toBeGreaterThan(0);
 
   const inicial = await posicion(page, 'nombre');
   await arrastrarConDedo(page, '[data-elemento="nombre"]', 0, 120);

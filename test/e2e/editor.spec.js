@@ -7,6 +7,13 @@ import { fileURLToPath } from 'node:url';
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const FOTO = path.join(AQUI, 'fixtures', 'producto.png');
 
+// La vista previa ahora es un <canvas> que se dibuja directo (sin <img src="blob:...">) — para
+// detectar "se regeneró" se usa el contador que expone la propia app para los tests (CREAR-BRIEF.md
+// "vista previa en vivo": exponer en window el último layout dibujado).
+function revisionDibujo(page) {
+  return page.evaluate(() => window.__editorDebugPlantilla?.revision ?? 0);
+}
+
 async function crearProducto(page) {
   await page.locator('[data-accion="agregar"]').click();
   await page.locator('#campo-nombre').fill('Producto editor');
@@ -35,7 +42,7 @@ test('arrastrar el nombre lo mueve y la vista previa se regenera', async ({ page
 
   await page.locator('[data-elemento="nombre"]').click();
   const antesBox = await page.locator('[data-elemento="nombre"]').boundingBox();
-  const antesSrc = await page.locator('.editor-plantilla__imagen').getAttribute('src');
+  const revisionAntes = await revisionDibujo(page);
 
   await page.mouse.move(antesBox.x + antesBox.width / 2, antesBox.y + antesBox.height / 2);
   await page.mouse.down();
@@ -45,9 +52,35 @@ test('arrastrar el nombre lo mueve y la vista previa se regenera', async ({ page
   const despuesBox = await page.locator('[data-elemento="nombre"]').boundingBox();
   expect(Math.abs(despuesBox.x - antesBox.x)).toBeGreaterThan(10);
 
+  await expect.poll(() => revisionDibujo(page), { timeout: 5_000 }).toBeGreaterThan(revisionAntes);
+});
+
+// El bug original (BUGS.md, ronda "vista previa en vivo"): el recuadro del overlay se movía al
+// toque, pero la imagen (un <img src> regenerado a mano) tardaba y quedaba desfasada. Ahora ambos
+// se derivan del MISMO `ajustes` — este test compara la posición lógica del overlay (leída del
+// DOM, en % convertido a 1080x1920) contra lo que la app dice haber dibujado en el canvas.
+test('el canvas dibuja exactamente la posición del overlay tras arrastrar (sin desfasaje)', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla');
+
+  await page.locator('[data-elemento="nombre"]').click();
+  const caja = await page.locator('[data-elemento="nombre"]').boundingBox();
+  await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(caja.x + caja.width / 2 - 30, caja.y + caja.height / 2 + 90, { steps: 6 });
+  await page.mouse.up();
+
+  const overlayLogico = await page.locator('[data-elemento="nombre"]').evaluate((el) => ({
+    x: (parseFloat(el.style.left) / 100) * 1080,
+    y: (parseFloat(el.style.top) / 100) * 1920,
+  }));
+
   await expect
-    .poll(async () => page.locator('.editor-plantilla__imagen').getAttribute('src'), { timeout: 5_000 })
-    .not.toBe(antesSrc);
+    .poll(async () => page.evaluate(() => window.__editorDebugPlantilla?.ajustes?.nombre?.x), { timeout: 5_000 })
+    .toBeCloseTo(overlayLogico.x, 0);
+  const yDibujado = await page.evaluate(() => window.__editorDebugPlantilla?.ajustes?.nombre?.y);
+  expect(yDibujado).toBeCloseTo(overlayLogico.y, 0);
 });
 
 test('arrastrar la manija de resize agranda la caja seleccionada', async ({ page }) => {
@@ -79,7 +112,7 @@ test('cambiar tamaño, color y tipografía en el panel se ve al instante', async
   await page.locator('[data-elemento="nombre"]').click();
   const panel = page.locator('.editor-plantilla__panel');
 
-  const srcInicial = await page.locator('.editor-plantilla__imagen').getAttribute('src');
+  const revisionInicial = await revisionDibujo(page);
 
   // Tamaño de letra (slider): .fill() no dispara bien el evento input en type=range (BUGS.md #15);
   // se fija el valor y se despacha el evento a mano, como haría un usuario arrastrándolo.
@@ -87,29 +120,29 @@ test('cambiar tamaño, color y tipografía en el panel se ve al instante', async
     el.value = val;
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }, '140');
-  await expect
-    .poll(async () => page.locator('.editor-plantilla__imagen').getAttribute('src'), { timeout: 5_000 })
-    .not.toBe(srcInicial);
+  await expect.poll(() => revisionDibujo(page), { timeout: 5_000 }).toBeGreaterThan(revisionInicial);
+  await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla?.ajustes?.nombre?.tamano)).toBe(140);
 
   // Tipografía
-  const srcTrasTamano = await page.locator('.editor-plantilla__imagen').getAttribute('src');
+  const revisionTrasTamano = await revisionDibujo(page);
   await panel.locator('select[data-accion="editor-fuente"]').selectOption('pacifico');
-  await expect
-    .poll(async () => page.locator('.editor-plantilla__imagen').getAttribute('src'), { timeout: 5_000 })
-    .not.toBe(srcTrasTamano);
+  await expect.poll(() => revisionDibujo(page), { timeout: 5_000 }).toBeGreaterThan(revisionTrasTamano);
 
   // Color rápido (swatch)
-  const srcTrasFuente = await page.locator('.editor-plantilla__imagen').getAttribute('src');
+  const revisionTrasFuente = await revisionDibujo(page);
   await panel.locator('.editor-plantilla__swatch').first().click();
-  await expect
-    .poll(async () => page.locator('.editor-plantilla__imagen').getAttribute('src'), { timeout: 5_000 })
-    .not.toBe(srcTrasFuente);
+  await expect.poll(() => revisionDibujo(page), { timeout: 5_000 }).toBeGreaterThan(revisionTrasFuente);
 });
 
 // El test anterior solo miraba que los botones se habilitaran y dejó pasar que no revertían
 // nada (QA v4, BUGS.md): estos miden la posición y el tamaño de verdad, antes y después.
 async function editorListo(page) {
-  await expect(page.locator('.editor-plantilla__imagen')).toHaveAttribute('src', /^blob:/);
+  // La vista previa es un <canvas> dibujado en vivo (sin src): "listo" es que ya dibujó al menos
+  // una vez y tiene una resolución real (devicePixelRatio × tamaño en pantalla).
+  await expect.poll(() => revisionDibujo(page), { timeout: 5_000 }).toBeGreaterThan(0);
+  await expect
+    .poll(() => page.locator('.editor-plantilla__imagen').evaluate((el) => el.width), { timeout: 5_000 })
+    .toBeGreaterThan(0);
 }
 
 async function posicion(page, clave) {
@@ -203,4 +236,87 @@ test('la barra de deshacer sigue a la vista al bajar por el panel', async ({ pag
   const arriba = await page.locator('.editor-plantilla__barra').evaluate((el) => el.getBoundingClientRect().top);
   expect(arriba).toBeGreaterThanOrEqual(0);
   expect(arriba).toBeLessThan(120);
+});
+
+// --- Ocultar/mostrar capas (ronda "ocultar/mostrar a un toque") ---
+
+test('el ojo de una capa la oculta: se ve punteado tenue con "(oculto)", no se dibuja y se puede volver a mostrar', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla');
+
+  const ojoNombre = page.locator('[data-accion="capa-ojo-nombre"]');
+  await expect(ojoNombre).toHaveAttribute('aria-pressed', 'true'); // visible por defecto
+
+  await ojoNombre.click();
+  await expect(ojoNombre).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('[data-elemento="nombre"]')).toHaveClass(/editor-plantilla__caja--oculta/);
+  await expect(page.locator('[data-elemento="nombre"] .editor-plantilla__etiqueta-oculta')).toHaveText('(oculto)');
+  await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla?.ajustes?.nombre?.visible)).toBe(false);
+
+  // se puede seguir seleccionando (y el panel ofrece "Mostrar" arriba, no un checkbox al final).
+  await page.locator('[data-elemento="nombre"]').click();
+  const btnOcultar = page.locator('[data-accion="editor-toggle-visible"]');
+  await expect(btnOcultar).toHaveText('Mostrar');
+  await btnOcultar.click();
+  await expect(ojoNombre).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-elemento="nombre"]')).not.toHaveClass(/editor-plantilla__caja--oculta/);
+});
+
+test('"Foto con descripción" con el nombre oculto no dibuja el nombre (caso: solo descripción)', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla');
+  await page.locator('#editor-vista-previa-estilo').selectOption('foto-descripcion');
+  await page.locator('[data-accion="capa-ojo-nombre"]').click();
+  await expect
+    .poll(() => page.evaluate(() => window.__editorDebugPlantilla?.ajustes?.nombre?.visible))
+    .toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla?.estilo)).toBe('foto-descripcion');
+});
+
+// --- Distribución: "Acomodar automáticamente" y "Centrar horizontal" ---
+
+test('Acomodar automáticamente apila los elementos visibles centrados, de abajo hacia arriba', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla');
+
+  // Se descentra el nombre a propósito para verificar que el botón lo vuelve a centrar.
+  await arrastrar(page, 'nombre', 200, 0);
+
+  await page.locator('[data-accion="acomodar-automatico"]').click();
+  await expect(page.locator('#toast')).toHaveText(/acomodados/i);
+
+  // El canvas se redibuja en el siguiente requestAnimationFrame (coalescido): leer
+  // `window.__editorDebugPlantilla` en el toque puede traer todavía el snapshot anterior al
+  // click, así que se espera a que realmente refleje el centrado antes de comparar todo lo demás.
+  await expect
+    .poll(() => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.x + window.__editorDebugPlantilla.ajustes.nombre.w / 2))
+    .toBeCloseTo(540, 0);
+  const ajustes = await page.evaluate(() => window.__editorDebugPlantilla.ajustes);
+  // centrado horizontal: x + w/2 == 1080/2 para los 3 (mismo ancho por defecto).
+  for (const clave of ['nombre', 'precio', 'descripcion']) {
+    expect(ajustes[clave].x + ajustes[clave].w / 2).toBeCloseTo(540, 0);
+  }
+  // apilados de abajo hacia arriba sin superponerse: nombre arriba de precio, precio arriba de descripción.
+  expect(ajustes.nombre.y + ajustes.nombre.h).toBeLessThanOrEqual(ajustes.precio.y);
+  expect(ajustes.precio.y + ajustes.precio.h).toBeLessThanOrEqual(ajustes.descripcion.y);
+  // margen inferior respetado: el borde inferior del último elemento no toca el final del lienzo.
+  expect(ajustes.descripcion.y + ajustes.descripcion.h).toBeLessThan(1920);
+});
+
+test('Centrar horizontal (panel) centra el elemento seleccionado sin tocar los demás', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla');
+
+  await arrastrar(page, 'nombre', -150, 0); // lo descentra
+  await page.locator('[data-elemento="nombre"]').click();
+  await page.locator('[data-accion="editor-centrar-horizontal"]').click();
+
+  // Mismo motivo que en el test de "Acomodar automáticamente": esperar el próximo dibujo real.
+  await expect
+    .poll(() => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.x + window.__editorDebugPlantilla.ajustes.nombre.w / 2))
+    .toBeCloseTo(540, 0);
 });

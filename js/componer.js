@@ -1,8 +1,14 @@
-// Composición del estado: dibuja en un canvas 1080x1920 según el estilo elegido.
-// El cálculo de layout vive en layout.js (puro); acá solo se dibuja con canvas real (DOM).
+// Composición del estado: dibuja según el estilo elegido, separado en dos capas (CREAR-BRIEF.md,
+// ronda "vista previa en vivo"):
+//   - `dibujarSegunEstilo(ctx, datos)` — SÍNCRONA, dibuja en cualquier CanvasRenderingContext2D ya
+//     preparado (fuentes cargadas de antemano). La usa el editor para pintar directo en el canvas
+//     visible en cada frame (requestAnimationFrame), y también la exportación de abajo.
+//   - `componerSegunEstilo(datos)` — async: crea un lienzo 1080×1920 fuera de pantalla, llama a la
+//     función de arriba y exporta un Blob PNG. La usan Publicar y las miniaturas de Ajustes.
 // Nombre, precio y descripción comparten UN solo conjunto de ajustes (ver AJUSTES_POR_DEFECTO en
-// modelo.js) usado por "Foto con precio", "Foto con descripción" y "Mi plantilla" (CREAR-BRIEF.md
-// 2026-09-27); `foto` solo aplica a "Mi plantilla" (los otros dos van siempre a pantalla completa).
+// modelo.js) usado por "Foto con precio", "Foto con descripción" y "Mi plantilla"; `foto` solo
+// aplica a "Mi plantilla" (los otros van siempre a pantalla completa, con el encuadre elegido en
+// Ajustes: "Entera"/contain por defecto, o "Llenar la pantalla"/cover).
 import { calcularLineas, calcularRecorteCover } from './layout.js';
 import { formatearPrecio } from './modelo.js';
 import { cargarFuentes, familiaCanvas } from './fuentes.js';
@@ -12,88 +18,88 @@ export const ALTO = 1920;
 const FONDO_BASE = '#0d0f1a';
 
 /**
- * Elige la función de composición según el estilo resuelto (ver `resolverEstilo` en modelo.js).
- * @param {{estilo:string, plantillaImagen, fotoImagen, producto, ajustes, formatoPrecio, descripcion}} datos
+ * Dibuja el estado completo en `ctx` según el estilo resuelto (ver `resolverEstilo` en modelo.js).
+ * Síncrona a propósito: asume que las fuentes ya están cargadas (`await cargarFuentes()` antes) y
+ * que las imágenes (`plantillaImagen`/`fotoImagen`) ya son `ImageBitmap` decodificados — así se
+ * puede llamar en cada frame sin volver a decodificar ni esperar nada.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {{estilo:string, plantillaImagen, fotoImagen, producto, ajustes, formatoPrecio, descripcion, encuadreFoto}} datos
+ */
+export function dibujarSegunEstilo(ctx, datos) {
+  const { estilo, plantillaImagen, fotoImagen, producto, ajustes, formatoPrecio, descripcion, encuadreFoto } = datos;
+  limpiarLienzo(ctx);
+
+  if (estilo === 'foto-precio') {
+    dibujarFondoFoto(ctx, fotoImagen, encuadreFoto);
+    dibujarNombrePrecio(ctx, producto, ajustes, formatoPrecio);
+    return;
+  }
+
+  if (estilo === 'foto-descripcion') {
+    dibujarFondoFoto(ctx, fotoImagen, encuadreFoto);
+    if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto.nombre ?? '', ajustes.nombre);
+    if (ajustes.descripcion?.visible !== false && descripcion) {
+      dibujarCajaTexto(ctx, descripcion, { ...ajustes.descripcion, maxLineas: ajustes.descripcion.maxLineas ?? 3 });
+    }
+    const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
+    if (ajustes.precio?.visible !== false && textoPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
+    return;
+  }
+
+  if (estilo === 'mi-plantilla') {
+    if (plantillaImagen) ctx.drawImage(plantillaImagen, 0, 0, ANCHO, ALTO);
+    if (fotoImagen && ajustes.foto && ajustes.foto.visible !== false) dibujarFotoCover(ctx, fotoImagen, ajustes.foto);
+    dibujarNombrePrecio(ctx, producto, ajustes, formatoPrecio);
+    return;
+  }
+
+  // 'solo-foto' (por defecto): siempre la foto entera (contain) con fondo difuminado, sin textos.
+  dibujarFondoFoto(ctx, fotoImagen, 'contain');
+}
+
+/**
+ * Versión "de exportación": crea un lienzo 1080×1920 fuera de pantalla, carga las fuentes que
+ * hagan falta y devuelve el PNG ya compuesto. La usan Publicar, la hoja de revisión y las
+ * miniaturas de Ajustes/editor (donde sí hace falta un Blob, a diferencia de la vista previa en
+ * vivo del editor que dibuja directo en su propio canvas con `dibujarSegunEstilo`).
  * @returns {Promise<Blob>}
  */
-export async function componerSegunEstilo({ estilo, plantillaImagen, fotoImagen, producto, ajustes, formatoPrecio, descripcion }) {
-  if (estilo === 'foto-precio') return componerFotoConPrecio({ fotoImagen, producto, ajustes, formatoPrecio });
-  if (estilo === 'foto-descripcion') {
-    return componerFotoConDescripcion({ fotoImagen, producto, ajustes, formatoPrecio, descripcion });
-  }
-  if (estilo === 'mi-plantilla') return componerImagen({ plantillaImagen, fotoImagen, producto, ajustes, formatoPrecio });
-  return componerSoloFoto({ fotoImagen });
+export async function componerSegunEstilo(datos) {
+  if (datos.estilo !== 'solo-foto') await cargarFuentes();
+  const { canvas, ctx } = lienzoNuevo();
+  dibujarSegunEstilo(ctx, datos);
+  return exportarBlob(canvas);
+}
+
+function limpiarLienzo(ctx) {
+  ctx.fillStyle = FONDO_BASE;
+  ctx.fillRect(0, 0, ANCHO, ALTO);
 }
 
 /**
- * Estilo "Mi plantilla": plantilla propia de fondo + foto + nombre + precio (posiciones de
- * `ajustes`, incluida la caja `foto`).
+ * Fondo de foto compartido por "Solo la foto", "Foto con precio" y "Foto con descripción":
+ * - 'contain' (defecto): la foto entera, sin recortar, centrada, con la misma foto de fondo
+ *   difuminada llenando los márgenes (evita el letterboxing negro cuando la relación de aspecto no
+ *   coincide con la del estado).
+ * - 'cover': la foto llena toda la pantalla, recortada si hace falta (comportamiento previo a la
+ *   ronda de distribución, disponible como "Llenar la pantalla" en Ajustes).
  */
-export async function componerImagen({ plantillaImagen, fotoImagen, producto, ajustes, formatoPrecio }) {
-  await cargarFuentes();
-  const { canvas, ctx } = lienzoNuevo();
-
-  if (plantillaImagen) ctx.drawImage(plantillaImagen, 0, 0, ANCHO, ALTO);
-  if (fotoImagen && ajustes.foto) dibujarFotoCover(ctx, fotoImagen, ajustes.foto);
-
-  dibujarNombrePrecio(ctx, producto, ajustes, formatoPrecio);
-
-  return exportarBlob(canvas);
-}
-
-/**
- * Estilo "Solo la foto" (por defecto): la foto del producto tal cual, sin textos, llevada a
- * 1080×1920 con un fondo difuminado de la misma foto (evita el letterboxing negro cuando la
- * relación de aspecto de la foto no coincide con la del estado).
- */
-export async function componerSoloFoto({ fotoImagen }) {
-  const { canvas, ctx } = lienzoNuevo();
-
-  if (fotoImagen) {
-    // Fondo: la misma foto, cover-fit y difuminada, para llenar los márgenes sin barras negras.
-    ctx.save();
-    ctx.filter = 'blur(40px) brightness(0.6)';
-    dibujarFotoCover(ctx, fotoImagen, { x: -40, y: -40, w: ANCHO + 80, h: ALTO + 80 });
-    ctx.restore();
-
-    // Primer plano: la foto entera, sin recortar (contain), nítida y centrada.
-    dibujarFotoContain(ctx, fotoImagen, { x: 0, y: 0, w: ANCHO, h: ALTO });
+function dibujarFondoFoto(ctx, fotoImagen, encuadreFoto) {
+  if (!fotoImagen) return;
+  if (encuadreFoto === 'cover') {
+    dibujarFotoCover(ctx, fotoImagen, { x: 0, y: 0, w: ANCHO, h: ALTO });
+    return;
   }
-
-  return exportarBlob(canvas);
-}
-
-/** Estilo "Foto con precio": foto de fondo a pantalla completa + nombre y precio (sin descripción). */
-export async function componerFotoConPrecio({ fotoImagen, producto, ajustes, formatoPrecio }) {
-  await cargarFuentes();
-  const { canvas, ctx } = lienzoNuevo();
-  if (fotoImagen) dibujarFotoCover(ctx, fotoImagen, { x: 0, y: 0, w: ANCHO, h: ALTO });
-  dibujarNombrePrecio(ctx, producto, ajustes, formatoPrecio);
-  return exportarBlob(canvas);
-}
-
-/**
- * Estilo "Foto con descripción": foto de fondo a pantalla completa + nombre + descripción
- * (la propia del producto, o la resuelta con el modelo) + precio opcional debajo.
- */
-export async function componerFotoConDescripcion({ fotoImagen, producto, ajustes, formatoPrecio, descripcion }) {
-  await cargarFuentes();
-  const { canvas, ctx } = lienzoNuevo();
-  if (fotoImagen) dibujarFotoCover(ctx, fotoImagen, { x: 0, y: 0, w: ANCHO, h: ALTO });
-
-  if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto.nombre ?? '', ajustes.nombre);
-  if (ajustes.descripcion?.visible !== false && descripcion) {
-    dibujarCajaTexto(ctx, descripcion, { ...ajustes.descripcion, maxLineas: ajustes.descripcion.maxLineas ?? 3 });
-  }
-  const textoPrecio = formatearPrecio(producto.precio, formatoPrecio);
-  if (ajustes.precio?.visible !== false && textoPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
-
-  return exportarBlob(canvas);
+  ctx.save();
+  ctx.filter = 'blur(40px) brightness(0.6)';
+  dibujarFotoCover(ctx, fotoImagen, { x: -40, y: -40, w: ANCHO + 80, h: ALTO + 80 });
+  ctx.restore();
+  dibujarFotoContain(ctx, fotoImagen, { x: 0, y: 0, w: ANCHO, h: ALTO });
 }
 
 function dibujarNombrePrecio(ctx, producto, ajustes, formatoPrecio) {
-  if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto.nombre ?? '', ajustes.nombre);
-  const textoPrecio = formatearPrecio(producto.precio, formatoPrecio);
+  if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto?.nombre ?? '', ajustes.nombre);
+  const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
   if (ajustes.precio?.visible !== false && textoPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
 }
 
@@ -102,8 +108,6 @@ function lienzoNuevo() {
   canvas.width = ANCHO;
   canvas.height = ALTO;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = FONDO_BASE;
-  ctx.fillRect(0, 0, ANCHO, ALTO);
   return { canvas, ctx };
 }
 

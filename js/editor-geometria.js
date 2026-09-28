@@ -90,3 +90,28 @@ export function aplicarSnap(caja, limites, umbral = 12) {
 
   return { caja: { ...caja, x, y }, guias };
 }
+
+/**
+ * "Acomodar automáticamente" (CREAR-BRIEF.md, ronda distribución): apila los elementos dados
+ * centrados horizontalmente, de abajo hacia arriba — el ÚLTIMO de `elementos` queda más cerca del
+ * margen inferior, y cada uno anterior se apoya sobre el siguiente con `separacion` de por medio.
+ * Respeta el alto (`h`) y ancho (`w`) de cada uno; solo calcula `x`/`y`. Pura: no toca `ajustes` ni
+ * el DOM — quien llama decide qué hacer con el resultado (aplicarlo, sumarlo al historial).
+ * @param {Array<{clave:string, w:number, h:number}>} elementos en el orden visual de arriba hacia
+ *   abajo (p. ej. nombre, precio, descripción); solo se pasan los VISIBLES.
+ * @param {{ancho?:number, alto?:number, margenInferior?:number, separacion?:number}} [opciones]
+ * @returns {Record<string, {x:number, y:number}>}
+ */
+export function acomodarAutomatico(elementos, opciones = {}) {
+  const { ancho = 1080, alto = 1920, margenInferior = 120, separacion = 24 } = opciones;
+  const resultado = {};
+  let bordeInferior = alto - margenInferior;
+  for (let i = elementos.length - 1; i >= 0; i -= 1) {
+    const { clave, w, h } = elementos[i];
+    const y = bordeInferior - h;
+    const x = (ancho - w) / 2;
+    resultado[clave] = { x, y };
+    bordeInferior = y - separacion;
+  }
+  return resultado;
+}
