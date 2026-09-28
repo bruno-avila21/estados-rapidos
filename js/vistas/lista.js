@@ -7,6 +7,7 @@ import { formatearPrecio, parsearPrecio, agruparProductosPorSeccion, contarProdu
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 import { abrirHojaRevision } from './revision.js';
+import { crearIcono } from '../utils/iconos.js';
 
 let urlsActuales = [];
 
@@ -179,8 +180,7 @@ function estadoVacio() {
   div.className = 'estado';
   const icono = document.createElement('div');
   icono.className = 'estado__icono';
-  icono.setAttribute('aria-hidden', 'true');
-  icono.textContent = '🏷️';
+  icono.append(crearIcono('etiqueta'));
   const titulo = document.createElement('div');
   titulo.className = 'estado__titulo';
   titulo.textContent = 'Todavía no cargaste productos';
@@ -196,8 +196,7 @@ function estadoVacioFiltro() {
   div.className = 'estado';
   const icono = document.createElement('div');
   icono.className = 'estado__icono';
-  icono.setAttribute('aria-hidden', 'true');
-  icono.textContent = '🔎';
+  icono.append(crearIcono('buscar'));
   const titulo = document.createElement('div');
   titulo.className = 'estado__titulo';
   titulo.textContent = 'No hay productos acá todavía';
@@ -237,7 +236,7 @@ function filaFiltro(secciones, conteos, prefs, { navegar, recargar }) {
   btnGestionar.type = 'button';
   btnGestionar.className = 'chip chip--fantasma';
   btnGestionar.setAttribute('data-accion', 'gestionar-secciones');
-  btnGestionar.textContent = '⚙ Secciones';
+  btnGestionar.append(crearIcono('etiqueta'), document.createTextNode('Secciones'));
   btnGestionar.addEventListener('click', () => navegar('#/secciones'));
   cont.append(btnGestionar);
 
@@ -249,8 +248,8 @@ function conmutadorVista(prefs, recargar) {
   const cont = document.createElement('div');
   cont.className = 'fila conmutador-vista';
   const opciones = [
-    { valor: 'compacta', etiqueta: '☰ Lista' },
-    { valor: 'grilla', etiqueta: '▦ Grilla' },
+    { valor: 'compacta', icono: 'lista', etiqueta: 'Lista' },
+    { valor: 'grilla', icono: 'grilla', etiqueta: 'Grilla' },
   ];
   for (const op of opciones) {
     const btn = document.createElement('button');
@@ -259,7 +258,7 @@ function conmutadorVista(prefs, recargar) {
     btn.className = 'boton boton--chico ' + (activo ? 'boton--primario' : 'boton--fantasma');
     btn.setAttribute('data-accion', `vista-${op.valor}`);
     btn.setAttribute('aria-pressed', String(activo));
-    btn.textContent = op.etiqueta;
+    btn.append(crearIcono(op.icono), document.createTextNode(op.etiqueta));
     btn.addEventListener('click', async () => {
       if (activo) return;
       await repo.guardarPreferenciasLista({ vista: op.valor });
@@ -387,7 +386,7 @@ function filaCompacta(producto, ctx) {
     foto = document.createElement('div');
     foto.className = 'fila-compacta__foto fila-compacta__foto--vacia';
     foto.setAttribute('aria-hidden', 'true');
-    foto.textContent = '📷';
+    foto.append(crearIcono('camara'));
   }
 
   const nombre = document.createElement('button');
@@ -434,7 +433,7 @@ function filaCompacta(producto, ctx) {
   btnPublicar.className = 'boton-icono';
   btnPublicar.setAttribute('data-accion', 'publicar');
   btnPublicar.setAttribute('aria-label', `Publicar ${producto.nombre}`);
-  btnPublicar.textContent = '📤';
+  btnPublicar.append(crearIcono('subir'));
   btnPublicar.addEventListener('click', () => abrirHojaRevision({ ids: [producto.id] }));
 
   const btnBorrar = document.createElement('button');
@@ -442,7 +441,7 @@ function filaCompacta(producto, ctx) {
   btnBorrar.className = 'boton-icono';
   btnBorrar.setAttribute('data-accion', 'borrar');
   btnBorrar.setAttribute('aria-label', `Borrar ${producto.nombre}`);
-  btnBorrar.textContent = '🗑';
+  btnBorrar.append(crearIcono('borrar'));
   btnBorrar.addEventListener('click', async () => {
     const ok = await pedirConfirmacion({
       titulo: 'Borrar producto',
@@ -500,7 +499,7 @@ function tarjetaGrilla(producto, ctx) {
     foto = document.createElement('div');
     foto.className = 'grilla-item__foto grilla-item__foto--vacia';
     foto.setAttribute('aria-hidden', 'true');
-    foto.textContent = '📷';
+    foto.append(crearIcono('camara'));
   }
 
   const checkbox = document.createElement('input');

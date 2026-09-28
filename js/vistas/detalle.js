@@ -3,6 +3,7 @@ import * as repo from '../repositorio.js';
 import { validarProducto, parsearPrecio, formatearPrecio, ESTILOS_IMAGEN, ETIQUETA_ESTILO, validarNombreSeccion } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
+import { crearIcono } from '../utils/iconos.js';
 
 export async function render(contenedor, { navegar, params }) {
   contenedor.textContent = '';
@@ -38,7 +39,8 @@ export async function render(contenedor, { navegar, params }) {
 
   const previaVacia = document.createElement('div');
   previaVacia.className = 'foto-picker__vista tarjeta__foto--vacia';
-  previaVacia.textContent = '📷';
+  previaVacia.setAttribute('aria-hidden', 'true');
+  previaVacia.append(crearIcono('camara'));
   previaVacia.hidden = !!urlPreviaActual;
 
   const inputGaleria = document.createElement('input');

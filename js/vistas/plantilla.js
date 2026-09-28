@@ -31,9 +31,10 @@ import {
   resolverDescripcion,
 } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
+import { crearIcono } from '../utils/iconos.js';
 import { mostrarToast } from '../utils/toast.js';
 
-const COLORES_RAPIDOS = ['#ffffff', '#0d0f1a', '#4f46e5', '#a78bfa', '#f5a623', '#3ecf8e'];
+const COLORES_RAPIDOS = ['#ffffff', '#242220', '#3a4d39', '#6e5b49', '#f5a623', '#3f5c38'];
 const CLAVES_TEXTO = ['nombre', 'precio', 'descripcion'];
 const HANDLES = ['nw', 'ne', 'sw', 'se'];
 
@@ -80,7 +81,7 @@ export async function render(contenedor, { navegar, params } = {}) {
   btnVolver.type = 'button';
   btnVolver.className = 'boton boton--fantasma boton--chico';
   btnVolver.setAttribute('data-accion', 'ir-ajustes');
-  btnVolver.textContent = '← Volver a Ajustes';
+  btnVolver.append(crearIcono('volver'), document.createTextNode('Volver a Ajustes'));
   btnVolver.addEventListener('click', () => navegar?.('#/ajustes'));
 
   // --- Selector de CUÁL estilo se edita (ya no una "vista previa" sin persistir: cada estilo
@@ -174,12 +175,12 @@ export async function render(contenedor, { navegar, params } = {}) {
   btnDeshacer.type = 'button';
   btnDeshacer.className = 'boton boton--chico';
   btnDeshacer.setAttribute('data-accion', 'deshacer');
-  btnDeshacer.textContent = '↶ Deshacer';
+  btnDeshacer.append(crearIcono('deshacer'), document.createTextNode('Deshacer'));
   const btnRehacer = document.createElement('button');
   btnRehacer.type = 'button';
   btnRehacer.className = 'boton boton--chico';
   btnRehacer.setAttribute('data-accion', 'rehacer');
-  btnRehacer.textContent = '↷ Rehacer';
+  btnRehacer.append(crearIcono('rehacer'), document.createTextNode('Rehacer'));
   const btnAcomodar = document.createElement('button');
   btnAcomodar.type = 'button';
   btnAcomodar.className = 'boton boton--chico';
@@ -318,7 +319,7 @@ export async function render(contenedor, { navegar, params } = {}) {
       btnOjo.setAttribute('data-accion', `capa-ojo-${clave}`);
       btnOjo.setAttribute('aria-pressed', String(!oculto)); // "presionado" = visible (ojo abierto)
       btnOjo.setAttribute('aria-label', oculto ? `Mostrar ${etiquetaCaja(clave)}` : `Ocultar ${etiquetaCaja(clave)}`);
-      btnOjo.textContent = oculto ? '🚫' : '👁';
+      btnOjo.append(crearIcono(oculto ? 'ojo-tachado' : 'ojo'));
       btnOjo.addEventListener('click', (ev) => {
         ev.stopPropagation();
         actualizarCampo(clave, 'visible', oculto ? true : false, true);

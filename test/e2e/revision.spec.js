@@ -121,16 +121,28 @@ test('Publicar de una tarjeta abre la hoja con 1 sola imagen', async ({ page }) 
   expect(llamadas[0].cantidad).toBe(1);
 });
 
+// La miniatura se crea SIN `src` y recién lo recibe cuando termina de componerse en canvas (async):
+// `toHaveCount(1)` ya pasa con el <img> recién creado y todavía vacío, así que hay que esperar a
+// que el atributo tenga un blob: real antes de leerlo (si no, se lee "" en una carrera — más
+// visible con el reskin "Organic Minimalist", que carga 2 fuentes más antes del primer paint).
+async function esperarMiniaturaLista(page) {
+  await page.waitForFunction(() => {
+    const img = document.querySelector('.hoja-revision__miniatura');
+    return !!img?.getAttribute('src');
+  }, null, { timeout: 10_000 });
+  return page.locator('.hoja-revision__miniatura').first().getAttribute('src');
+}
+
 test('el selector de estilo de la hoja regenera las imágenes', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page, { nombre: 'Reversible', precio: '3000' });
   await page.locator('[data-accion="publicar"]').first().click();
   await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
-  const primeraImagen = await page.locator('.hoja-revision__miniatura').first().getAttribute('src');
+  const primeraImagen = await esperarMiniaturaLista(page);
 
   await page.locator('#revision-estilo').selectOption('foto-precio');
   await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
-  const segundaImagen = await page.locator('.hoja-revision__miniatura').first().getAttribute('src');
+  const segundaImagen = await esperarMiniaturaLista(page);
   expect(segundaImagen).not.toBe(primeraImagen);
 });
 

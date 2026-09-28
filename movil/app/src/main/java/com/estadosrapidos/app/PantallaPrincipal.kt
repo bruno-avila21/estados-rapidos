@@ -75,7 +75,7 @@ class PantallaPrincipal : AppCompatActivity() {
         if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
 
         web = WebView(this)
-        web.setBackgroundColor(Color.parseColor("#0d0f1a")) // = --color-fondo, evita el flash blanco
+        web.setBackgroundColor(Color.parseColor("#fbf9f5")) // = --color-fondo, evita el flash blanco
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true   // localStorage
         web.settings.databaseEnabled = true      // IndexedDB (productos, fotos, plantilla)

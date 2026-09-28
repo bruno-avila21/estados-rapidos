@@ -6,6 +6,7 @@ import * as repo from '../repositorio.js';
 import { validarNombreSeccion } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
+import { crearIcono } from '../utils/iconos.js';
 
 export async function render(contenedor, { navegar }) {
   contenedor.textContent = '';
@@ -19,7 +20,7 @@ export async function render(contenedor, { navegar }) {
   btnVolver.type = 'button';
   btnVolver.className = 'boton boton--fantasma';
   btnVolver.setAttribute('data-accion', 'volver');
-  btnVolver.textContent = '← Volver a Productos';
+  btnVolver.append(crearIcono('volver'), document.createTextNode('Volver a Productos'));
   btnVolver.addEventListener('click', () => navegar('#/'));
   raiz.append(btnVolver);
 
@@ -115,7 +116,7 @@ function filaSeccion(seccion, indice, total, recargar) {
   btnSubir.className = 'boton-icono';
   btnSubir.setAttribute('data-accion', 'subir-seccion');
   btnSubir.setAttribute('aria-label', `Subir ${seccion.nombre}`);
-  btnSubir.textContent = '↑';
+  btnSubir.append(crearIcono('flecha-arriba'));
   btnSubir.disabled = indice === 0;
   btnSubir.addEventListener('click', async () => {
     await repo.reordenarSeccion(seccion.id, 'subir');
@@ -127,7 +128,7 @@ function filaSeccion(seccion, indice, total, recargar) {
   btnBajar.className = 'boton-icono';
   btnBajar.setAttribute('data-accion', 'bajar-seccion');
   btnBajar.setAttribute('aria-label', `Bajar ${seccion.nombre}`);
-  btnBajar.textContent = '↓';
+  btnBajar.append(crearIcono('flecha-abajo'));
   btnBajar.disabled = indice === total - 1;
   btnBajar.addEventListener('click', async () => {
     await repo.reordenarSeccion(seccion.id, 'bajar');

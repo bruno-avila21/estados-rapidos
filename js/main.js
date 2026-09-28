@@ -10,10 +10,16 @@ import * as ajustes from './vistas/ajustes.js';
 import * as plantilla from './vistas/plantilla.js';
 import * as respaldo from './vistas/respaldo.js';
 import { pedirAlmacenamientoPersistente } from './db.js';
+import { crearIcono } from './utils/iconos.js';
 
 const vista = document.getElementById('vista');
 const titulo = document.getElementById('titulo-pantalla');
 const navBotones = Array.from(document.querySelectorAll('.nav-inferior__item'));
+
+// Íconos de la nav inferior: SVG inline (reskin "Organic Minimalist"), no glifos unicode.
+document.querySelectorAll('[data-icono]').forEach((cont) => {
+  cont.append(crearIcono(cont.dataset.icono));
+});
 
 const RUTAS = [
   { patron: /^#\/$/, modulo: lista, titulo: 'Productos', ruta: '#/' },

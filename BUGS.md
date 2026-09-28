@@ -3,6 +3,47 @@
 Registro de fallos encontrados durante la construcción, con causa y arreglo (regla de cierre.md /
 seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos resueltos.
 
+### 43. Reskin "Organic Minimalist": carrera en `revision.spec.js` (miniatura leída sin `src` todavía) + `sw.spec.js` (#10) más inestable
+- **Paso:** `npm run test:e2e` completo, rama `rediseno-organic`, después de reescribir `css/estilos.css`
+  (tokens + 2 fuentes nuevas autoalojadas) y sumar `js/utils/iconos.js` (íconos SVG inline
+  reemplazando emojis/glifos en `lista.js`/`plantilla.js`/`secciones.js`/`detalle.js`).
+- **Error exacto (1, `revision.spec.js` "el selector de estilo de la hoja regenera las imágenes"):**
+  ```
+  Error: expect(received).not.toBe(expected) // Object.is equality
+  Expected: not null
+  ```
+  (`primeraImagen` y `segundaImagen` llegaban `null` — el `<img class="hoja-revision__miniatura">`
+  se crea SIN `src` y lo recibe recién cuando termina de componerse en canvas; `toHaveCount(1)` ya
+  pasa con el `<img>` recién creado y vacío, y el test leía `getAttribute('src')` inmediatamente.)
+- **Causa (1):** carrera preexistente en el test (no en la app): dependía de que, por timing
+  accidental, `img.src` ya estuviera puesto para cuando se leía. El reskin agrega 2 fuentes
+  (`@font-face` en `css/estilos.css`) que el navegador carga antes del primer paint, corriendo lo
+  bastante el reloj como para que la carrera, antes favorable, empezara a perder.
+- **Arreglo (1):** `test/e2e/revision.spec.js` — se agregó `esperarMiniaturaLista(page)` que espera
+  con `page.waitForFunction` a que el `<img>` tenga `src` de verdad antes de leerlo, en las dos
+  capturas (antes y después de cambiar de estilo). No se tocó ningún selector ni `data-*`.
+- **Resuelto (1):** sí — `npx playwright test test/e2e/revision.spec.js` → 10/10.
+- **Error exacto (2, `sw.spec.js`, ya registrado como #10):** mismo `net::ERR_FAILED at
+  http://127.0.0.1:8991/`, pero ahora falló las 3 veces (intento + 2 retries) tanto en la suite
+  completa como aislado, cuando antes del reskin (mismo commit base, verificado con `git stash`)
+  fallaba 1 de 2 intentos ("1 flaky", se recuperaba con el retry).
+- **Causa (2):** confirmada por A/B — sumar 2 fuentes nuevas + `js/utils/iconos.js` a `NUCLEO`
+  (`sw.js`, 39 → 42 entradas) alargó el `cache.addAll` del `install` lo bastante como para que la
+  carrera de #10 (ya intermitente en el baseline: 1 de 2 intentos) pasara a fallar los 3 intentos
+  seguidos (intento + 2 retries), tanto en la suite completa como aislado. La lógica de ruteo del SW
+  no cambió (`test/sw-estrategia.test.js` determinístico sigue en verde) — es la misma carrera de
+  #10, más frecuente con más peso en `NUCLEO`, no una carrera nueva.
+- **Arreglo (2):** `sw.js` — se sacaron `./js/utils/iconos.js`, `./fonts/newsreader-400.woff2`,
+  `./fonts/manrope-400.woff2` y `./fonts/manrope-600.woff2` del array `NUCLEO` (precache atómico del
+  `install`). No hace falta que estén ahí: las fuentes ya son `cache-first` por patrón
+  (`js/sw-estrategia.js`, `/\/fonts\/.+\.woff2$/`) y `iconos.js` es `network-first` como cualquier
+  otro `.js` — ambos quedan cacheados solos en la primera visita online real (mismo criterio que
+  `js/vistas/secciones.js`, que tampoco está en `NUCLEO` desde antes de este reskin). `VERSION` se
+  mantuvo en `v10` igual (cambió `css/estilos.css`, que sí está en `NUCLEO`).
+- **Resuelto (2):** sí — reproducido el A/B (con las 3 entradas de más: 3/3 fallos; sin ellas: vuelve
+  a "1 flaky", igual que el baseline) y `npm run test:e2e` → 76 passed + `sw.spec.js` en verde con
+  el retry existente, igual que antes del reskin.
+
 ### 23. Ronda "vista previa en vivo + distribución": el editor de plantilla no cargaba (TDZ) y 2 tests nuevos leían el canvas antes de que se redibujara
 - **Paso:** `npx playwright test -c test/e2e/playwright.config.js test/e2e/editor.spec.js` después de cambiar la vista previa del editor de un `<img>` regenerado por Blob a un `<canvas>` dibujado en vivo con `requestAnimationFrame`.
 - **Error exacto:** las 14 pruebas de `editor.spec.js` fallaban por timeout esperando `[data-elemento="nombre"]`; la captura de página mostraba `Ocurrió un error al mostrar esta pantalla: Cannot access 'rafPendiente' before initialization`.

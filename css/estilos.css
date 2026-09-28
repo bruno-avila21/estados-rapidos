@@ -1,26 +1,55 @@
-/* Estados rápidos — tokens y estilos. Estética sobria de herramienta de trabajo: sin gradientes,
-   sin card-itis, acento solo como información de estado. Móvil primero, pulgar abajo. */
+/* Estados rápidos — tokens y estilos. Dirección "Organic Minimalist" (rediseño 2026-09-28, ver
+   Interfaz/ANALISIS-STITCH.md y Interfaz/stitch_whatsapp_status_uploader_ui/organic_minimalist/
+   DESIGN.md): superficies mate cálidas, verde ciprés como color foco, tipografía editorial
+   (Newsreader) + utilitaria (Manrope). Sin gradientes, sin card-itis, sin pill buttons de texto
+   (los círculos quedan solo para el FAB, el punto de estado y los swatches de color). */
+
+@font-face {
+  font-family: 'EstadosNewsreader';
+  src: url('../fonts/newsreader-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'EstadosManrope';
+  src: url('../fonts/manrope-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'EstadosManrope';
+  src: url('../fonts/manrope-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
-  /* Identidad visual: azul→violeta (índigo primario, violeta como acento secundario).
-     Contraste AA verificado (ver BUGS.md / registro de la ronda 2026-09-27):
-     indigo-600 vs blanco 6.29:1, violet-400 vs fondo oscuro 6.33:1, violet-600 vs blanco 5.70:1. */
-  --color-fondo: #0d0f1a;
-  --color-superficie: #161a2c;
-  --color-superficie-alta: #1f2440;
-  --color-borde: #2b3157;
-  --color-texto: #eef0fb;
-  --color-texto-tenue: #9aa0c3;
-  --color-primario: #4f46e5;
-  --color-primario-fuerte: #4338ca;
-  --color-primario-texto: #ffffff;
-  --color-acento: #a78bfa;
-  --color-peligro: #e5484d;
-  --color-exito: #3ecf8e;
-  --gradiente-marca: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  /* Identidad visual: verde ciprés (primario) + umber cálido (acento secundario) sobre
+     superficies de alabastro/lino. Contraste AA verificado (ver CALIDAD.md, ronda
+     "Organic Minimalist" 2026-09-28). */
+  --color-fondo: #fbf9f5;
+  --color-superficie: #f3efea;
+  --color-superficie-alta: #ebe5dd;
+  --color-borde: rgba(90, 88, 86, 0.22);
+  --color-texto: #242220;
+  --color-texto-tenue: #5c584f;
+  --color-primario: #3a4d39;
+  --color-primario-fuerte: #2e3d2d;
+  --color-primario-texto: #fbf9f5;
+  --color-primario-tinte: rgba(58, 77, 57, 0.1);
+  --color-acento: #6e5b49;
+  --color-peligro: #ba1a1a;
+  --color-peligro-fuerte: #8f1414;
+  --color-peligro-texto: #fbf9f5;
+  --color-exito: #3f5c38;
+  --color-superposicion: rgba(36, 34, 32, 0.45);
+  --sombra: 0 4px 20px -2px rgba(58, 48, 40, 0.08), 0 1px 3px 0 rgba(58, 48, 40, 0.05);
 
-  --font-titulo: 'Segoe UI Variable Display', Inter, system-ui, sans-serif;
-  --font-cuerpo: 'Segoe UI Variable Text', Inter, system-ui, sans-serif;
+  --font-titulo: 'EstadosNewsreader', Georgia, 'Times New Roman', serif;
+  --font-cuerpo: 'EstadosManrope', system-ui, sans-serif;
   --font-datos: 'Cascadia Code', 'JetBrains Mono', ui-monospace, monospace;
 
   --tamano-12: 0.75rem;
@@ -30,8 +59,9 @@
   --tamano-28: 1.75rem;
   --tamano-40: 2.5rem;
 
-  --radio: 10px;
-  --radio-chico: 6px;
+  --radio-chico: 4px;
+  --radio: 8px;
+  --radio-grande: 12px;
   --toque-min: 48px;
   --duracion: 200ms;
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
@@ -41,17 +71,48 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) {
-    --color-fondo: #f5f6fb;
-    --color-superficie: #ffffff;
-    --color-superficie-alta: #eef0fb;
-    --color-borde: #dcdff5;
-    --color-texto: #14172b;
-    --color-texto-tenue: #5b6088;
-    /* violeta más oscuro en claro: mismo violet-400 pierde contraste sobre blanco */
-    --color-acento: #7c3aed;
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    /* Misma paleta, tonos "aged slate": piedra oscura en vez de negro puro, verde ciprés
+       aclarado para que el texto sobre botones siga siendo oscuro (mejor contraste que blanco
+       sobre un verde tan cerrado). */
+    --color-fondo: #201e1a;
+    --color-superficie: #29271f;
+    --color-superficie-alta: #333026;
+    --color-borde: rgba(255, 255, 255, 0.16);
+    --color-texto: #efe9e0;
+    --color-texto-tenue: #b8b1a4;
+    --color-primario: #a7bda4;
+    --color-primario-fuerte: #93ac90;
+    --color-primario-texto: #16210f;
+    --color-primario-tinte: rgba(167, 189, 164, 0.16);
+    --color-acento: #dcc2ac;
+    --color-peligro: #ffb4a9;
+    --color-peligro-fuerte: #ff9c8e;
+    --color-peligro-texto: #201e1a;
+    --color-exito: #9dbd98;
+    --color-superposicion: rgba(0, 0, 0, 0.55);
+    --sombra: 0 4px 20px -2px rgba(0, 0, 0, 0.35), 0 1px 3px 0 rgba(0, 0, 0, 0.25);
   }
+}
+[data-theme='dark'] {
+  --color-fondo: #201e1a;
+  --color-superficie: #29271f;
+  --color-superficie-alta: #333026;
+  --color-borde: rgba(255, 255, 255, 0.16);
+  --color-texto: #efe9e0;
+  --color-texto-tenue: #b8b1a4;
+  --color-primario: #a7bda4;
+  --color-primario-fuerte: #93ac90;
+  --color-primario-texto: #16210f;
+  --color-primario-tinte: rgba(167, 189, 164, 0.16);
+  --color-acento: #dcc2ac;
+  --color-peligro: #ffb4a9;
+  --color-peligro-fuerte: #ff9c8e;
+  --color-peligro-texto: #201e1a;
+  --color-exito: #9dbd98;
+  --color-superposicion: rgba(0, 0, 0, 0.55);
+  --sombra: 0 4px 20px -2px rgba(0, 0, 0, 0.35), 0 1px 3px 0 rgba(0, 0, 0, 0.25);
 }
 
 * {
@@ -90,8 +151,9 @@ h1,
 h2,
 h3 {
   font-family: var(--font-titulo);
-  font-weight: 700;
-  line-height: 1.2;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
@@ -165,7 +227,11 @@ h3 {
   transition: color var(--duracion) var(--ease);
 }
 .nav-inferior__icono {
-  font-size: var(--tamano-20);
+  display: flex;
+}
+.nav-inferior__icono .icono {
+  width: 22px;
+  height: 22px;
 }
 .nav-inferior__item:hover {
   color: var(--color-texto);
@@ -182,7 +248,7 @@ h3 {
 .boton {
   min-height: var(--toque-min);
   padding: 0 18px;
-  border-radius: var(--radio);
+  border-radius: var(--radio-chico);
   border: 1px solid transparent;
   background: var(--color-superficie-alta);
   color: var(--color-texto);
@@ -216,10 +282,10 @@ h3 {
 }
 .boton--peligro {
   background: var(--color-peligro);
-  color: #fff;
+  color: var(--color-peligro-texto);
 }
 .boton--peligro:hover {
-  background: #ff6469;
+  background: var(--color-peligro-fuerte);
 }
 .boton--fantasma {
   background: transparent;
@@ -256,7 +322,7 @@ h3 {
   border: none;
   font-size: var(--tamano-28);
   line-height: 1;
-  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.35);
+  box-shadow: var(--sombra);
   cursor: pointer;
   z-index: 19; /* por encima de .barra-publicar (BUGS.md #11): nunca queda tapado */
   transition: transform var(--duracion) var(--ease), background var(--duracion) var(--ease);
@@ -268,7 +334,7 @@ h3 {
   transform: scale(0.94);
 }
 .fab:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--color-primario-texto);
   outline-offset: 3px;
 }
 
@@ -469,7 +535,29 @@ details.grupo > .campo {
   color: var(--color-texto-tenue);
 }
 .estado__icono {
-  font-size: var(--tamano-40);
+  display: flex;
+}
+.estado__icono .icono {
+  width: 2.5rem;
+  height: 2.5rem;
+  stroke-width: 1.25;
+}
+
+/* ---------- Iconos de línea (reskin "Organic Minimalist"): SVG inline, nunca fuente remota ---------- */
+.icono {
+  width: 1.25em;
+  height: 1.25em;
+  flex-shrink: 0;
+  vertical-align: -0.2em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.boton .icono,
+.chip .icono {
+  margin-right: 6px;
 }
 .estado__titulo {
   color: var(--color-texto);
@@ -663,9 +751,9 @@ details.grupo > .campo {
 .tarjeta-estilo__badge {
   font-size: var(--tamano-14);
   font-weight: 600;
-  color: var(--color-acento);
-  background: rgba(167, 139, 250, 0.16);
-  border-radius: 999px;
+  color: var(--color-primario);
+  background: var(--color-primario-tinte);
+  border-radius: var(--radio-chico);
   padding: 2px 10px;
   overflow-wrap: anywhere;
 }
@@ -694,7 +782,7 @@ details.grupo > .campo {
 .dialogo-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--color-superposicion);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -704,7 +792,8 @@ details.grupo > .campo {
 .dialogo {
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
-  border-radius: var(--radio) var(--radio) 0 0;
+  border-radius: var(--radio-grande) var(--radio-grande) 0 0;
+  box-shadow: var(--sombra);
   padding: 20px;
   width: 100%;
   max-width: 480px;
@@ -744,7 +833,8 @@ details.grupo > .campo {
   border: 1px solid var(--color-borde);
   color: var(--color-texto);
   padding: 10px 16px;
-  border-radius: var(--radio-chico);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
   font-size: var(--tamano-14);
   opacity: 0;
   pointer-events: none;
@@ -772,7 +862,8 @@ details.grupo > .campo {
   gap: 10px;
   background: var(--color-superficie-alta);
   border: 1px solid var(--color-acento);
-  border-radius: var(--radio);
+  border-radius: var(--radio-grande);
+  box-shadow: var(--sombra);
   padding: 10px 12px;
   z-index: 25;
   transition: opacity var(--duracion) var(--ease), transform var(--duracion) var(--ease);
@@ -791,7 +882,8 @@ details.grupo > .campo {
   background: var(--color-superficie-alta);
   border: 1px solid var(--color-borde);
   color: var(--color-texto-tenue);
-  border-radius: var(--radio);
+  border-radius: var(--radio-grande);
+  box-shadow: var(--sombra);
   padding: 8px 12px;
   font-size: var(--tamano-14);
   text-align: center;
@@ -860,7 +952,7 @@ details.grupo > .campo {
 }
 .editor-plantilla__caja--activa {
   border: 2px solid var(--color-primario);
-  background: rgba(79, 70, 229, 0.12);
+  background: var(--color-primario-tinte);
 }
 .editor-plantilla__caja--oculta {
   opacity: 0.35;
@@ -924,7 +1016,7 @@ details.grupo > .campo {
 }
 .editor-plantilla__fila-capa--activa {
   border-color: var(--color-primario);
-  background: rgba(79, 70, 229, 0.14);
+  background: var(--color-primario-tinte);
 }
 .editor-plantilla__fila-capa__nombre {
   flex: 1;
@@ -964,9 +1056,9 @@ details.grupo > .campo {
 .editor-plantilla__badge {
   font-size: var(--tamano-14);
   font-weight: 600;
-  color: var(--color-acento);
-  background: rgba(167, 139, 250, 0.16);
-  border-radius: 999px;
+  color: var(--color-primario);
+  background: var(--color-primario-tinte);
+  border-radius: var(--radio-chico);
   padding: 2px 10px;
 }
 .editor-plantilla__badge[hidden] {
@@ -1122,7 +1214,7 @@ details.grupo > .campo {
   flex-shrink: 0;
   min-height: var(--toque-min);
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radio-chico);
   border: 1px solid var(--color-borde);
   background: var(--color-superficie);
   color: var(--color-texto);
@@ -1222,6 +1314,9 @@ details.grupo > .campo {
   flex-shrink: 0;
   width: 44px;
   height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radio-chico);
   border: 1px solid var(--color-borde);
   background: var(--color-superficie);
