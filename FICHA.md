@@ -38,7 +38,8 @@
 | Qué hace | Arma y comparte el estado de WhatsApp de un producto (foto + nombre + precio sobre una plantilla propia) en 3 segundos, sin automatizar WhatsApp |
 | No tocar | Los datos de producto (fotos, nombres, precios) NUNCA van al repo — viven solo en el IndexedDB de cada instalación. El repo es público (decisión de Bruno, mismo caso que `cv`): revisar antes de commitear que no se cuele nada de las capturas de `docs/` con datos reales si algún día dejan de ser de prueba |
 
-## APK (TWA) — 2026-09-28
-- Paquete: `com.estadosrapidos.app`. Es una Trusted Web Activity: abre la web en Chrome a pantalla completa, así compartir a WhatsApp funciona igual que en la web.
-- Firma: `D:\Proyectos_Propios\_firmas\estados-rapidos\` (`firma.keystore` + `clave.env`), **fuera del repo**. Sin esa llave no se puede publicar una actualización del APK. Respaldala.
-- Verificación del dominio: `.well-known/assetlinks.json` (huella SHA-256 de esa firma). Sin eso el APK abre con la barra de la dirección.
+## APK — 2026-09-28
+- Paquete: `com.estadosrapidos.app`. APK autónomo: la web va adentro (`assets/`, servida por `https://appassets.androidplatform.net/`), anda sin internet y no depende de ningún hosting. Se reparte pasando el `.apk` por WhatsApp.
+- Compartir a WhatsApp, elegir fotos y guardar/abrir el respaldo pasan por puentes nativos (el WebView no tiene `navigator.share` con archivos).
+- Firma: `D:\Proyectos_Propios\Agentes\llaves\estados-rapidos.jks` + `estados-rapidos.credenciales`, junto a las demás llaves y **fuera del repo**. Sin esa llave no se puede instalar una versión nueva encima (habría que desinstalar y se pierden los datos). Respaldala en el gestor de contraseñas.
+- Sin auto-actualización: cada versión es un APK nuevo que se reenvía; instalado encima conserva los datos.
