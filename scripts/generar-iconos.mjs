@@ -12,7 +12,10 @@ import { chromium } from '@playwright/test';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.join(__dirname, '..');
 const SVG = fs.readFileSync(path.join(RAIZ, 'assets', 'logo.svg'), 'utf8');
-const FONDO = '#0d0f1a'; // --color-fondo oscuro de la identidad visual
+const FONDO = '#fbf9f5'; // --color-fondo claro (alabastro) de "Organic Minimalist" — mismo valor
+// que background_color/theme_color de manifest.webmanifest; el logo ya no tiene degradé claro
+// que necesite un fondo oscuro para contrastar (verde ciprés + umber, ambos oscuros, se leen
+// mejor sobre un fondo claro).
 
 function paginaPara(size) {
   const logoSize = Math.round(size * 0.62); // zona segura maskable

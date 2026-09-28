@@ -3,6 +3,22 @@
 Registro de fallos encontrados durante la construcción, con causa y arreglo (regla de cierre.md /
 seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos resueltos.
 
+### 50. `sw.spec.js` fallaba de forma consistente (recurrencia de #10/#39/#45/#46/#47), diagnosticado y arreglado — no era ajeno al código
+- **Paso:** Fase final del reskin. `npx playwright test -c test/e2e/playwright.config.js test/e2e/sw.spec.js` — fallaba 3/3 (intento + 2 retries) de forma determinística en esta máquina, aislado y dentro de la suite completa.
+- **Error exacto:**
+  ```
+  Error: page.goto: net::ERR_FAILED at http://127.0.0.1:8991/
+  Call log:
+    - navigating to "http://127.0.0.1:8991/", waiting until "load"
+    > await page.goto('/');   (después de page.route('**/*', route.abort()))
+  ```
+- **Reproducir (antes del arreglo):** `npx playwright test -c test/e2e/playwright.config.js test/e2e/sw.spec.js --retries=0` — fallaba siempre, no era intermitente en esta máquina.
+- **Causa (confirmada con un spec de diagnóstico en scratchpad que agregaba listeners de `response`/`console` y volvía a leer el registro):** el test esperaba `registration.active.state === 'activated'` y a continuación, en el mismo tick, activaba `page.route('**/*', abort)` y navegaba de nuevo esperando que el SW sirviera desde caché. Pero `active.state === 'activated'` es un flag que el **renderer** ve por el lado de JS; el proceso del **navegador** (donde vive el ruteo real "esta navegación va al fetch handler del SW, no a la red") sincroniza el estado de "cliente controlado" en un paso aparte, con su propia latencia. Si la navegación que corta la red llega antes de que esa sincronización termine, el navegador trata la navegación como NO controlada, nunca dispara el fetch handler del SW, y el `route.abort()` mata la petición de verdad — de ahí el `net::ERR_FAILED`. Confirmado agregando una navegación intermedia CON red + polling extra: pasaba 5/5; quitando esos milisegundos de más, volvía a fallar 3/3.
+- **Arreglo:** `test/e2e/sw.spec.js` — después de confirmar `active.state === 'activated'`, se agrega una navegación real (`page.goto('/')`, con red todavía permitida) seguida de `page.waitForFunction(() => !!navigator.serviceWorker.controller)`. Esa espera es una condición determinística (no un `timeout`/`sleep` a ciegas): confirma que ESTA página ya está controlada por el SW antes de cortar la red y navegar por tercera vez. Se sacó el `test.describe.configure({ retries: 2 })` (BUGS.md #10) porque ya no hace falta — 5/5 corridas limpias con `--retries=0`, y 92/92 en la suite completa.
+- **NUCLEO restaurado en `sw.js` (v13→v14):** con la causa real resuelta (no tenía que ver con la cantidad de archivos precacheados), se vuelven a meter en `NUCLEO` los 3 archivos que la Fase 1 había sacado para "bajar el flake" sin diagnóstico (`./fonts/newsreader-400.woff2`, `./fonts/manrope-400.woff2`, `./fonts/manrope-600.woff2`, más `./js/utils/iconos.js`) — estaban afuera del precache y por lo tanto la PWA no abría con las fuentes/íconos nuevos en la primera carga sin red. De paso se sumó `./js/utils/plataforma.js`, que faltaba en `NUCLEO` desde la ronda APK 1.1 (`d4c513b`) y lo importan `respaldo.js`/`compartir.js`/`ajustes-la-app.js`, ya en el núcleo — mismo criterio: sin él, esas pantallas podían quedar rotas offline en la primera carga.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — cualquier E2E que mida `registration.active.state` y corte la red en la MISMA navegación tiene esta carrera. Agregado a `recetas/e2e.md` (sección "Service Worker: verificarlo aparte de los E2E mockeados"): la sincronización correcta es esperar `navigator.serviceWorker.controller` después de una navegación real con red, no un timeout.
+
 ### 49. Fase 4: el botón "Deshacer preset" quedaba visible con `hidden` puesto (pisado por `.fila{display:flex}`)
 - **Paso:** verificación manual con agent-browser a 412×915 en `/#/plantilla?estilo=editorial` — el
   botón "Deshacer preset" (nuevo, galería de presets) aparecía en el snapshot de accesibilidad y

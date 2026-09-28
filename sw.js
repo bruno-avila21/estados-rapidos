@@ -2,7 +2,7 @@
 // cache-first solo para los íconos. Receta pwa.md. `VERSION` sube en cada release.
 import { tipoDeCache } from './js/sw-estrategia.js';
 
-const VERSION = 'v13';
+const VERSION = 'v14';
 const CACHE = `estados-rapidos-${VERSION}`;
 const NUCLEO = [
   './',
@@ -26,6 +26,8 @@ const NUCLEO = [
   './js/utils/compartir.js',
   './js/utils/qr.js',
   './js/utils/instalacion.js',
+  './js/utils/iconos.js',
+  './js/utils/plataforma.js',
   './js/vistas/lista.js',
   './js/vistas/detalle.js',
   './js/vistas/ajustes.js',
@@ -46,6 +48,9 @@ const NUCLEO = [
   './fonts/playfair-700.woff2',
   './fonts/bebas-neue-400.woff2',
   './fonts/pacifico-400.woff2',
+  './fonts/newsreader-400.woff2',
+  './fonts/manrope-400.woff2',
+  './fonts/manrope-600.woff2',
 ];
 
 self.addEventListener('install', (evento) => {

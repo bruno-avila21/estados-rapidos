@@ -9,20 +9,31 @@ uno o varios archivos juntos) para elegir WhatsApp → Mi estado. Sin backend, s
 dependencias de runtime. Todo el dato vive en el IndexedDB del celular de quien la usa — el repo es
 público pero solo tiene código, nunca datos de producto.
 
-Cuatro estilos de imagen (Ajustes → tarjetas con miniatura en vivo, con override opcional por
-producto): **Solo la foto** (por defecto, sin textos), **Foto con precio**, **Foto con descripción**
-(cada estado lleva su propio texto aunque se publiquen varios juntos) y **Mi plantilla** (fondo PNG
-propio). Precio **opcional**: vacío es válido ("Sin precio"), solo un negativo es error. Nombre,
+Ocho estilos de imagen (`js/modelo.js`, `ESTILOS_IMAGEN`; Ajustes → tarjetas con miniatura en vivo,
+con override opcional por producto). Los 4 originales, configuraciones libres: **Solo la foto** (por
+defecto, sin textos), **Foto con precio**, **Foto con descripción** (cada estado lleva su propio
+texto aunque se publiquen varios juntos) y **Mi plantilla** (fondo PNG propio). Los 4 de Fase 4,
+composiciones prediseñadas de geometría fija (`js/geometria-presets.js`, `PRESETS_COMPOSICION`,
+elegibles desde una galería en el editor de plantilla): **Banner inferior** (franja sólida anclada
+abajo), **Editorial** (marco con nombre/precio arriba), **Polaroid** (tarjeta blanca con foto
+recortada y textos abajo) y **Story inmersiva** (scrim degradado sobre la foto a pantalla completa).
+Precio **opcional** en todos: vacío es válido ("Sin precio"), solo un negativo es error. Nombre,
 precio y descripción comparten un solo **editor de plantilla** tipo inspector (pantalla "Plantilla",
 se abre desde Ajustes): clic/toque selecciona un elemento sobre la vista previa, arrastrar mueve,
 las manijas de las esquinas redimensionan, con panel de propiedades (tamaño, tipografía, color,
 fondo/etiqueta, visible), capas, deshacer/rehacer y restablecer.
 
-Identidad visual: paleta azul→violeta (índigo primario `--color-primario`, violeta `--color-acento`;
-contraste AA verificado — ver `CALIDAD.md`), logo propio (`assets/logo.svg`, anillo segmentado +
-rayo) rasterizado a PNG 192/512 maskable con Playwright (`npm run iconos`). Tipografía: 6 fuentes OFL
-autoalojadas en `fonts/*.woff2` (Inter, Montserrat, Poppins, Playfair Display, Bebas Neue, Pacifico),
-cargadas con `FontFace` (`js/fuentes.js`) — nada de Google Fonts remoto (la CSP no lo permite).
+Identidad visual "Organic Minimalist" (reskin 2026-09-28): paleta verde ciprés + umber sobre
+superficies de alabastro/lino (verde ciprés primario `--color-primario`, umber `--color-acento`;
+sin gradientes decorativos — regla de UI 4; contraste AA verificado — ver `CALIDAD.md`), logo propio
+(`assets/logo.svg`, anillo segmentado en verde ciprés + rayo en umber, colores planos) rasterizado a
+PNG 192/512 maskable con Playwright (`npm run iconos`). Tipografía: 8 fuentes OFL autoalojadas en
+`fonts/*.woff2` — **Newsreader** (títulos) y **Manrope** (cuerpo/labels) para la UI, más las 6
+originales que siguen sirviendo a los estilos de imagen con tipografía elegible (Inter, Montserrat,
+Poppins, Playfair Display, Bebas Neue, Pacifico) — cargadas con `FontFace` (`js/fuentes.js`) — nada
+de Google Fonts remoto (la CSP no lo permite). Íconos propios de línea en `js/utils/iconos.js` (sin
+fuente de íconos remota), todas las fuentes/íconos en el precache `NUCLEO` de `sw.js` (offline desde
+la primera carga).
 
 Fuente de verdad del alcance: `CREAR-BRIEF.md`.
 
@@ -84,10 +95,15 @@ propósito desde la pestaña "Respaldo" — y ese archivo tampoco se commitea (v
   `normalizarAjustes` (compatibilidad con respaldos viejos).
 - `js/layout.js` — cálculo puro de wrap de texto y cover-fit (sin canvas; recibe un medidor inyectado).
 - `js/editor-geometria.js` — hit-testing, mover/redimensionar con límites y snap del editor (puro).
-- `js/fuentes.js` — carga de las 6 tipografías OFL con `FontFace`, memoizada.
+- `js/fuentes.js` — carga de las 8 tipografías OFL con `FontFace`, memoizada (Newsreader/Manrope para
+  la UI + las 6 originales que siguen usando los estilos de imagen con tipografía elegible).
+- `js/geometria-presets.js` — geometría pura (sin canvas) de los 4 presets de composición de Fase 4
+  (banner inferior, editorial, polaroid, story inmersiva): rectángulos de foto/zona decorativa/
+  textos según si el producto tiene precio y/o descripción.
 - `js/componer.js` — dibuja en un canvas 1080×1920 → Blob PNG; `componerSegunEstilo` elige entre
-  `componerSoloFoto`, `componerFotoConPrecio`, `componerFotoConDescripcion` y `componerImagen`
-  ("Mi plantilla"); nombre/precio/descripción comparten los mismos `ajustes`.
+  `componerSoloFoto`, `componerFotoConPrecio`, `componerFotoConDescripcion`, `componerImagen` ("Mi
+  plantilla") y los 4 presets de `geometria-presets.js`; nombre/precio/descripción comparten los
+  mismos `ajustes`.
 - `js/db.js` / `js/repositorio.js` — IndexedDB y las operaciones de dominio (selección persistente,
   ajustes generales, normalización de ajustes al leer/importar).
 - `js/vistas/*.js` — pantallas: `lista` (productos + selección + barra "Publicar N"), `detalle`
