@@ -168,3 +168,11 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Error exacto:** `page.goto: net::ERR_FAILED at http://127.0.0.1:8991/` (3/5 pasan).
 - **Causa:** pendiente. Se descartó que fuera cortar la red con el SW en "activating": ahora espera `state === 'activated'` y sigue igual. Hipótesis siguiente: `page.route` también intercepta el `fetch()` del SW y la caída al caché no encuentra la clave de `/`.
 - **Arreglo:** pendiente; el test sigue con `retries: 2`. La app sí abre sin red (verificado a mano y en QA).
+
+### 20. La hoja de revisión quedaba abierta encima de otra pantalla
+- **Paso:** verificación en vivo de la v5: abrir la hoja (Publicar) y cambiar de pantalla (Atrás de Android / cambio de hash).
+- **Error exacto:** `locator.click: <select id="revision-estilo"> from <div class="dialogo-overlay"> subtree intercepts pointer events` al querer tocar el editor.
+- **Reproducir:** Publicar un producto → botón Atrás del celu → la vista de abajo cambia pero la hoja sigue encima y no se puede tocar nada.
+- **Causa:** la hoja es un overlay agregado al `<body>` que no escucha la navegación.
+- **Arreglo:** abrir la hoja suma un paso al historial (`pushState`); `popstate` la cierra, así Atrás cierra la hoja sin cambiar de pantalla. Cerrarla con la X, Escape o al compartir hace `history.back()` para no dejar el paso de más. Tests: Atrás cierra la hoja y la lista queda usable; cerrar con la X no deja el paso.
+- **Resuelto:** sí (ver commit).

@@ -144,3 +144,29 @@ test('el selector de estilo de la hoja tiene etiqueta en todas sus opciones', as
   for (const t of textos) expect(t.trim()).not.toBe('');
   expect(textos).toContain('Foto con descripción');
 });
+
+// Atrás (el botón de Android) cierra la hoja y deja la lista usable; antes la hoja quedaba encima
+// de la pantalla siguiente tapándolo todo (BUGS.md #20).
+test('Atrás cierra la hoja de revisión y no cambia de pantalla', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Atrás', precio: '100' });
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision')).toBeVisible();
+  await page.goBack();
+  await expect(page.locator('.hoja-revision')).toHaveCount(0);
+  await expect(page.locator('[data-accion="agregar"]')).toBeVisible();
+  await page.locator('[data-accion="agregar"]').click(); // la lista responde: nada la tapa
+  await expect(page.locator('#campo-nombre')).toBeVisible();
+});
+
+test('cerrar la hoja con la X no deja un paso de más en el historial', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Equis', precio: '100' });
+  const largo = await page.evaluate(() => history.length);
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision')).toBeVisible();
+  await page.locator('[data-accion="revision-cerrar"]').click();
+  await expect(page.locator('.hoja-revision')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => history.state?.hojaRevision ?? null)).toBeNull();
+  expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(largo);
+});

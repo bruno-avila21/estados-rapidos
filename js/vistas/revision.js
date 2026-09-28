@@ -108,12 +108,22 @@ export async function abrirHojaRevision({ ids }) {
   overlay.addEventListener('click', (ev) => {
     if (ev.target === overlay) cerrar();
   });
-  btnCerrar.addEventListener('click', cerrar);
+  btnCerrar.addEventListener('click', () => cerrar());
 
-  function cerrar() {
+  // Atrás de Android cierra la hoja en vez de cambiar la pantalla de abajo: antes la hoja quedaba
+  // encima de la otra vista, tapándolo todo (BUGS.md #20). Abrirla suma un paso al historial.
+  history.pushState({ hojaRevision: true }, '');
+  const alVolver = () => cerrar({ desdeHistorial: true });
+  window.addEventListener('popstate', alVolver);
+
+  function cerrar({ desdeHistorial = false } = {}) {
+    if (!overlay.isConnected) return;
     document.removeEventListener('keydown', alEscape);
+    window.removeEventListener('popstate', alVolver);
     imagenes.forEach((im) => im.url && URL.revokeObjectURL(im.url));
     overlay.remove();
+    // Cerrada con la X, Escape o al compartir: sacar el paso que se sumó al abrir.
+    if (!desdeHistorial && history.state?.hojaRevision) history.back();
   }
 
   async function generarImagenProducto(producto) {
