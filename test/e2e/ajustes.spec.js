@@ -27,10 +27,12 @@ test('Plantilla no está en la navegación principal, pero el editor se abre des
   await expect(page.locator('#titulo-pantalla')).toHaveText('Plantilla');
 });
 
-test('las 4 tarjetas de estilo muestran una miniatura y se puede elegir una', async ({ page }) => {
+test('las 8 tarjetas de estilo (4 de siempre + 4 presets de composición, Fase 4) muestran una miniatura y se puede elegir una', async ({
+  page,
+}) => {
   await page.goto('/#/ajustes');
   const tarjetas = page.locator('.tarjeta-estilo');
-  await expect(tarjetas).toHaveCount(4);
+  await expect(tarjetas).toHaveCount(8);
   for (const tarjeta of await tarjetas.all()) {
     await expect(tarjeta.locator('img')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
   }
@@ -57,10 +59,18 @@ test('la descripción modelo se guarda y se ve en el ejemplo', async ({ page }) 
 
 // --- "Editar" por tarjeta + badge "Personalizado" (ronda "ajustes por estilo", 2026-09-28) ---
 
-test('"Solo la foto" no tiene botón Editar (no es editable); los otros 3 sí', async ({ page }) => {
+test('"Solo la foto" no tiene botón Editar (no es editable); los otros 7 sí', async ({ page }) => {
   await page.goto('/#/ajustes');
   await expect(page.locator('[data-accion="editar-estilo-solo-foto"]')).toHaveCount(0);
-  for (const estilo of ['foto-precio', 'foto-descripcion', 'mi-plantilla']) {
+  for (const estilo of [
+    'foto-precio',
+    'foto-descripcion',
+    'mi-plantilla',
+    'banner-inferior',
+    'editorial',
+    'polaroid',
+    'story-inmersiva',
+  ]) {
     await expect(page.locator(`[data-accion="editar-estilo-${estilo}"]`)).toBeVisible();
   }
 });

@@ -843,6 +843,20 @@ details.grupo > .campo {
 .tarjeta-estilo__badge[hidden] {
   display: none;
 }
+/* Galería de presets de composición del editor de plantilla (Fase 4, "catálogo de presets"):
+   mismas tarjetas de .grilla-estilos, en tira horizontal con scroll en vez de grilla 2 columnas —
+   son 4 presets nada más y conviene verlos como un carrusel de miniaturas, no una lista larga. */
+.grilla-estilos--galeria {
+  display: flex;
+  overflow-x: auto;
+  gap: 12px;
+  padding-bottom: 4px;
+  scroll-snap-type: x proximity;
+}
+.grilla-estilos--galeria .tarjeta-estilo {
+  flex: 0 0 148px;
+  scroll-snap-align: start;
+}
 
 .foto-picker {
   display: flex;
@@ -1267,6 +1281,13 @@ details.grupo > .campo {
     salirse del viewport con letra grande — bug real, "Derecha" del panel de propiedades del
     editor se pasaba 8px afuera a 320px + font_scale 1.3 (BUGS.md) */
   gap: 10px;
+}
+/* El atributo `hidden` de por sí ya no alcanza acá: `display:flex` de arriba pisa el `display:none`
+   por defecto del navegador (misma trampa que ya resolvían `.tarjeta-estilo__badge[hidden]`/
+   `.editor-plantilla__badge[hidden]` más abajo) — el "Deshacer preset" de plantilla.js (Fase 4) es
+   un `.fila` que se oculta con `hidden` y quedaba visible vacío sin este override. */
+.fila[hidden] {
+  display: none;
 }
 .texto-tenue {
   color: var(--color-texto-tenue);

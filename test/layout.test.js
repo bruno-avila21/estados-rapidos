@@ -48,6 +48,59 @@ test('calcularLineas: texto vacío no rompe', () => {
   assert.deepEqual(lineas, ['']);
 });
 
+// --- `elipsis: true` (Fase 4, presets de composición: banner inferior/editorial/polaroid/story
+// inmersiva) — en vez del clip de siempre, la última línea se trunca con "…" antes de desbordar.
+
+test('calcularLineas con elipsis: si ni partido en maxLineas entra, la última línea se trunca con "…" en vez de desbordar', () => {
+  const texto = 'Campera de invierno impermeable talle grande con capucha desmontable';
+  const { lineas, tamano } = calcularLineas({
+    texto,
+    anchoMax: 260,
+    medirAncho,
+    tamanoInicial: 60,
+    tamanoMinimo: 24,
+    maxLineas: 2,
+    elipsis: true,
+  });
+  assert.equal(lineas.length, 2);
+  for (const linea of lineas) assert.ok(medirAncho(linea, tamano) <= 260 + 1e-6);
+  assert.ok(lineas[1].endsWith('…'));
+});
+
+test('calcularLineas con elipsis: una sola palabra más ancha que la caja también se trunca', () => {
+  const texto = 'Superextraordinariamente';
+  const { lineas, tamano } = calcularLineas({
+    texto,
+    anchoMax: 150,
+    medirAncho,
+    tamanoInicial: 40,
+    tamanoMinimo: 20,
+    maxLineas: 1,
+    elipsis: true,
+  });
+  assert.equal(lineas.length, 1);
+  assert.ok(lineas[0].endsWith('…'));
+  assert.ok(medirAncho(lineas[0], tamano) <= 150 + 1e-6);
+});
+
+test('calcularLineas con elipsis: texto que entra tal cual no se toca (sin "…" de más)', () => {
+  const { lineas } = calcularLineas({
+    texto: 'Remera',
+    anchoMax: 400,
+    medirAncho,
+    tamanoInicial: 60,
+    tamanoMinimo: 20,
+    elipsis: true,
+  });
+  assert.deepEqual(lineas, ['Remera']);
+});
+
+test('calcularLineas: sin elipsis (comportamiento de siempre) sigue dejando desbordar la última línea', () => {
+  const texto = 'Campera de invierno impermeable talle grande con capucha desmontable';
+  const { lineas } = calcularLineas({ texto, anchoMax: 260, medirAncho, tamanoInicial: 60, tamanoMinimo: 24, maxLineas: 2 });
+  assert.ok(!lineas[1].endsWith('…'));
+});
+
 test('calcularRecorteCover: origen más ancho recorta los costados', () => {
   const { sx, sy, sw, sh } = calcularRecorteCover({ anchoOrigen: 2000, altoOrigen: 1000, anchoDestino: 800, altoDestino: 800 });
   assert.equal(sh, 1000);

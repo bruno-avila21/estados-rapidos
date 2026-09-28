@@ -10,18 +10,41 @@
 //     default si alguien llama sin pasar `opciones`).
 //   - `componerMiniatura(datos)` — async: igual, pero a 270×480 para vista previa (Ajustes,
 //     carrusel de la hoja de revisión): no hace falta resolución completa para una miniatura.
-// Cada estilo con texto ("Foto con precio", "Foto con descripción", "Mi plantilla") tiene su PROPIO
-// juego de ajustes (`ajustesPorEstilo` en modelo.js/repositorio.js, ronda "ajustes por estilo",
-// 2026-09-28) — acá solo se dibuja con el que llega en `datos.ajustes`, sin saber de dónde salió.
-// `foto` solo aplica a "Mi plantilla" (los otros van siempre a pantalla completa, con el encuadre
-// elegido en Ajustes: "Entera"/contain por defecto, o "Llenar la pantalla"/cover).
+// Cada estilo con texto ("Foto con precio", "Foto con descripción", "Mi plantilla" y, desde la
+// Fase 4, los 4 presets de composición: banner inferior/editorial/polaroid/story inmersiva) tiene
+// su PROPIO juego de ajustes (`ajustesPorEstilo` en modelo.js/repositorio.js, ronda "ajustes por
+// estilo", 2026-09-28) — acá solo se dibuja con el que llega en `datos.ajustes`, sin saber de dónde
+// salió. `foto` solo aplica a "Mi plantilla" (los otros van siempre a pantalla completa o al marco
+// del preset, con el encuadre elegido en Ajustes: "Entera"/contain por defecto, o "Llenar la
+// pantalla"/cover — los 4 presets nuevos siempre son "cover" dentro de su propia zona de foto,
+// como en el mockup original).
+// Los 4 presets de composición (Fase 4, "catálogo de presets"): la zona DECORATIVA de cada uno
+// (franja del banner, marco del editorial, tarjeta del polaroid, scrim de la story) la calculan
+// las funciones puras de geometria-presets.js según la visibilidad VIGENTE de precio/descripción;
+// nombre/precio/descripción en sí siguen viniendo de `datos.ajustes`, igual que los demás estilos
+// con texto (el usuario los mueve/redimensiona en el editor de plantilla exactamente igual).
 import { calcularLineas, calcularRecorteCover } from './layout.js';
 import { formatearPrecio } from './modelo.js';
 import { cargarFuentes, familiaCanvas } from './fuentes.js';
+import {
+  geometriaBannerInferior,
+  geometriaEditorial,
+  geometriaPolaroid,
+  geometriaStoryInmersiva,
+} from './geometria-presets.js';
 
 export const ANCHO = 1080;
 export const ALTO = 1920;
 const FONDO_BASE = '#0d0f1a';
+
+// --- Colores de fondo de los 4 presets de composición (Fase 4): tokens de la piel "Organic
+// Minimalist" (css/estilos.css: --color-primario/--color-superficie-alta/--color-superficie),
+// para que calcen con el resto de la app en vez de copiar la paleta verde/beige del mockup Stitch
+// tal cual. */
+const COLOR_BANNER_FRANJA = '#3a4d39';
+const COLOR_EDITORIAL_FONDO = '#f6f3ed';
+const COLOR_POLAROID_FONDO = '#ebe5dd';
+const COLOR_POLAROID_TARJETA = '#fbf9f5';
 
 /**
  * Dibuja el estado completo en `ctx` según el estilo resuelto (ver `resolverEstilo` en modelo.js).
@@ -56,6 +79,72 @@ export function dibujarSegunEstilo(ctx, datos) {
     if (plantillaImagen) ctx.drawImage(plantillaImagen, 0, 0, ANCHO, ALTO);
     if (fotoImagen && ajustes.foto && ajustes.foto.visible !== false) dibujarFotoCover(ctx, fotoImagen, ajustes.foto);
     dibujarNombrePrecio(ctx, producto, ajustes, formatoPrecio);
+    return;
+  }
+
+  // --- 4 presets de composición (Fase 4, catálogo de presets) ---
+  // La geometría (foto de fondo + zona decorativa) la calculan las funciones puras de
+  // geometria-presets.js, siempre con la visibilidad VIGENTE de precio/descripción (no la de
+  // fábrica): "sin precio"/"sin descripción" nunca deja un hueco en el fondo. Nombre/precio/
+  // descripción en sí se dibujan con `ajustes[clave]` igual que los demás estilos con texto —
+  // el usuario los puede mover/redimensionar en el editor exactamente igual.
+  if (estilo === 'banner-inferior') {
+    const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
+    const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
+    const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
+    const geo = geometriaBannerInferior({ conPrecio, conDescripcion });
+    dibujarFondoFoto(ctx, fotoImagen, 'cover');
+    dibujarRectanguloSolido(ctx, geo.franja, COLOR_BANNER_FRANJA, { arribaIzq: 32, arribaDer: 32 });
+    if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto?.nombre ?? '', ajustes.nombre);
+    if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
+    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
+    return;
+  }
+
+  if (estilo === 'editorial') {
+    const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
+    const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
+    const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
+    const geo = geometriaEditorial({ conPrecio, conDescripcion });
+    ctx.save();
+    ctx.fillStyle = COLOR_EDITORIAL_FONDO;
+    ctx.fillRect(0, 0, ANCHO, ALTO);
+    ctx.restore();
+    if (fotoImagen) dibujarFotoCover(ctx, fotoImagen, geo.marco);
+    dibujarBordeFino(ctx, geo.marco, 'rgba(36,34,32,0.18)');
+    if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto?.nombre ?? '', ajustes.nombre);
+    if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
+    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
+    return;
+  }
+
+  if (estilo === 'polaroid') {
+    const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
+    const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
+    const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
+    const geo = geometriaPolaroid({ conPrecio, conDescripcion });
+    ctx.save();
+    ctx.fillStyle = COLOR_POLAROID_FONDO;
+    ctx.fillRect(0, 0, ANCHO, ALTO);
+    ctx.restore();
+    dibujarRectanguloSolido(ctx, geo.tarjeta, COLOR_POLAROID_TARJETA, { todas: 6 });
+    if (fotoImagen) dibujarFotoCover(ctx, fotoImagen, geo.foto);
+    if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto?.nombre ?? '', ajustes.nombre);
+    if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
+    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
+    return;
+  }
+
+  if (estilo === 'story-inmersiva') {
+    const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
+    const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
+    const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
+    const geo = geometriaStoryInmersiva({ conPrecio, conDescripcion });
+    dibujarFondoFoto(ctx, fotoImagen, 'cover');
+    dibujarDegradadoVertical(ctx, geo.scrim, 'rgba(5,6,10,0)', 'rgba(5,6,10,0.82)');
+    if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto?.nombre ?? '', ajustes.nombre);
+    if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
+    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
     return;
   }
 
@@ -201,6 +290,55 @@ function hexARgba(hex, alfa) {
   return `rgba(${r}, ${g}, ${b}, ${alfa})`;
 }
 
+/** Rectángulo sólido con esquinas redondeadas: todas iguales (`radios.todas`, ej. la tarjeta
+ * Polaroid) o solo las de arriba (`radios.arribaIzq/arribaDer`, la franja del banner inferior). */
+function dibujarRectanguloSolido(ctx, rect, color, radios = {}) {
+  if (!rect) return;
+  ctx.save();
+  ctx.fillStyle = color;
+  if (radios.todas != null) {
+    rutaRedondeada(ctx, rect.x, rect.y, rect.w, rect.h, radios.todas);
+  } else {
+    rutaRedondeadaSuperior(ctx, rect.x, rect.y, rect.w, rect.h, radios.arribaIzq ?? 0, radios.arribaDer ?? 0);
+  }
+  ctx.fill();
+  ctx.restore();
+}
+
+function rutaRedondeadaSuperior(ctx, x, y, w, h, rIzq, rDer) {
+  ctx.beginPath();
+  ctx.moveTo(x, y + h);
+  ctx.lineTo(x, y + rIzq);
+  ctx.arcTo(x, y, x + rIzq, y, rIzq);
+  ctx.lineTo(x + w - rDer, y);
+  ctx.arcTo(x + w, y, x + w, y + rDer, rDer);
+  ctx.lineTo(x + w, y + h);
+  ctx.closePath();
+}
+
+/** Borde fino sin relleno (el marco 4:5 del preset "Editorial"). */
+function dibujarBordeFino(ctx, rect, color) {
+  if (!rect) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(rect.x + 1, rect.y + 1, Math.max(0, rect.w - 2), Math.max(0, rect.h - 2));
+  ctx.restore();
+}
+
+/** Degradado vertical (el scrim del preset "Story inmersiva", para que el texto flotante sobre la
+ * foto se siga leyendo — funcional, no decorativo). */
+function dibujarDegradadoVertical(ctx, rect, colorArriba, colorAbajo) {
+  if (!rect) return;
+  ctx.save();
+  const gradiente = ctx.createLinearGradient(0, rect.y, 0, rect.y + rect.h);
+  gradiente.addColorStop(0, colorArriba);
+  gradiente.addColorStop(1, colorAbajo);
+  ctx.fillStyle = gradiente;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.restore();
+}
+
 /** Dibuja el fondo/etiqueta (color, opacidad, redondeo) de una caja de texto, si corresponde. */
 function dibujarFondoCaja(ctx, caja) {
   if (!caja.fondoColor || !(caja.fondoOpacidad > 0)) return;
@@ -232,6 +370,11 @@ function dibujarCajaTexto(ctx, texto, caja) {
     tamanoInicial,
     tamanoMinimo,
     maxLineas,
+    // Los 4 presets de composición (Fase 4) truncan con "…" en vez de dejar que el clip recorte
+    // el texto a la mitad: tienen geometría/fondo fijo donde eso se nota más que en los estilos de
+    // siempre. `caja.elipsis` lo trae el juego de ajustes de cada preset (modelo.js); los demás
+    // estilos no lo tienen, así que siguen con el comportamiento de clip de toda la vida.
+    elipsis: caja.elipsis === true,
   });
 
   ctx.save();

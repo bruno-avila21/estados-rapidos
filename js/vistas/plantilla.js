@@ -17,8 +17,15 @@
 // lógica de composición, separada de la exportación en componer.js), coalescido con
 // `requestAnimationFrame` (máximo 1 dibujo por frame) y a resolución de pantalla (ancho CSS ×
 // devicePixelRatio, escalando el contexto — las coordenadas siguen siendo las lógicas 1080×1920).
+//
+// Galería de presets de composición (Fase 4, "catálogo de presets", 2026-09-28): banner inferior/
+// editorial/polaroid/story inmersiva son, para el modelo, 4 estilos de imagen más (mismo
+// `ESTILOS_CON_AJUSTES`/`AJUSTES_POR_DEFECTO_POR_ESTILO` que foto-precio/foto-descripcion/
+// mi-plantilla — ver modelo.js) — lo único nuevo es la fila `PRESETS_COMPOSICION` con miniaturas EN
+// VIVO (mismo `tarjetaEstilo`/`componerMiniatura` que Ajustes) para elegirlos con un toque sin salir
+// del editor, con un "Deshacer" corto para el estilo general anterior.
 import * as repo from '../repositorio.js';
-import { dibujarSegunEstilo, ANCHO, ALTO } from '../componer.js';
+import { dibujarSegunEstilo, componerMiniatura, ANCHO, ALTO } from '../componer.js';
 import { cargarFuentes } from '../fuentes.js';
 import { elementoEnPunto, moverCaja, redimensionarCaja, aplicarSnap, acomodarAutomatico } from '../editor-geometria.js';
 import {
@@ -31,17 +38,34 @@ import {
   resolverDescripcion,
   PRESETS_FONDO_TEXTO,
   aplicarPresetFondo,
+  PRESETS_COMPOSICION,
 } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { crearIcono } from '../utils/iconos.js';
 import { mostrarToast } from '../utils/toast.js';
+import { tarjetaEstilo, mostrarMiniatura } from './ajustes.js';
 
 const COLORES_RAPIDOS = ['#ffffff', '#242220', '#3a4d39', '#6e5b49', '#f5a623', '#3f5c38'];
 const CLAVES_TEXTO = ['nombre', 'precio', 'descripcion'];
 const HANDLES = ['nw', 'ne', 'sw', 'se'];
 
+// Blobs de las miniaturas de la galería de presets (Fase 4): urls de objeto que hay que revocar
+// para no perder memoria — mismo criterio que `urlsMiniaturas` en ajustes.js.
+let urlsGaleriaPresets = [];
+function limpiarUrlsGaleriaPresets() {
+  urlsGaleriaPresets.forEach((u) => URL.revokeObjectURL(u));
+  urlsGaleriaPresets = [];
+}
+
+// El "Deshacer preset" de la galería tiene que sobrevivir a `render()`: aplicar un preset DISTINTO
+// del que se está editando navega a `#/plantilla?estilo=<preset>` (ronda "editar ahí mismo"), lo
+// que destruye y reconstruye toda la pantalla — un `let` local se perdería en esa reconstrucción
+// justo antes de mostrarse. Vive a nivel de módulo, como `urlsGaleriaPresets`.
+let deshacerPresetPendiente = null; // { anterior } — null si no hay nada para deshacer
+
 export async function render(contenedor, { navegar, params } = {}) {
   contenedor.textContent = '';
+  limpiarUrlsGaleriaPresets();
 
   const config = await repo.obtenerPlantillaConfig();
   const general = await repo.obtenerAjustesGenerales();
@@ -119,6 +143,59 @@ export async function render(contenedor, { navegar, params } = {}) {
   });
   selectorEstilo.append(filaLabelEstilo, selectEstilo);
 
+  // --- Galería de presets de composición (Fase 4, "catálogo de presets") ---
+  // Reusa la MISMA tarjeta con miniatura en vivo de Ajustes (`tarjetaEstilo`/`mostrarMiniatura`,
+  // exportadas desde ajustes.js) para no duplicar el componente. Un toque: (1) aplica el preset
+  // como estilo general — igual que elegirlo en Ajustes — y (2) pasa a editarlo acá mismo (como ya
+  // hace el selector de arriba). Queda un "Deshacer" corto para volver al estilo general anterior
+  // sin tener que ir a buscarlo a Ajustes.
+  const galeriaPresets = document.createElement('div');
+  galeriaPresets.className = 'campo';
+  const tituloGaleria = document.createElement('div');
+  tituloGaleria.className = 'grupo__titulo';
+  tituloGaleria.textContent = 'Presets de composición';
+  const filaPresets = document.createElement('div');
+  filaPresets.className = 'grilla-estilos grilla-estilos--galeria';
+  const tarjetasPresets = {};
+  const filaDeshacerPreset = document.createElement('div');
+  filaDeshacerPreset.className = 'fila';
+  filaDeshacerPreset.hidden = !deshacerPresetPendiente; // sobrevive a la navegación (ver arriba)
+  const btnDeshacerPreset = document.createElement('button');
+  btnDeshacerPreset.type = 'button';
+  btnDeshacerPreset.className = 'boton boton--chico boton--fantasma';
+  btnDeshacerPreset.setAttribute('data-accion', 'deshacer-preset');
+  btnDeshacerPreset.textContent = 'Deshacer preset';
+  btnDeshacerPreset.addEventListener('click', async () => {
+    if (!deshacerPresetPendiente) return;
+    const { anterior } = deshacerPresetPendiente;
+    await repo.guardarEstiloGeneral(anterior);
+    general.estiloGeneral = anterior;
+    deshacerPresetPendiente = null;
+    filaDeshacerPreset.hidden = true;
+    mostrarToast('Preset deshecho');
+    if (ESTILOS_CON_AJUSTES.includes(anterior) && anterior !== estiloEditando) navegar(`#/plantilla?estilo=${anterior}`);
+  });
+  filaDeshacerPreset.append(btnDeshacerPreset);
+  for (const valor of PRESETS_COMPOSICION) {
+    const tarjeta = tarjetaEstilo(valor, general.estiloGeneral === valor, {
+      editable: false,
+      onSeleccionar: async () => {
+        const anterior = general.estiloGeneral;
+        await repo.guardarEstiloGeneral(valor);
+        general.estiloGeneral = valor;
+        mostrarToast(`Preset aplicado: ${ETIQUETA_ESTILO[valor]}`);
+        if (anterior !== valor) {
+          deshacerPresetPendiente = { anterior };
+          filaDeshacerPreset.hidden = false;
+        }
+        if (valor !== estiloEditando) navegar(`#/plantilla?estilo=${valor}`);
+      },
+    });
+    tarjetasPresets[valor] = tarjeta;
+    filaPresets.append(tarjeta.raiz);
+  }
+  galeriaPresets.append(tituloGaleria, filaPresets, filaDeshacerPreset);
+
   // --- Subida de fondo propio (solo relevante para "Mi plantilla") ---
   const grupoSubida = document.createElement('div');
   grupoSubida.className = 'fila';
@@ -195,13 +272,18 @@ export async function render(contenedor, { navegar, params } = {}) {
   btnRestablecer.textContent = 'Restablecer';
   filaHistorial.append(btnDeshacer, btnRehacer, btnAcomodar, btnRestablecer);
 
-  wrap.append(btnVolver, selectorEstilo, grupoSubida, filaHistorial, previaContenedor, capas, panel);
+  // `galeriaPresets` va AL FINAL a propósito (no antes del lienzo): es una sección extra para
+  // "probar otra composición", no la edición principal — empujar el lienzo hacia abajo con esto
+  // arriba dejaba el elemento "nombre" fuera del viewport en 412×915 y rompía el arrastre con
+  // mouse/touch en los tests (BUGS.md).
+  wrap.append(btnVolver, selectorEstilo, grupoSubida, filaHistorial, previaContenedor, capas, panel, galeriaPresets);
   contenedor.append(wrap);
 
   actualizarBotonesHistorial();
   dibujarOverlay();
   ajustarResolucionCanvas();
   solicitarRedibujo();
+  generarMiniaturasPresets();
 
   const resizeObserver = new ResizeObserver(() => {
     ajustarResolucionCanvas();
@@ -263,6 +345,34 @@ export async function render(contenedor, { navegar, params } = {}) {
       estilo: estiloEditando,
       ajustes: estructuraClonada(ajustes),
     };
+  }
+
+  // Miniaturas REALES de la galería de presets (Fase 4): mismo `componerMiniatura` de Ajustes, con
+  // el producto de ejemplo ya cargado arriba (`productoEjemplo`/`fotoEjemplo`) — nada de imágenes
+  // de relleno. Cada preset usa sus PROPIOS ajustes guardados (o sus defaults si nunca se tocó),
+  // no los de `estiloEditando`.
+  async function generarMiniaturasPresets() {
+    await Promise.all(
+      PRESETS_COMPOSICION.map(async (valor) => {
+        try {
+          const blob = await componerMiniatura({
+            estilo: valor,
+            plantillaImagen: plantillaImagenActual,
+            fotoImagen: fotoEjemplo,
+            producto: productoEjemplo,
+            ajustes: config.ajustesPorEstilo[valor] ?? AJUSTES_POR_DEFECTO_POR_ESTILO[valor],
+            formatoPrecio,
+            descripcion: descripcionEjemplo,
+            encuadreFoto: general.encuadreFoto,
+          });
+          const url = URL.createObjectURL(blob);
+          urlsGaleriaPresets.push(url);
+          mostrarMiniatura(tarjetasPresets[valor].marco, url, `Vista previa del preset ${ETIQUETA_ESTILO[valor]}`);
+        } catch {
+          // una miniatura que falla no rompe el resto de la galería
+        }
+      })
+    );
   }
 
   // `conPanel: false` redibuja el overlay/capas pero deja el panel de propiedades como está: si se

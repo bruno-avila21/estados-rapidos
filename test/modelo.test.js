@@ -24,6 +24,9 @@ import {
   CALIDADES_IMAGEN,
   CALIDAD_IMAGEN_POR_DEFECTO,
   resolverOpcionesExportacion,
+  ETIQUETA_ESTILO,
+  PRESETS_COMPOSICION,
+  FUENTES_DISPONIBLES,
 } from '../js/modelo.js';
 
 test('formatearPrecio: miles es-AR, sin decimales por defecto', () => {
@@ -162,8 +165,8 @@ test('resolverEstilo: ignora un override u estiloGeneral inválido (dato corrupt
   assert.equal(resolverEstilo({}, { estiloGeneral: 'tampoco-existe' }), ESTILO_POR_DEFECTO);
 });
 
-test('resolverEstilo: los 4 estilos declarados son válidos', () => {
-  assert.equal(ESTILOS_IMAGEN.length, 4);
+test('resolverEstilo: los 8 estilos declarados son válidos (4 de siempre + 4 presets de composición, Fase 4)', () => {
+  assert.equal(ESTILOS_IMAGEN.length, 8);
   for (const estilo of ESTILOS_IMAGEN) {
     assert.equal(resolverEstilo({ estilo }, {}), estilo);
   }
@@ -277,7 +280,7 @@ test('AJUSTES_POR_DEFECTO_POR_ESTILO: mi-plantilla arranca con foto, nombre y pr
   assert.equal(d.descripcion.visible, false);
 });
 
-test('AJUSTES_POR_DEFECTO_POR_ESTILO: tiene exactamente los 3 estilos con texto, no "solo-foto"', () => {
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: tiene exactamente los estilos con texto (los 3 de siempre + los 4 presets de composición), no "solo-foto"', () => {
   assert.deepEqual(Object.keys(AJUSTES_POR_DEFECTO_POR_ESTILO).sort(), [...ESTILOS_CON_AJUSTES].sort());
   assert.equal(ESTILOS_CON_AJUSTES.includes('solo-foto'), false);
 });
@@ -307,19 +310,24 @@ test('migrarAjustesPorEstilo: ya viene en formato nuevo (ajustesPorEstilo), se n
   assert.equal(resultado['mi-plantilla'].nombre.x, 77);
 });
 
-test('migrarAjustesPorEstilo: formato VIEJO (ajustes compartido) se copia a los 3 estilos, conservando lo hecho', () => {
+test('migrarAjustesPorEstilo: formato VIEJO (ajustes compartido) se copia a los 3 estilos de siempre, conservando lo hecho', () => {
   const ajustesViejos = {
     foto: { x: 10, y: 10, w: 500, h: 500, modo: 'cover' },
     nombre: { x: 321, y: 900, w: 900, h: 100, tamano: 60, color: '#fff', peso: 700, alineacion: 'center' },
     precio: { x: 60, y: 1000, w: 900, h: 100, tamano: 80, color: '#f5a623', peso: 800, alineacion: 'center' },
   };
   const resultado = migrarAjustesPorEstilo({ ajustes: ajustesViejos });
-  for (const estilo of ESTILOS_CON_AJUSTES) {
+  for (const estilo of ['foto-precio', 'foto-descripcion', 'mi-plantilla']) {
     assert.equal(resultado[estilo].nombre.x, 321); // lo que el usuario ya había movido, conservado
   }
   // los 3 quedan IGUALES entre sí justo después de migrar (recién divergen si el usuario edita).
   assert.deepEqual(resultado['foto-precio'], resultado['foto-descripcion']);
   assert.deepEqual(resultado['foto-precio'], resultado['mi-plantilla']);
+  // los 4 presets de composición (Fase 4) no existían en este respaldo viejo: no hay nada que
+  // copiarles, arrancan con sus propios defaults de fábrica (no quedan ausentes).
+  for (const preset of ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva']) {
+    assert.deepEqual(resultado[preset], AJUSTES_POR_DEFECTO_POR_ESTILO[preset]);
+  }
 });
 
 test('esAjustePersonalizado: false contra los defaults de fábrica, true apenas se cambia algo', () => {
@@ -401,4 +409,56 @@ test('validarRespaldo: acepta calidadImagen válida y rechaza un valor inventado
 test('construirRespaldo: sin calidadImagen explícita, guarda el valor por defecto (compatibilidad con respaldos viejos)', () => {
   const respaldo = construirRespaldo({ productos: [], plantilla: null, general: {} });
   assert.equal(respaldo.general.calidadImagen, CALIDAD_IMAGEN_POR_DEFECTO);
+});
+
+// --- Presets de composición (Fase 4, "catálogo de presets"): banner inferior/editorial/polaroid/
+// story inmersiva. Mismo mecanismo de siempre (ESTILOS_IMAGEN/ESTILOS_CON_AJUSTES/
+// AJUSTES_POR_DEFECTO_POR_ESTILO), solo que la posición de partida de sus cajas sale de las
+// funciones puras de geometria-presets.js en vez de un número fijo a mano.
+
+test('PRESETS_COMPOSICION: los 4 presets son también estilos de imagen editables', () => {
+  assert.deepEqual([...PRESETS_COMPOSICION].sort(), ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva'].sort());
+  for (const preset of PRESETS_COMPOSICION) {
+    assert.ok(ESTILOS_IMAGEN.includes(preset));
+    assert.ok(ESTILOS_CON_AJUSTES.includes(preset));
+    assert.equal(typeof ETIQUETA_ESTILO[preset], 'string');
+  }
+});
+
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: los 4 presets de composición arrancan con nombre+precio+descripción visibles y la foto oculta (va a una zona fija propia)', () => {
+  for (const preset of PRESETS_COMPOSICION) {
+    const d = AJUSTES_POR_DEFECTO_POR_ESTILO[preset];
+    assert.equal(d.nombre.visible, true, preset);
+    assert.equal(d.precio.visible, true, preset);
+    assert.equal(d.descripcion.visible, true, preset);
+    assert.equal(d.foto.visible, false, preset);
+  }
+});
+
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: los 4 presets de composición truncan con elipsis (geometría fija, no clip)', () => {
+  for (const preset of PRESETS_COMPOSICION) {
+    const d = AJUSTES_POR_DEFECTO_POR_ESTILO[preset];
+    assert.equal(d.nombre.elipsis, true, preset);
+    assert.equal(d.descripcion.elipsis, true, preset);
+  }
+});
+
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: los 4 presets de composición solo usan las 6 tipografías OFL disponibles', () => {
+  for (const preset of PRESETS_COMPOSICION) {
+    const d = AJUSTES_POR_DEFECTO_POR_ESTILO[preset];
+    for (const clave of ['nombre', 'precio', 'descripcion']) {
+      assert.ok(FUENTES_DISPONIBLES.includes(d[clave].familia), `${preset}.${clave}.familia`);
+    }
+  }
+});
+
+test('esAjustePersonalizado: también funciona con los 4 presets de composición', () => {
+  for (const preset of PRESETS_COMPOSICION) {
+    assert.equal(esAjustePersonalizado(preset, AJUSTES_POR_DEFECTO_POR_ESTILO[preset]), false);
+    const modificado = {
+      ...AJUSTES_POR_DEFECTO_POR_ESTILO[preset],
+      nombre: { ...AJUSTES_POR_DEFECTO_POR_ESTILO[preset].nombre, tamano: 999 },
+    };
+    assert.equal(esAjustePersonalizado(preset, modificado), true);
+  }
 });

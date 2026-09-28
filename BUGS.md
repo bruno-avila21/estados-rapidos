@@ -3,6 +3,68 @@
 Registro de fallos encontrados durante la construcción, con causa y arreglo (regla de cierre.md /
 seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos resueltos.
 
+### 49. Fase 4: el botón "Deshacer preset" quedaba visible con `hidden` puesto (pisado por `.fila{display:flex}`)
+- **Paso:** verificación manual con agent-browser a 412×915 en `/#/plantilla?estilo=editorial` — el
+  botón "Deshacer preset" (nuevo, galería de presets) aparecía en el snapshot de accesibilidad y
+  `agent-browser is visible` lo confirmaba visible aun con `filaDeshacerPreset.hidden = true` recién
+  entrado al editor (nadie aplicó ningún preset todavía).
+- **Error exacto:** ninguna excepción — bug visual/de estado: `hidden` (atributo HTML) no ocultaba
+  el elemento.
+- **Reproducir:** abrir `/#/plantilla?estilo=<cualquiera>` sin haber tocado la galería de presets;
+  `agent-browser is visible "[data-accion='deshacer-preset']"` daba `true`.
+- **Causa:** el contenedor del botón usa `class="fila"`, y `.fila { display: flex; }` (css/estilos.css)
+  es una regla de AUTOR con la misma especificidad que el `[hidden] { display: none }` que trae el
+  navegador por defecto — una regla de autor siempre gana contra la hoja de estilos por defecto del
+  navegador, sin importar el orden. Es la MISMA trampa que ya resolvían `.tarjeta-estilo__badge[hidden]`
+  y `.editor-plantilla__badge[hidden]` (ya existian en el CSS antes de esta ronda) -- pero esas dos
+  son puntuales por clase, y no había una regla genérica para `.fila`.
+- **Arreglo:** agregar `.fila[hidden] { display: none; }` junto a la definición de `.fila`
+  (`css/estilos.css`), en vez de una clase puntual — cubre este caso Y cualquier `.fila` oculta que
+  se agregue después.
+- **Resuelto:** sí, mismo commit de Fase 4.
+- ¿Se repetiría en otro proyecto? Sí — cualquier proyecto con clases utilitarias que fijan `display`
+  (`.fila`, `.flex`, `.grid`, etc.) tiene esta misma trampa con el atributo `hidden`: conviene una
+  regla genérica `[hidden] { display: none !important; }` (o, como acá, una por clase utilitaria)
+  desde el arranque del proyecto, no descubrirla bug por bug.
+
+### 48. Fase 4: la galería de presets arriba del lienzo rompía el arrastre con mouse/touch en 412×915
+- **Paso:** `npm run test:e2e` con la galería de presets de composición (`js/vistas/plantilla.js`)
+  insertada ANTES de `previaContenedor` (lienzo + overlay), entre el selector de estilo y la barra
+  de deshacer/rehacer.
+- **Error exacto:** `test/e2e/editor.spec.js:163` (`deshacer devuelve el elemento a donde estaba…`),
+  `editor.spec.js:300` (badge "Personalizado" al mover) y `test/e2e/tactil.spec.js:36` (arrastrar con
+  el dedo) fallaban con `expect(movido.top).not.toBe(inicial.top)` — el elemento "nombre" quedaba
+  EXACTAMENTE en la misma posición después de arrastrarlo (`76.0417%` en ambos casos).
+- **Reproducir:** `npx playwright test test/e2e/editor.spec.js -g "deshacer devuelve el elemento"`
+  con la galería antes del lienzo en el DOM.
+- **Causa:** la galería (título + tira de 4 tarjetas 148×263px aprox.) sumaba suficiente alto como
+  para empujar el lienzo/overlay hacia abajo y sacar el elemento "nombre" (que ya está cerca del
+  75% inferior de un lienzo lógico 1080×1920) del viewport visible en 412×915. Los tests arrastran
+  con coordenadas de pantalla reales (`page.mouse`/emulación táctil por CDP), no por selector: el
+  `pointerdown` caía fuera del viewport y nunca llegaba al elemento, así que `ajustes.nombre` nunca
+  cambiaba.
+- **Arreglo:** mover la galería de presets al FINAL de `wrap.append(...)` (después de
+  `previaContenedor`/`capas`/`panel`, no antes) — es una sección para "probar otra composición", no
+  la edición principal, así que no debía competir por el espacio de arriba con el lienzo (regla de
+  UI 6, móvil primero: la acción principal accesible sin scroll extra). `js/vistas/plantilla.js`.
+- **Resuelto:** sí, mismo commit de Fase 4.
+- ¿Se repetiría en otro proyecto? Sí — cualquier pantalla que agregue una sección nueva ARRIBA de
+  una superficie interactiva ya testeada con coordenadas de pantalla reales (no por selector) puede
+  romper el mismo tipo de test sin que el test en sí tenga nada mal. Vale la pena, al agregar
+  contenido nuevo a una pantalla con drag/touch, revisar primero si va antes o después de la
+  superficie interactiva en el DOM.
+
+### 47. `sw.spec.js` sigue fallando en esta máquina (recurrencia de #46/#45/#39), confirmado ajeno a Fase 4
+- **Paso:** `npm run test:e2e` completo al cerrar Fase 4 (catálogo de presets de composición: banner
+  inferior/editorial/polaroid/story inmersiva). Único fallo, 84/85 specs pasan.
+- **Error exacto:** igual que #46/#45/#39 — `page.goto: net::ERR_FAILED at http://127.0.0.1:8991/`
+  con `page.route('**/*', route.abort())` activo, los 3 intentos (intento + 2 retries).
+- **Reproducir:** `npx playwright test test/e2e/sw.spec.js`.
+- **Causa:** la misma de #39/#45/#46 (pendiente de investigar, fuera de alcance).
+- **Arreglo:** ninguno en esta ronda (mismo criterio que #39/#45/#46).
+- **Resuelto:** no (fuera de alcance, igual que #39/#45/#46).
+- ¿Se repetiría en otro proyecto? No aplica — sigue sin diagnóstico (ver #39).
+
 ### 46. `sw.spec.js` sigue fallando en esta máquina (recurrencia de #45/#39), confirmado ajeno a Fase 3
 - **Paso:** `npm run test:e2e` completo al cerrar Fase 3 (3 funcionalidades "M" del reskin: reordenar
   con drag/teclado, editar precio en modal desde la grilla, acciones visibles en la grilla). Único

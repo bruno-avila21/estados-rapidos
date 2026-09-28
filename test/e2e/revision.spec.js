@@ -153,11 +153,13 @@ test('el selector de estilo de la hoja tiene etiqueta en todas sus opciones', as
   await page.goto('/');
   await crearProducto(page, { nombre: 'Etiquetas', precio: '1000' });
   await page.locator('[data-accion="publicar"]').first().click();
-  await expect(page.locator('#revision-estilo option')).toHaveCount(5); // la hoja se arma async
+  await expect(page.locator('#revision-estilo option')).toHaveCount(9); // la hoja se arma async
   const textos = await page.locator('#revision-estilo option').allTextContents();
-  expect(textos).toHaveLength(5); // "El de cada producto" + los 4 estilos
+  expect(textos).toHaveLength(9); // "El de cada producto" + los 8 estilos (4 de siempre + 4 presets de composición, Fase 4)
   for (const t of textos) expect(t.trim()).not.toBe('');
   expect(textos).toContain('Foto con descripción');
+  expect(textos).toContain('Banner inferior');
+  expect(textos).toContain('Story inmersiva');
 });
 
 // Atrás (el botón de Android) cierra la hoja y deja la lista usable; antes la hoja quedaba encima

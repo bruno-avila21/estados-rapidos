@@ -301,7 +301,9 @@ function seccion(titulo, explicacion) {
  * miniatura, BUGS.md ronda "miniaturas con placeholder") + etiqueta, y si `editable` un pie con
  * badge "Personalizado" (oculto hasta que corresponda) y botón "Editar".
  */
-function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar }) {
+/** Exportada para reusarla en la galería de presets del editor de plantilla (js/vistas/
+ * plantilla.js, Fase 4): la misma tarjeta con miniatura en vivo, sin duplicar el componente. */
+export function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar }) {
   const raiz = document.createElement('div');
   raiz.className = 'tarjeta-estilo' + (activa ? ' tarjeta-estilo--activa' : '');
 
@@ -360,7 +362,8 @@ function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar }) {
   return { raiz, marco, btnSeleccionar, badge };
 }
 
-function mostrarMiniatura(marco, url, alt) {
+/** Exportada junto con `tarjetaEstilo` para la galería de presets de plantilla.js (Fase 4). */
+export function mostrarMiniatura(marco, url, alt) {
   const img = document.createElement('img');
   img.className = 'tarjeta-estilo__miniatura';
   img.alt = alt;
