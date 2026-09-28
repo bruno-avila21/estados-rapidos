@@ -13,7 +13,20 @@ function limpiarUrls() {
   urlsActuales = [];
 }
 
+// ¿Seguimos en la pantalla de Productos? `render()` se auto-llama (`recargar`) sin esperar a
+// terminar, y sus `await` (leer la lista, traer cada foto) le dan tiempo de sobra al usuario para
+// navegar a OTRA pantalla mientras tanto — sin este chequeo, cuando ese render viejo termina de
+// juntar sus datos pisa con la lista lo que la pantalla nueva ya dibujó en el mismo `contenedor`.
+function esVigente() {
+  return !location.hash || location.hash === '#/';
+}
+
 export async function render(contenedor, { navegar }) {
+  // `recargar()` (checkbox/marcar todos/borrar) espera su propio `await` (escribir en IndexedDB)
+  // ANTES de llamar acá — tiempo de sobra para que el usuario ya haya navegado a otra pantalla.
+  // Si ya no estamos en Productos, ni arrancar: ni el skeleton se llega a mostrar (bug real, ver
+  // el comentario largo más abajo, cerca del guardado final).
+  if (!esVigente()) return;
   limpiarUrls();
   contenedor.textContent = '';
 
@@ -30,6 +43,7 @@ export async function render(contenedor, { navegar }) {
   try {
     productos = await repo.listarProductos();
   } catch (error) {
+    if (!esVigente()) return; // ya se navegó a otro lado mientras esto cargaba (ver abajo)
     contenedor.textContent = '';
     const alerta = document.createElement('div');
     alerta.setAttribute('role', 'alert');
@@ -38,25 +52,24 @@ export async function render(contenedor, { navegar }) {
     return;
   }
 
-  contenedor.textContent = '';
   const recargar = () => render(contenedor, { navegar });
 
+  // Arma TODO fuera del DOM primero (el `await tarjeta()` de cada producto trae su foto —
+  // más awaits, más ventana para la carrera de abajo) y recién al final, en un solo golpe,
+  // reemplaza `contenedor`. Nada de ir mutando `contenedor` a medida que cada pieza está lista.
+  const piezas = [];
   if (productos.length === 0) {
-    contenedor.append(estadoVacio());
+    piezas.push(estadoVacio());
   } else {
-    contenedor.append(barraSeleccion(productos, recargar));
-
+    piezas.push(barraSeleccion(productos, recargar));
     const lista = document.createElement('div');
     lista.className = 'lista-productos';
     for (const producto of productos) {
       lista.append(await tarjeta(producto, { navegar, recargar }));
     }
-    contenedor.append(lista);
-
+    piezas.push(lista);
     const seleccionados = productos.filter((p) => p.seleccionado);
-    if (seleccionados.length > 0) {
-      contenedor.append(barraPublicarFija(seleccionados));
-    }
+    if (seleccionados.length > 0) piezas.push(barraPublicarFija(seleccionados));
   }
 
   const fab = document.createElement('button');
@@ -66,7 +79,18 @@ export async function render(contenedor, { navegar }) {
   fab.setAttribute('aria-label', 'Agregar producto');
   fab.textContent = '+';
   fab.addEventListener('click', () => navegar('#/producto/nuevo'));
-  contenedor.append(fab);
+  piezas.push(fab);
+
+  // Guarda contra una carrera real: `recargar()` (checkbox, marcar/desmarcar todos, borrar) llama
+  // a este mismo `render()` de nuevo sin esperar a que termine. Si mientras tanto el usuario ya
+  // navegó a OTRA pantalla (`hashchange` → detalle.js/ajustes.js ya dibujaron la suya en este
+  // mismo `contenedor`), este render que recién termina de juntar sus datos no puede pisarla con
+  // la lista vieja. Confirmado con un E2E real: click en el checkbox + ir a "nuevo producto" de
+  // inmediato dejaba el hash en `#/producto/nuevo` pero el DOM con la lista, porque este render
+  // tardaba más (fotos) que el del formulario vacío y llegaba último.
+  if (!esVigente()) return;
+  contenedor.textContent = '';
+  contenedor.append(...piezas);
 }
 
 function estadoVacio() {

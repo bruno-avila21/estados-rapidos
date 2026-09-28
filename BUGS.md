@@ -253,3 +253,100 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **De más queda:** por las dudas, `js/utils/imagen.js` (`base64ABlob`) se cambió igual de `fetch(dataUrl).then(r => r.blob())` a decodificar el base64 a mano (`atob` + `Uint8Array` + `new Blob(...)`) — no porque hiciera falta (no había bug), sino porque de paso queda testeable sin mocks (`test/imagen.test.js`, nuevo) y no depende de que el motor soporte `fetch` sobre esquema `data:`. Cambio de bajo riesgo, cero comportamiento distinto observado, pero se deja documentado para no confundir el porqué si alguien lo lee después.
 - **Resuelto:** sí — no había nada que resolver; verificado con capturas nuevas (`docs/apk11-*.png`) usando un producto con una foto de GALERÍA real (no el fixture-logo) para las capturas que sí importaba distinguir visualmente.
 - ¿Se repetiría en otro proyecto? Lección para QA propio, no para el ecosistema: si el fixture de "foto de producto" de los tests es el logo de la marca, un vistazo rápido en el emulador puede confundirse con el estado vacío — para verificar visualmente a ojo, usar una foto de galería real, no el fixture de los E2E.
+
+### 28. "Se sobresale de la pantalla" en el Samsung de Bruno (APK 1.1) — nunca se probó con letra grande
+- **Paso:** Bruno instaló el APK 1.1 en su Samsung real y reportó "se sobresale de la pantalla" sin más detalle. La skill `crear-apk` (BUGS.md, `referencias/ui-movil.md` §10) exige medir `document.documentElement.scrollWidth === innerWidth` en el teléfono antes de dar el APK por bueno — no se hizo en la ronda 1.1.
+- **Reproducir:** emulador AVD `docuvoz`, debug build con `WebView.setWebContentsDebuggingEnabled(true)` + `adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>` + CDP (`Runtime.evaluate`). `adb shell settings put system font_scale 1.6` + `adb shell wm density 504` (+20% sobre los 420 de fábrica del AVD, ancho lógico resultante ~343px) con la tarjeta "Foto con precio" de Ajustes en estado "Personalizado" (badge visible).
+- **Error exacto (medido):** `.tarjeta-estilo` de "Foto con precio": `getBoundingClientRect().right = 463` con `innerWidth = 343` → 120px afuera del viewport, invisible (no aparece como scroll horizontal porque `.vista { overflow-x: clip }` lo recorta: `document.documentElement.scrollWidth` se queda en 343, igual a `innerWidth` — **medir solo `scrollWidth` no alcanza, hay que medir `getBoundingClientRect()` de los elementos**). Captura: `docs/apk12-antes-statusbar.png` (se ve el mismo frame con los dos bugs de esta ronda).
+- **Causa:** `.grilla-estilos { grid-template-columns: repeat(2, 1fr) }` — `1fr` a secas es `minmax(auto, 1fr)`, así que el track no podía achicarse por debajo del `min-content` de la tarjeta. Con la etiqueta "Foto con precio" en 2 líneas y el badge "Personalizado" + botón "Editar" en una sola fila (`.tarjeta-estilo__pie`, sin `flex-wrap`) a letra grande, ese `min-content` superaba el ancho del viewport y el grid entero se corría a la derecha.
+- **Arreglo:** `css/estilos.css` — `.grilla-estilos` a `grid-template-columns: repeat(2, minmax(0, 1fr))`; `.tarjeta-estilo` con `min-width: 0`; `.tarjeta-estilo__pie` con `flex-wrap: wrap` y `.tarjeta-estilo__pie .boton` con `min-width: 0`; `.tarjeta-estilo__badge` con `overflow-wrap: anywhere`. Nada de `overflow-x: hidden` nuevo ni de tocar `textZoom` (es accesibilidad, no un bug). Verificado: mismo escenario (1.6 / +20% densidad) da `right = 312` (adentro de los 343), 0 desbordes en las 10 pantallas de `test/e2e/overflow-fuente-grande.spec.js`. Captura: `docs/apk12-despues-statusbar.png`.
+- **Resuelto:** sí — matriz repetida (`barrer.cjs`) con el release corregido, 0 desbordes en Productos, alta/edición, Ajustes, editor de plantilla, respaldo, diálogo de confirmación y hoja de revisión.
+- ¿Se repetiría en otro proyecto? Sí — cualquier `grid-template-columns: repeat(N, 1fr)` con contenido que no envuelve (badge + botón en una fila) es candidato al mismo bug con `font_scale` alto: sumado al checklist de `crear-apk` SKILL.md y a `referencias/ui-movil.md` §10.
+
+### 29. El título de la pantalla se ve detrás del reloj/íconos del sistema al scrollear (APK 1.1)
+- **Paso:** mismo reporte de Bruno ("se sobresale de la pantalla") — al scrollear Ajustes hacia abajo y volver a mirar arriba, el contenido pasaba por detrás de la barra de estado (reloj, wifi, batería) en vez de quedar tapado por un fondo opaco.
+- **Reproducir:** emulador, cualquier `font_scale`/densidad — no es un bug de textZoom, es de layout. `location.hash = '#/ajustes'` y `window.scrollTo(0, 260)` (o más): el título/contenido scrolleado queda visible por debajo de los íconos del status bar. Captura: `docs/apk12-antes-statusbar.png`.
+- **Causa:** `enableEdgeToEdge()` (Kotlin) hace que la WebView dibuje detrás de la barra de estado a propósito (por eso existe `--safe-top: env(safe-area-inset-top)`), pero ese inset se aplicaba una sola vez como `padding-top` de `.app` (contenedor de TODO, no solo del header). Como quien scrollea es la ventana (`.vista { overflow-x: clip }`, no un contenedor propio) y `.encabezado` estaba en flujo normal, al scrollear el título viajaba hacia arriba del padding y quedaba en la franja de la barra de estado sin nada opaco cubriéndolo.
+- **Arreglo:** `css/estilos.css` — se sacó el `padding-top: var(--safe-top)` de `.app` y se puso en `.encabezado` (`position: sticky; top: 0; z-index: 15; background: var(--color-fondo); padding-top: calc(var(--safe-top) + 16px)`). El header queda siempre fijo arriba, pintado con el mismo fondo que la app, cubriendo la franja del status bar sin importar cuánto se scrollee. Verificado con capturas a `scrollY = 260` y `scrollY = 900`: el título nunca se mezcla con los íconos del sistema (`docs/apk12-despues-statusbar.png`, `docs/apk12-despues-statusbar-scroll-profundo.png`).
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — cualquier WebView con `enableEdgeToEdge()` que reserve el `safe-area-inset-top` con un padding de una sola vez en vez de un header fijo/sticky con su propio fondo tiene el mismo problema apenas el contenido sea más alto que la pantalla. Sumado a `crear-apk` BUGS.md y `referencias/ui-movil.md` §10.
+
+### 30. Test nuevo `overflow-fuente-grande.spec.js`: `[data-accion="editar"]` ambiguo con 2+ productos
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js overflow-fuente-grande.spec.js`, primera corrida (bug #28/#29 arriba).
+- **Error exacto:**
+  ```
+  Error: expect(locator).toBeVisible() failed
+  strict mode violation: locator('[data-accion="editar"]') resolved to 2 elements
+  ```
+- **Reproducir:** helper `crearProducto()` esperaba `page.locator('[data-accion="editar"]')` (sin acotar) después de guardar; al crear un 2° producto en el mismo test ya hay 2 botones `[data-accion="editar"]` en la lista (uno por tarjeta) y Playwright en modo estricto rechaza el locator ambiguo.
+- **Causa:** no es un bug de la app — error de test: el selector no distinguía "el que se acaba de crear" del resto de la lista.
+- **Arreglo:** `test/e2e/overflow-fuente-grande.spec.js` — `crearProducto()` ahora espera `page.locator('[data-accion="editar"]').last()` (el último producto agregado es el último en la lista, por orden de alta).
+- **Resuelto:** sí — verde tras el cambio.
+- ¿Se repetiría en otro proyecto? Sí, patrón general de E2E: un helper que crea N veces el mismo tipo de fila y después usa un selector no acotado para "la que acabo de crear" es ambiguo desde la 2ª vez — acotar con `.last()`/`.nth()` o por texto único. No amerita fila en la receta compartida (ya cubierto por "esperar con una aserción que reintenta", entrada #24); nota solo para no repetirlo en este archivo.
+
+### 31. Mismo test: el drag para personalizar "foto-precio" no se registraba con viewport de 800px de alto
+- **Paso:** después de arreglar la entrada #30, la misma corrida seguía fallando, ahora en `personalizarEstiloFotoPrecio()`: `.editor-plantilla__badge` se quedaba `hidden` pese a haber hecho el drag.
+- **Error exacto:**
+  ```
+  Error: expect(locator).toBeVisible() failed
+  Locator:  locator('.editor-plantilla__badge')
+  Expected: visible
+  Received: hidden
+  ```
+- **Reproducir:** script de diagnóstico aparte (`chromium.launch()` + mismo flujo, fuera de Playwright Test) leyendo `ajustesPorEstilo['foto-precio'].nombre` de IndexedDB antes y después del drag: con viewport `{ width: 320, height: 800 }`, `[data-elemento="nombre"]` cae en `y ≈ 746` (alto 32px); el drag de este test mueve el puntero a `caja.y + alto/2 + 60 ≈ 822`, **afuera** de un viewport de 800px de alto. El objeto `nombre` quedaba idéntico antes/después (`x/y/w/h` sin cambios): el gesto nunca llegó a soltarse sobre el lienzo.
+- **Causa:** no es un bug de la app — el viewport de prueba (800px de alto, elegido solo pensando en el ancho que este test quería variar) es más bajo que lo que ocupan la barra + capas del editor de plantilla antes de llegar al lienzo, así que el punto de destino del drag caía fuera de la ventana visible.
+- **Arreglo:** `test/e2e/overflow-fuente-grande.spec.js` — el viewport de estos tests pasa a `height: 1400` (de sobra para que toda la barra+capas+lienzo entren y el drag tenga margen). Confirmado con el mismo script de diagnóstico: con `height: 1400` el objeto `nombre` sí cambia de posición y el badge queda visible.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — patrón general: un test que hace drag-and-drop debe usar un viewport con espacio real de sobra alrededor del punto de destino, no solo "algo razonable"; si el drag no cambia nada, medir el estado antes/después del gesto (no solo el resultado visual esperado) para distinguir "el gesto no llegó a pasar" de "el gesto pasó pero el efecto no es el esperado". Nota para la receta `e2e.md` si se repite en otro proyecto con editores drag-and-drop.
+
+### 32. Mismo test: `[data-accion="cancelar"]` ambiguo — el form de detalle.js también tiene un "Cancelar"
+- **Paso:** corrida completa de `overflow-fuente-grande.spec.js` tras arreglar #30/#31.
+- **Error exacto:**
+  ```
+  Error: locator.click: Error: strict mode violation: locator('[data-accion="cancelar"]') resolved to 2 elements:
+      1) <button ... data-accion="cancelar" ...>Cancelar</button> aka locator('#vista').getByRole('button', { name: 'Cancelar' })
+      2) <button ... data-accion="cancelar" ...>Cancelar</button> aka getByRole('alertdialog').getByRole('button', { name: 'Cancelar' })
+  ```
+- **Reproducir:** en `#/producto/<id>` con el diálogo de confirmación de borrado abierto, `page.locator('[data-accion="cancelar"]')` sin acotar matchea TANTO el botón "Cancelar" propio del form de `detalle.js` (volver sin guardar) COMO el "Cancelar" del diálogo (`js/utils/confirmar.js`) — ambos con el mismo `data-accion`.
+- **Causa:** no es un bug de la app (dos botones "Cancelar" con roles distintos y contextos distintos es correcto); error de test — selector no acotado al diálogo.
+- **Arreglo:** `test/e2e/overflow-fuente-grande.spec.js` — `page.locator('.dialogo [data-accion="cancelar"]')` en vez de global.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — mismo patrón que #30: cualquier `data-accion` reutilizado en dos contextos superpuestos (un form y un diálogo que se abre encima) es ambiguo apenas ambos están montados a la vez. Acotar siempre al contenedor del diálogo/modal cuando se interactúa con sus botones.
+
+### 33. Dos corridas de `playwright test` en paralelo contra la misma carpeta `test-results/` chocan
+- **Paso:** lancé la corrida aislada de `overflow-fuente-grande.spec.js` (para reverificar tras el fix de #31) y, sin esperarla, lancé también `npm run test:e2e` (la suite completa) — ambas en segundo plano, casi al mismo tiempo.
+- **Error exacto:**
+  ```
+  node:internal/fs/promises:857
+  Error: ENOENT: no such file or directory, mkdir 'D:\...\estados-rapidos\test-results\.playwright-artifacts-4'
+      at WorkerHost.start (...\node_modules\playwright\lib\runner\index.js:5472:5)
+  ```
+  Antes del crash, 4 tests de esa misma suite completa daban falso timeout (1.0m, el timeout de 60s del test) que en la corrida aislada (sin la otra corriendo en simultáneo) no pasaba.
+- **Reproducir:** dos `playwright test` apuntando al mismo `test-results/` (default) al mismo tiempo — Playwright limpia/recrea esa carpeta al arrancar cada corrida; si la otra corrida está escribiendo un artifact justo en ese momento, el `mkdir` de un worker choca con el `rm -rf` + recreación de la otra.
+- **Causa:** no es un bug de la app ni del test — condición de carrera por correr dos invocaciones de Playwright a la vez contra el mismo output dir, además de duplicar la carga de CPU/memoria (más probable que un timeout real de 60s en un test que normalmente tarda ~15s por variante).
+- **Arreglo:** ninguno en el código — nunca correr dos `playwright test` en simultáneo contra el mismo proyecto sin `--output` separado. Si hace falta pararalelizar corridas del mismo repo, pasar `--output <carpeta-propia>` a cada una.
+- **Resuelto:** sí — confirmado corriendo la suite completa SOLA (sin nada más de Playwright corriendo a la vez): verde.
+- ¿Se repetiría en otro proyecto? Sí, en cualquier repo con Playwright: nota para la receta compartida `~/.claude/crear-kit/recetas/e2e.md` ("nunca 2 `playwright test` en paralelo contra el mismo `test-results/`; usar `--output` si hace falta correr en simultáneo").
+
+### 34. Carrera real: `recargar()` de la lista podía pisar la pantalla a la que ya navegaste
+- **Paso:** descubierto por `overflow-fuente-grande.spec.js` (ronda "textZoom", 2026-09-28) al encadenar: tildar el checkbox de un producto y, de inmediato, ir a "nuevo producto" — sin este test nadie lo había disparado.
+- **Error exacto:** `page.locator('details.grupo summary').waitFor()` con timeout, porque el DOM de `#vista` seguía mostrando el skeleton/lista de Productos con `location.hash` ya en `#/producto/nuevo`.
+- **Reproducir:** en `js/vistas/lista.js`, el `change` del checkbox hace `await repo.actualizarSeleccion(...)` (escritura async a IndexedDB) **antes** de llamar `recargar()` (= `render(contenedor, ...)` de nuevo). `page.locator(checkbox).click()` de Playwright resuelve apenas se despacha el evento, sin esperar ese `await` interno — así que el test alcanza a navegar a otra pantalla (`page.goto('#/producto/nuevo')`, que dispara el render de `detalle.js` sobre el mismo `contenedor`) mientras el `await actualizarSeleccion` de la lista todavía está en vuelo. Cuando por fin resuelve, `recargar()` corre "normal" — sin chequear que el usuario ya se fue de Productos — y pisa el formulario recién dibujado con el skeleton/lista vieja.
+- **Causa:** `render()` de `lista.js` no distinguía "sigo siendo la pantalla activa" de "ya me pisaron" — mutaba `contenedor` (el `<main id="vista">` COMPARTIDO por todas las rutas) incondicionalmente, en cada punto (al arrancar, tras cada `await`), sin verificar `location.hash` en ninguno.
+- **Arreglo:** `js/vistas/lista.js` — nueva `esVigente()` (`!location.hash || location.hash === '#/'`), chequeada (1) al arrancar `render()`, antes de tocar `contenedor` para nada (cubre el caso real: `recargar()` invocado cuando ya navegaste), y (2) antes del `commit` final (arma todas las piezas en un array `piezas` fuera del DOM primero — incluida la foto de cada tarjeta, otro `await` — y recién al final, si sigue vigente, hace UN solo `contenedor.textContent=''` + `contenedor.append(...piezas)`). Nada de tocar `contenedor` a medias.
+- **Resuelto:** sí — confirmado con un script de reproducción aparte (`chromium.launch` + la secuencia exacta) antes y después del fix: antes, `#vista` quedaba con el skeleton de Productos pese a `location.hash = '#/producto/nuevo'`; después, el formulario de alta se ve normal.
+- ¿Se repetiría en otro proyecto? Sí — cualquier SPA con un router "manual" (un solo contenedor compartido, `render()` reescribe todo) donde una vista se auto-recarga (`recargar()`/`refresh()`) después de un `await` propio tiene el mismo riesgo: el render viejo puede resolver después de que el usuario ya navegó y pisar la pantalla nueva. Antes de la mutación final (y antes de arrancar, si el disparador puede venir de un callback async), verificar que la ruta "dueña" de ese render siga siendo la activa. Nota para la receta compartida de routers manuales si se repite en otro proyecto.
+
+### 35. Panel de propiedades del editor: "Derecha" (alineación) se pasaba del viewport a 320px + letra grande
+- **Paso:** `overflow-fuente-grande.spec.js`, corrida limpia tras arreglar la carrera #34 (recién ahí el test llegaba a esta pantalla).
+- **Error exacto:**
+  ```
+  Editor de plantilla (capa seleccionada): scrollOverflow=false
+  BUTTON.boton.boton--chico right=329 left=236 "Derecha"
+  ```
+  (viewport 320px, font_scale 130%: el botón terminaba en x=329, 9px afuera).
+- **Reproducir:** panel de propiedades del editor de plantilla, con un elemento de texto seleccionado → fila de alineación ("Izquierda"/"Centro"/"Derecha"), a 320px de ancho con la fuente del sistema al 130%.
+- **Causa:** `.fila { display: flex; gap: 10px }` (sin `flex-wrap`) — usada para las 3 filas de botones del panel (peso, alineación) y otras 6 filas de controles del proyecto (`ajustes.js`, `detalle.js`, `revision.js`). Con 3 botones de texto ("Izquierda"/"Centro"/"Derecha") y la letra grande del sistema, el `min-content` de la fila superaba los 320px.
+- **Arreglo:** `css/estilos.css` — `.fila` con `flex-wrap: wrap`. Es una clase genérica de "fila de controles", así que el arreglo cubre las 8 filas del proyecto de una sola vez (peso/alineación del editor, encuadre de foto y "La app" de Ajustes, acciones de detalle, incluir-texto de la hoja de revisión) sin tocar cada una.
+- **Resuelto:** sí — confirmado con el mismo test en las 6 combinaciones de ancho/escala, 0 desbordes.
+- ¿Se repetiría en otro proyecto? Sí — cualquier `display: flex` de una fila de botones/controles sin `flex-wrap` es candidato al mismo bug con `font_scale` alto; ya está cubierto por el punto general de bug #42 en la skill `crear-apk` (medir con `font_scale` 1.3/1.6), no amerita fila aparte ahí.

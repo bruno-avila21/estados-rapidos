@@ -70,6 +70,10 @@ class PantallaPrincipal : AppCompatActivity() {
         File(cacheDir, "compartir").let { it.deleteRecursively(); it.mkdirs() }
         File(cacheDir, "camara").let { it.deleteRecursively(); it.mkdirs() }
 
+        // Solo en debug: deja inspeccionar la WebView por chrome://inspect / CDP remoto
+        // (medir scrollWidth con font_scale y densidad alterados). El release no la toca.
+        if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
+
         web = WebView(this)
         web.setBackgroundColor(Color.parseColor("#0d0f1a")) // = --color-fondo, evita el flash blanco
         web.settings.javaScriptEnabled = true
