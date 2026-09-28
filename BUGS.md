@@ -184,3 +184,11 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Causa:** `.vista` tenía `overflow-y: auto` sin alto fijo: no scrollea ella (crece y scrollea la ventana) pero igual es el contenedor de referencia del `position: sticky`, que queda anulado.
 - **Arreglo:** `.vista` pasa a `overflow-x: clip` (contiene el desborde horizontal sin crear contenedor de scroll). Test E2E que baja hasta el panel y mide que la barra siga arriba.
 - **Resuelto:** sí (ver commit).
+
+### 22. Cloudflare: el deploy fallaba por "Asset too large"
+- **Paso:** primer deploy en Cloudflare (proyecto creado como Worker, deploy command `npx wrangler deploy`).
+- **Error exacto:** `✘ [ERROR] Asset too large. Cloudflare Workers supports assets with sizes of up to 25 MiB. We found a file /opt/buildhome/repo/node_modules/workerd/bin/workerd with a size of 128 MiB.`
+- **Reproducir:** conectar el repo a Cloudflare sin `wrangler.jsonc`: wrangler detecta "Static" con `Output Directory: .` y sube todo el repo (2332 archivos, node_modules incluido).
+- **Causa:** sin archivo de configuración, wrangler usa la raíz del repo como carpeta de assets.
+- **Arreglo:** `wrangler.jsonc` versionado con `assets.directory: "./_sitio"` (lo arma `scripts/armar-sitio.mjs`, el mismo que usa GitHub Pages).
+- **Resuelto:** pendiente de confirmar con el próximo deploy.

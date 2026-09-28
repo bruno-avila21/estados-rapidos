@@ -1,0 +1,11 @@
+// Cloudflare (Workers con assets estáticos): publica SOLO `_sitio/`, que arma
+// `node scripts/armar-sitio.mjs` en el build. Sin esto wrangler subía la carpeta entera del
+// repo, node_modules incluido, y fallaba por un binario de 128 MB (BUGS.md #22).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "estados-rapidos",
+  "compatibility_date": "2026-09-26",
+  "assets": {
+    "directory": "./_sitio"
+  }
+}
