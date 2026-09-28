@@ -3,6 +3,7 @@ import * as repo from '../repositorio.js';
 import { validarRespaldo } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
+import { enApk, guardarArchivoApk } from '../utils/plataforma.js';
 
 export async function render(contenedor) {
   contenedor.textContent = '';
@@ -30,16 +31,23 @@ export async function render(contenedor) {
     btnExportar.disabled = true;
     try {
       const respaldo = await repo.exportarRespaldo();
-      const blob = new Blob([JSON.stringify(respaldo)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `estados-rapidos-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
-      mostrarToast('Respaldo descargado');
+      const nombreArchivo = `estados-rapidos-${new Date().toISOString().slice(0, 10)}.json`;
+      if (enApk()) {
+        // <a download> con un blob: no descarga nada confiable dentro de un WebView: el
+        // usuario elige dónde guardarlo con el selector del sistema (SAF).
+        guardarArchivoApk({ nombre: nombreArchivo, mime: 'application/json', contenido: JSON.stringify(respaldo) });
+      } else {
+        const blob = new Blob([JSON.stringify(respaldo)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nombreArchivo;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        mostrarToast('Respaldo descargado');
+      }
     } catch (error) {
       mostrarToast('No se pudo exportar: ' + error.message);
     } finally {

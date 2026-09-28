@@ -1,0 +1,99 @@
+apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+def version = new Properties()
+file('../version.properties').withInputStream { version.load(it) }
+
+// Firma propia (sin ella no hay forma de instalar una versión nueva encima sin perder los
+// datos locales). El KEYSTORE va en local.properties (fuera del repo); el ALIAS y las dos
+// claves viven en un archivo aparte, también fuera del repo, al lado del .jks:
+// D:/Proyectos_Propios/Agentes/llaves/estados-rapidos.credenciales
+def keyProps = new Properties()
+def keyPropsFile = rootProject.file('local.properties')
+if (keyPropsFile.exists()) keyPropsFile.withInputStream { keyProps.load(it) }
+def rutaKeystore = keyProps.getProperty('estados-rapidos.keystore')
+
+def archivoCredenciales = new File('D:/Proyectos_Propios/Agentes/llaves/estados-rapidos.credenciales')
+def credenciales = new Properties()
+if (archivoCredenciales.exists()) {
+    archivoCredenciales.withInputStream { credenciales.load(it) }
+}
+// Lee una clave del .credenciales (formato clave=valor, una por línea). Separado del
+// keystore.jks y de local.properties a propósito: ninguno de los dos secretos vive en el repo,
+// y el .credenciales tampoco tiene la RUTA del keystore (esa es de local.properties).
+def leerSecreto = { nombre -> credenciales.getProperty(nombre) }
+
+def tieneFirmaPropia = rutaKeystore != null && file(rutaKeystore).exists() &&
+    leerSecreto('estados-rapidos.keystore.clave') != null
+
+// La web NO se copia a mano: `armarSitio` corre el mismo script que arma _sitio/ para
+// GitHub Pages / Cloudflare Pages (una sola lista de qué se sirve), y `copiarApp` lo sincroniza
+// a assets/app. El service worker se excluye: no aplica dentro del APK (ya es contenido local).
+def raizProyecto = file('../../')
+def sitioArmado = file('../../_sitio')
+def assetsApp = layout.buildDirectory.dir('generated/assets')
+
+def armarSitio = tasks.register('armarSitio', Exec) {
+    workingDir raizProyecto
+    commandLine 'node', 'scripts/armar-sitio.mjs'
+}
+def copiarApp = tasks.register('copiarApp', Copy) {
+    dependsOn armarSitio
+    from(sitioArmado) { exclude 'sw.js' }
+    into(assetsApp.map { new File(it.asFile, 'app') })
+}
+
+android {
+    namespace 'com.estadosrapidos.app'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.estadosrapidos.app'
+        minSdk 24
+        targetSdk 35
+        versionCode version.getProperty('versionCode').toInteger()
+        versionName version.getProperty('versionName')
+    }
+    sourceSets { main { assets.srcDir(assetsApp) } }
+    buildFeatures { buildConfig true } // BuildConfig.VERSION_NAME, para Android.version() del puente
+    signingConfigs {
+        release {
+            if (tieneFirmaPropia) {
+                storeFile file(rutaKeystore)
+                storePassword leerSecreto('estados-rapidos.keystore.clave')
+                keyAlias 'estados-rapidos'
+                keyPassword leerSecreto('estados-rapidos.keystore.alias.clave')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            debuggable false
+            // Son ~200 líneas de Kotlin sin lógica secreta; lo que vale (HTML/JS/CSS) está en
+            // assets/ y R8 no lo toca. Ofuscar esto rinde casi nada y suma riesgo (blindaje.md).
+            minifyEnabled false
+            signingConfig tieneFirmaPropia ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    kotlinOptions { jvmTarget = '17' }
+}
+tasks.named('preBuild') { dependsOn(copiarApp) }
+
+// Un release firmado con debug se ve idéntico hasta que hay que actualizarlo. Grita fuerte.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.hasTask(':app:assembleRelease') && !tieneFirmaPropia) {
+        logger.error('╔══════════════════════════════════════════════════════════════════╗')
+        logger.error('║  ATENCIÓN: no se encontró la firma propia de estados-rapidos.       ║')
+        logger.error('║  El release va a salir firmado con la llave de DEBUG.               ║')
+        logger.error('║  Revisá D:/Proyectos_Propios/Agentes/llaves/estados-rapidos.jks     ║')
+        logger.error('║  y el .credenciales al lado. NO SE PUBLICA ASÍ.                     ║')
+        logger.error('╚══════════════════════════════════════════════════════════════════╝')
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.activity:activity-ktx:1.9.3' // enableEdgeToEdge()
+    implementation 'androidx.webkit:webkit:1.12.1'          // WebViewAssetLoader
+}

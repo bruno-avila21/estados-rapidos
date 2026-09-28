@@ -24,3 +24,8 @@ Thumbs.db
 
 # salida de scripts/armar-sitio.mjs
 _sitio/
+
+# APK compilado (movil/ tiene su propio .gitignore para build/.gradle/local.properties/*.jks);
+# el binario final que deja movil/build-apk.ps1 en la raíz tampoco se commitea, es un binario
+# grande y se reparte por WhatsApp / _INSTALABLES, no por git.
+/estados-rapidos-*.apk

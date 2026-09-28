@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Las imágenes que se comparten a WhatsApp (compartirImagenes) viven acá. Se limpia al
+         iniciar la app y antes de cada compartir. -->
+    <cache-path name="compartir" path="compartir/" />
+    <!-- La foto que saca la cámara (TakePicture) antes de que la web la lea. -->
+    <cache-path name="camara" path="camara/" />
+</paths>

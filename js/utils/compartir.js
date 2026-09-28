@@ -3,13 +3,14 @@
 // el botón que llama nunca queda colgado esperando una hoja de compartir que no cierra nadie
 // (QA.md 2026-09-27, hallazgo medio #6).
 import { mostrarToast } from './toast.js';
+import { enApk, copiarTexto, compartirImagenesApk } from './plataforma.js';
 
 export const TIMEOUT_COMPARTIR_MS = 15000;
 
 export async function copiarDescripcion(texto) {
   if (!texto) return false;
   try {
-    await navigator.clipboard.writeText(texto);
+    await copiarTexto(texto);
     mostrarToast('Descripción copiada');
     return true;
   } catch {
@@ -20,6 +21,10 @@ export async function copiarDescripcion(texto) {
 
 /** @param {File[]} archivos */
 export function puedeCompartirArchivos(archivos) {
+  // En el APK el puente arma el Intent.ACTION_SEND(_MULTIPLE) él mismo: siempre puede,
+  // sin importar cuántos archivos sean (a diferencia de navigator.canShare, que en algunos
+  // navegadores no soporta varios archivos juntos).
+  if (enApk()) return true;
   return typeof navigator.canShare === 'function' && navigator.canShare({ files: archivos });
 }
 
@@ -32,6 +37,16 @@ export function puedeCompartirArchivos(archivos) {
  */
 export async function compartirArchivos({ archivos, texto = '', timeoutMs = TIMEOUT_COMPARTIR_MS }) {
   if (!archivos?.length || !puedeCompartirArchivos(archivos)) return 'sin-soporte';
+
+  if (enApk()) {
+    try {
+      await compartirImagenesApk({ archivos, texto });
+      return 'compartido';
+    } catch (error) {
+      mostrarToast('No se pudo compartir: ' + error.message);
+      return 'error';
+    }
+  }
 
   const compartiendo = navigator.share({ files: archivos, text: texto });
   let idTimeout;

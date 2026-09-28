@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- El rayo de assets/logo.svg (path original, viewBox 64x64), escalado 1.03125x y centrado en
+     los 66dp seguros del viewport de 108dp: newX = origX*1.03125 + 21, newY = origY*1.03125 + 21. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M56.06,33.38 L39.56,56.06 L49.88,56.06 L47.81,74.63 L68.44,49.88 L57.09,49.88 Z" />
+</vector>

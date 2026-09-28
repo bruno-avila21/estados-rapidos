@@ -4,6 +4,7 @@
 import { estaInstalada, hayPromptDeInstalacion, solicitarInstalacion, linkDeLaApp } from '../utils/instalacion.js';
 import { dibujarQREnCanvas } from '../utils/qr.js';
 import { mostrarToast } from '../utils/toast.js';
+import { enApk, versionApk } from '../utils/plataforma.js';
 
 export function seccionLaApp() {
   const div = document.createElement('div');
@@ -11,6 +12,21 @@ export function seccionLaApp() {
   const titulo = document.createElement('div');
   titulo.className = 'grupo__titulo';
   titulo.textContent = 'La app';
+
+  // El APK es autónomo (sin hosting): no hay link ni QR que compartir, ni un navegador desde
+  // el que "instalarla" — ya está instalada. Bruno la reparte pasando el .apk por WhatsApp.
+  if (enApk()) {
+    const explicacion = document.createElement('p');
+    explicacion.className = 'grupo__explicacion';
+    explicacion.textContent = 'Esta es la versión empaquetada para Android.';
+    const version = document.createElement('p');
+    version.className = 'texto-tenue';
+    version.setAttribute('data-estado', 'version-apk');
+    version.textContent = `Versión ${versionApk() || '1.0'} (APK)`;
+    div.append(titulo, explicacion, version);
+    return div;
+  }
+
   const explicacion = document.createElement('p');
   explicacion.className = 'grupo__explicacion';
   explicacion.textContent = 'Para instalarla en otro celular o compartirla con un compañero de trabajo.';

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Sin INTERNET: la app es 100% local (assets), no habla con ningún servidor. -->
+    <!-- Cámara para "Elegir foto → Cámara" (captura directa con FileProvider). Se pide además
+         en runtime, justo antes de usarla (nunca al abrir la app). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
+    <application
+        android:label="@string/nombre_app"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:theme="@style/TemaApp"
+        android:supportsRtl="true"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="false"
+        android:largeHeap="true">
+        <!-- allowBackup=false: al desinstalar se pierden los datos. Está bien: el respaldo
+             (.json) es la vía explícita para llevarse los datos, no un backup automático. -->
+
+        <!-- Compartir PNGs a WhatsApp y capturar fotos con la cámara: los dos escriben en
+             cache/ y necesitan un FileProvider para pasarle la Uri a otra app. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.archivos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <activity
+            android:name=".PantallaPrincipal"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -7,7 +7,7 @@
   "scripts": {
     "servir": "node scripts/servir.js",
     "iconos": "node scripts/generar-iconos.mjs",
-    "test": "node --test test/modelo.test.js test/layout.test.js test/respaldo.test.js test/sw-estrategia.test.js test/compartir.test.js test/editor-geometria.test.js test/qr.test.js",
+    "test": "node --test test/modelo.test.js test/layout.test.js test/respaldo.test.js test/sw-estrategia.test.js test/compartir.test.js test/editor-geometria.test.js test/qr.test.js test/plataforma.test.js",
     "test:e2e": "playwright test -c test/e2e/playwright.config.js",
     "test:todo": "npm test && npm run test:e2e"
   },

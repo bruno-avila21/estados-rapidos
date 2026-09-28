@@ -1,0 +1,10 @@
+<resources>
+    <style name="TemaApp" parent="Theme.AppCompat.NoActionBar">
+        <!-- Mismo color que el token de fondo (css/estilos.css) y que meta theme-color del
+             index.html: sin esto hay un flash blanco al abrir (BUGS.md skill #5). -->
+        <item name="android:windowBackground">@color/fondo</item>
+        <!-- Edge to edge: barras transparentes, la web pinta detrás con safe area inset. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>
