@@ -214,16 +214,18 @@ export async function abrirHojaRevision({ ids }) {
 
   seccionSecuencia.append(cabeceraSecuencia, progreso, carrusel, notaSecuencia);
 
-  // --- "Estilo para esta tanda" (no está en el mock — se mantiene, override de todas las imágenes) ---
-  const campoEstilo = document.createElement('div');
-  campoEstilo.className = 'campo';
-  const labelEstilo = document.createElement('label');
-  labelEstilo.className = 'campo__etiqueta';
-  labelEstilo.htmlFor = 'revision-estilo';
-  labelEstilo.textContent = 'Estilo para esta tanda';
+  // --- "Estilo para esta tanda" (no está en el mock — se mantiene, override de todas las imágenes).
+  // Ronda "Configuración de salida" (CREAR-BRIEF.md 2026-09-29): el diseño no tiene este selector
+  // como campo suelto entre la secuencia y el texto — se mueve dentro de "Configuración de salida"
+  // como una fila más, con el mismo formato label + valor + "Cambiar ›" que "Destino de
+  // publicación" (hoja-revision__destino). Sigue siendo el mismo <select id="revision-estilo">
+  // real (mismo data-accion, mismas opciones) — solo tapado visualmente por la fila, para no
+  // romper los e2e que hacen `#revision-estilo`.selectOption(...). ---
   const selectEstilo = document.createElement('select');
   selectEstilo.id = 'revision-estilo';
+  selectEstilo.className = 'hoja-revision__select-tapa';
   selectEstilo.setAttribute('data-accion', 'revision-estilo');
+  selectEstilo.setAttribute('aria-label', 'Estilo para esta tanda');
   const opcionAuto = document.createElement('option');
   opcionAuto.value = '';
   opcionAuto.textContent = 'El de cada producto';
@@ -234,7 +236,32 @@ export async function abrirHojaRevision({ ids }) {
     opcion.textContent = ETIQUETA_ESTILO[valor];
     selectEstilo.append(opcion);
   }
-  campoEstilo.append(labelEstilo, selectEstilo);
+
+  const textosEstilo = document.createElement('div');
+  textosEstilo.className = 'hoja-revision__destino-textos';
+  const tituloFilaEstilo = document.createElement('span');
+  tituloFilaEstilo.className = 'hoja-revision__destino-titulo';
+  tituloFilaEstilo.textContent = 'Estilo para esta tanda';
+  const valorFilaEstilo = document.createElement('span');
+  valorFilaEstilo.className = 'hoja-revision__destino-valor';
+  const actualizarValorFilaEstilo = () => {
+    const opcion = selectEstilo.selectedOptions[0];
+    valorFilaEstilo.textContent = opcion ? opcion.textContent : 'El de cada producto';
+  };
+  actualizarValorFilaEstilo();
+  textosEstilo.append(tituloFilaEstilo, valorFilaEstilo);
+  const izquierdaEstilo = document.createElement('div');
+  izquierdaEstilo.className = 'hoja-revision__destino-izquierda';
+  izquierdaEstilo.append(crearIcono('galeria'), textosEstilo);
+  const cambiarWrap = document.createElement('div');
+  cambiarWrap.className = 'hoja-revision__cambiar-wrap';
+  const btnCambiarEstilo = document.createElement('span');
+  btnCambiarEstilo.className = 'hoja-revision__cambiar';
+  btnCambiarEstilo.append(document.createTextNode('Cambiar'), crearIcono('chevron-derecha'));
+  cambiarWrap.append(selectEstilo, btnCambiarEstilo);
+  const filaEstilo = document.createElement('div');
+  filaEstilo.className = 'hoja-revision__fila-config hoja-revision__fila-accion';
+  filaEstilo.append(izquierdaEstilo, cambiarWrap);
 
   // --- 2) Texto listo para pegar ---
   const seccionTexto = document.createElement('div');
@@ -394,7 +421,7 @@ export async function abrirHojaRevision({ ids }) {
   }
   filaCalidad.append(tituloCalidad, grillaCalidad);
 
-  panelConfig.append(filaIncluirTexto, filaDestino, filaCalidad);
+  panelConfig.append(filaIncluirTexto, filaDestino, filaEstilo, filaCalidad);
   seccionConfig.append(tituloConfig, panelConfig);
 
   actualizarEstadoIncluirTexto();
@@ -433,7 +460,7 @@ export async function abrirHojaRevision({ ids }) {
   }
   actualizarContadores();
 
-  caja.append(cabecera, seccionSecuencia, campoEstilo, seccionTexto, seccionConfig, acciones);
+  caja.append(cabecera, seccionSecuencia, seccionTexto, seccionConfig, acciones);
 
   // El mock dibuja la MISMA nav inferior de siempre debajo de la hoja (es una pantalla, no una
   // hoja chica): al ser esta hoja pantalla completa (`--completo`), la nav real de la app queda
@@ -767,6 +794,7 @@ export async function abrirHojaRevision({ ids }) {
 
   selectEstilo.addEventListener('change', async () => {
     estiloSesion = selectEstilo.value || null;
+    actualizarValorFilaEstilo();
     await generarTodo();
   });
 

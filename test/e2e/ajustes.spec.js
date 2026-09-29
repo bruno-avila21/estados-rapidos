@@ -27,23 +27,38 @@ test('Plantilla no está en la navegación principal, pero el editor se abre des
   await expect(page.locator('#titulo-pantalla')).toHaveText('Plantilla');
 });
 
-test('las 8 tarjetas de estilo (4 de siempre + 4 presets de composición, Fase 4) muestran una miniatura y se puede elegir una', async ({
+// Ronda "orden del diseño" (CREAR-BRIEF.md 2026-09-29): la galería "Estilo de las imágenes" se
+// mudó de Ajustes a Plantilla (el mock de Ajustes no la tiene entre Encuadre y Texto que
+// acompaña) — mismo componente, namespace `estilo-general-*`/`editar-estilo-general-*` para no
+// chocar con los `estilo-<preset>` de la galería "Presets de composición" de la misma pantalla.
+// En Ajustes queda solo una fila compacta ("Estilo de las imágenes: <actual> ›") que abre acá.
+test('Ajustes: la fila compacta "Estilo de las imágenes" muestra el estilo actual y abre Plantilla', async ({ page }) => {
+  await page.goto('/#/ajustes');
+  await expect(page.locator('.grilla-estilos')).toHaveCount(0); // ya no hay galería acá
+  const fila = page.locator('[data-accion="ir-plantilla-estilo"]');
+  await expect(fila).toContainText('Estilo de las imágenes');
+  await expect(fila).toContainText('Solo la foto');
+  await fila.click();
+  await expect(page).toHaveURL(/#\/plantilla$/);
+});
+
+test('Plantilla: las 8 tarjetas de estilo (4 de siempre + 4 presets de composición, Fase 4) muestran una miniatura y se puede elegir una', async ({
   page,
 }) => {
-  await page.goto('/#/ajustes');
-  const tarjetas = page.locator('.tarjeta-estilo');
+  await page.goto('/#/plantilla');
+  const tarjetas = page.locator('.grilla-estilos--general .tarjeta-estilo');
   await expect(tarjetas).toHaveCount(8);
   for (const tarjeta of await tarjetas.all()) {
     await expect(tarjeta.locator('img')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
   }
 
-  await expect(page.locator('[data-accion="estilo-solo-foto"]')).toHaveAttribute('aria-pressed', 'true');
-  await page.locator('[data-accion="estilo-foto-precio"]').click();
-  await expect(page.locator('[data-accion="estilo-foto-precio"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-accion="estilo-general-solo-foto"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-accion="estilo-general-foto-precio"]').click();
+  await expect(page.locator('[data-accion="estilo-general-foto-precio"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#toast')).toHaveText(/Foto con precio/);
 
   await page.reload();
-  await expect(page.locator('[data-accion="estilo-foto-precio"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-accion="estilo-general-foto-precio"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('la descripción modelo se guarda y se ve en el ejemplo', async ({ page }) => {
@@ -60,8 +75,8 @@ test('la descripción modelo se guarda y se ve en el ejemplo', async ({ page }) 
 // --- "Editar" por tarjeta + badge "Personalizado" (ronda "ajustes por estilo", 2026-09-28) ---
 
 test('"Solo la foto" no tiene botón Editar (no es editable); los otros 7 sí', async ({ page }) => {
-  await page.goto('/#/ajustes');
-  await expect(page.locator('[data-accion="editar-estilo-solo-foto"]')).toHaveCount(0);
+  await page.goto('/#/plantilla');
+  await expect(page.locator('[data-accion="editar-estilo-general-solo-foto"]')).toHaveCount(0);
   for (const estilo of [
     'foto-precio',
     'foto-descripcion',
@@ -71,26 +86,35 @@ test('"Solo la foto" no tiene botón Editar (no es editable); los otros 7 sí', 
     'polaroid',
     'story-inmersiva',
   ]) {
-    await expect(page.locator(`[data-accion="editar-estilo-${estilo}"]`)).toBeVisible();
+    await expect(page.locator(`[data-accion="editar-estilo-general-${estilo}"]`)).toBeVisible();
   }
 });
 
 test('"Editar" de una tarjeta abre el editor en ESE estilo', async ({ page }) => {
-  await page.goto('/#/ajustes');
-  await page.locator('[data-accion="editar-estilo-foto-descripcion"]').click();
+  await page.goto('/#/plantilla');
+  await page.locator('[data-accion="editar-estilo-general-foto-descripcion"]').click();
   await expect(page).toHaveURL(/#\/plantilla\?estilo=foto-descripcion/);
   await expect(page.locator('#editor-vista-previa-estilo')).toHaveValue('foto-descripcion');
 });
 
-test('badge "Personalizado" en la tarjeta de Ajustes aparece después de editar ese estilo', async ({ page }) => {
+test('badge "Personalizado" en la tarjeta de Plantilla aparece después de editar ese estilo', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page);
-  await page.goto('/#/ajustes');
-  const tarjetaFotoPrecio = page.locator('.tarjeta-estilo', { has: page.locator('[data-accion="estilo-foto-precio"]') });
+  await page.goto('/#/plantilla');
+  const tarjetaFotoPrecio = page.locator('.tarjeta-estilo', { has: page.locator('[data-accion="estilo-general-foto-precio"]') });
   await expect(tarjetaFotoPrecio.locator('.tarjeta-estilo__badge')).toBeHidden();
 
-  await page.locator('[data-accion="editar-estilo-foto-precio"]').click();
+  await page.locator('[data-accion="editar-estilo-general-foto-precio"]').click();
   await expect(page).toHaveURL(/estilo=foto-precio/);
+  // Misma ruta (Plantilla → Plantilla, ya no Ajustes → Plantilla): la URL cambia apenas se asigna
+  // el hash, ANTES de que termine el render async, que además redibuja el overlay más de una vez
+  // mientras se estabiliza (ResizeObserver/rAF) — `boundingBox()` no reintenta solo, así que se
+  // espera visible Y estable (`scrollIntoViewIfNeeded` fuerza esa espera) antes de leerlo.
+  // El elemento se destruye y se vuelve a crear más de una vez mientras el render async se
+  // estabiliza (overlay que se redibuja) — cada paso re-consulta el locator en vivo (nunca un
+  // handle guardado) y reintenta con `expect.poll` en vez de una sola lectura de `boundingBox()`.
+  await expect(page.locator('[data-elemento="nombre"]')).toBeVisible();
+  await expect.poll(() => page.locator('[data-elemento="nombre"]').boundingBox().catch(() => null)).toBeTruthy();
   const caja = await page.locator('[data-elemento="nombre"]').boundingBox();
   await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
   await page.mouse.down();
@@ -99,7 +123,7 @@ test('badge "Personalizado" en la tarjeta de Ajustes aparece después de editar 
   await expect(page.locator('.editor-plantilla__badge')).toBeVisible();
   await page.waitForTimeout(100); // deja que la escritura a IndexedDB (persistir) termine antes de navegar
 
-  await page.locator('[data-accion="ir-ajustes"]').first().click();
+  await page.reload();
   await expect(tarjetaFotoPrecio.locator('.tarjeta-estilo__badge')).toBeVisible();
 });
 

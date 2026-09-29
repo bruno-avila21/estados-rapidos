@@ -40,14 +40,22 @@ test.beforeEach(async ({ context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 });
 
+// Ronda "orden del diseño" (CREAR-BRIEF.md 2026-09-29): la galería "Estilo de las imágenes" (con
+// miniatura + botón Editar) se mudó de Ajustes a Plantilla, namespace `estilo-general-*` — no
+// confundir con la galería "Presets de composición" (`estilo-<preset>` sin namespace, más abajo en
+// este mismo archivo), que selecciona-y-navega-y-permite-deshacer en vez de solo marcar el general.
 for (const preset of ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva']) {
-  test(`Ajustes: la tarjeta del preset "${preset}" tiene miniatura en vivo y botón Editar`, async ({ page }) => {
+  test(`Plantilla: la tarjeta "Estilo de las imágenes" del preset "${preset}" tiene miniatura en vivo y botón Editar`, async ({
+    page,
+  }) => {
     await page.goto('/');
     await crearProducto(page, { nombre: 'Producto presets', precio: '8000' });
-    await page.goto('/#/ajustes');
-    const tarjeta = page.locator('.tarjeta-estilo', { has: page.locator(`[data-accion="estilo-${preset}"]`) });
+    await page.goto('/#/plantilla');
+    const tarjeta = page.locator('.grilla-estilos--general .tarjeta-estilo', {
+      has: page.locator(`[data-accion="estilo-general-${preset}"]`),
+    });
     await expect(tarjeta.locator('img')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
-    await expect(page.locator(`[data-accion="editar-estilo-${preset}"]`)).toBeVisible();
+    await expect(page.locator(`[data-accion="editar-estilo-general-${preset}"]`)).toBeVisible();
   });
 }
 
@@ -68,11 +76,11 @@ test('Plantilla: elegir un preset de la galería lo aplica con un toque, pasa a 
 
   // "Deshacer preset" vuelve al ESTILO GENERAL anterior (no a "lo que se estaba mirando en el
   // editor" — son cosas distintas): se fija a propósito el estilo general en "editorial" primero
-  // (como si el usuario ya lo hubiera elegido antes, en Ajustes o en la propia galería) para poder
-  // comprobar que deshacer vuelve exactamente ahí.
-  await page.goto('/#/ajustes');
-  await page.locator('[data-accion="estilo-editorial"]').click();
-  await expect(page.locator('[data-accion="estilo-editorial"]')).toHaveAttribute('aria-pressed', 'true');
+  // (como si el usuario ya lo hubiera elegido antes, en "Estilo de las imágenes" o en la propia
+  // galería de presets) para poder comprobar que deshacer vuelve exactamente ahí.
+  await page.goto('/#/plantilla');
+  await page.locator('[data-accion="estilo-general-editorial"]').click();
+  await expect(page.locator('[data-accion="estilo-general-editorial"]')).toHaveAttribute('aria-pressed', 'true');
 
   await page.goto('/#/plantilla?estilo=editorial');
   await expect(page.locator('[data-accion="deshacer-preset"]')).toBeHidden();

@@ -255,6 +255,8 @@ const TRAZOS = Object.freeze({
     ['line', { x1: 3.7, y1: 9, x2: 20.3, y2: 9 }],
     ['line', { x1: 3.7, y1: 15, x2: 20.3, y2: 15 }],
   ],
+  // "chevron_right": flecha chica a la derecha — filas "<label + valor> · Cambiar ›".
+  'chevron-derecha': [['polyline', { points: '9,6 15,12 9,18' }]],
 });
 
 /**

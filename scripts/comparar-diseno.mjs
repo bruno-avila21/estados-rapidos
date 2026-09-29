@@ -87,13 +87,13 @@ const ESCENAS = {
     },
   },
   // ajustes_de_publicaci_n_natural: el mock no muestra ninguna foto/producto real (es una pantalla
-  // de configuración) — catálogo vacío alcanza; las 8 tarjetas de estilo usan la foto de ejemplo
-  // propia del proyecto (assets/ejemplo.jpg, mismo criterio que la app sin productos cargados).
+  // de configuración) — catálogo vacío alcanza. Ronda "orden del diseño" (2026-09-29): la galería
+  // "Estilo de las imágenes" se mudó a Plantilla, así que ya no hay miniaturas que esperar acá.
   ajustes_de_publicaci_n_natural: {
     titulo: 'Ajustes',
     async preparar(page) {
       await page.goto('/#/ajustes');
-      await page.waitForSelector('.tarjeta-estilo__miniatura', { state: 'visible', timeout: 10_000 });
+      await page.waitForSelector('.fila-acceso', { state: 'visible', timeout: 10_000 });
       await page.waitForTimeout(150);
     },
   },

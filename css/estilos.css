@@ -301,6 +301,11 @@ h3 {
   line-height: 1.2;
   letter-spacing: normal;
   color: var(--color-primario-oscuro);
+  /* Es un <p> (index.html) sin reset de margin global (solo h1/h2/h3 lo tienen, arriba): sin este
+     margin:0 quedaba el margin-block por defecto del user-agent (~1em) empujando el subtítulo
+     bien lejos de la marca (Ajustes: "Ajustes de Publicación" separado en vez de pegado debajo,
+     BUGS.md ronda "reskin ajustes/confirmar" 2026-09-29). */
+  margin: 0;
 }
 /* gesti_n_de_secciones_natural: la marca va centrada (el div del medio entre hamburguesa y "+"). */
 .encabezado--centrado .encabezado__textos {
@@ -1122,6 +1127,53 @@ h3 {
   outline-offset: 2px;
 }
 
+/* Fila compacta de acceso "<título> · <valor actual> ›" (ronda "orden del diseño",
+   CREAR-BRIEF.md 2026-09-29): Ajustes la usa para "Estilo de las imágenes" (ahora en Plantilla).
+   Mismo lenguaje visual que `.hoja-revision__destino`/`.hoja-revision__cambiar` de la hoja de
+   revisión, pero como componente global reusable (no depende de esa pantalla). */
+.fila-acceso {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--color-superficie-baja);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-grande);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-cuerpo);
+  transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
+}
+.fila-acceso:hover {
+  background: var(--color-superficie);
+  border-color: var(--borde-medio);
+}
+.fila-acceso__textos {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fila-acceso__titulo {
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  color: var(--color-texto);
+}
+.fila-acceso__valor {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-primario);
+}
+.fila-acceso .icono {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--color-texto-tenue);
+  margin-right: 0;
+}
+
 .hoja-revision__destino {
   display: flex;
   align-items: center;
@@ -1150,6 +1202,68 @@ h3 {
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--color-primario);
+}
+
+/* "Estilo para esta tanda": misma fila que "Destino de publicación" (icono + label/valor a la
+   izquierda) + un chip "Cambiar ›" a la derecha que tapa el <select> real (CREAR-BRIEF.md, ronda
+   "Configuración de salida" 2026-09-29 — antes era un <select> suelto entre la secuencia y el
+   texto, el diseño no lo tiene ahí). */
+.hoja-revision__fila-accion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.hoja-revision__destino-izquierda {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.hoja-revision__destino-izquierda .icono {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--color-primario);
+  margin-right: 0;
+}
+.hoja-revision__cambiar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+}
+.hoja-revision__select-tapa {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.hoja-revision__cambiar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie);
+  border: 1px solid var(--borde-sutil);
+  font-family: var(--font-cuerpo);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-texto-tenue);
+  white-space: nowrap;
+  transition: color var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
+}
+.hoja-revision__cambiar .icono {
+  width: 14px;
+  height: 14px;
+  margin-right: 0;
+}
+.hoja-revision__cambiar-wrap:hover .hoja-revision__cambiar {
+  color: var(--color-texto);
+  border-color: var(--borde-medio);
 }
 
 .hoja-revision__calidad-titulo {
@@ -1768,11 +1882,17 @@ details.grupo > .campo {
 }
 /* Capas: lista VERTICAL, una fila por capa (nombre a lo ancho + ojo a la derecha), ≥48px de alto,
    la seleccionada resaltada (ronda "capas verticales", CREAR-BRIEF.md 2026-09-28: antes era una
-   grilla de chips que en pantallas angostas quedaba difícil de escanear). */
+   grilla de chips que en pantallas angostas quedaba difícil de escanear). Tarjeta `.panel`-like
+   (editar_plantilla_natural, "Capas y Visibilidad"): antes esta lista quedaba suelta sobre el
+   fondo de la página, sin el marco/padding que muestra el diseño. */
 .editor-plantilla__capas {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  background: var(--color-superficie-baja);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-grande);
+  padding: 14px;
 }
 .editor-plantilla__fila-capa {
   display: flex;
@@ -2013,17 +2133,42 @@ details.grupo > .campo {
   top: 0;
   z-index: 5;
   padding-block: 8px;
-  background: var(--color-fondo);
+  background: var(--color-superficie-baja);
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
+/* Mismo tamaño de siempre (fila, no columna: ver nota arriba de dónde se arman estos botones en
+   plantilla.js sobre por qué no se puede agrandar esta barra) — solo el color de fondo pasa a
+   blanco puro (editar_plantilla_natural: tarjetas `bg-surface`), antes tomaba el gris de `.boton`. */
 .editor-plantilla__barra .boton {
   width: 100%;
   padding-inline: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--borde-sutil);
+}
+
+/* "Subir mi fondo" (editar_plantilla_natural): botón ancho de borde punteado con ícono — antes era
+   un botón chico de borde sólido, igual que cualquier botón secundario. */
+.boton--subir-fondo {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--color-superficie);
+  border: 1px dashed var(--borde-medio);
+  color: var(--color-primario);
+}
+.boton--subir-fondo:hover {
+  background: var(--color-superficie-alta);
+}
+.boton--subir-fondo .icono {
+  color: var(--color-primario);
 }
 
 /* ---------- Secciones (etiquetas, ronda "secciones") ---------- */

@@ -1,56 +1,35 @@
-// Pantalla "Ajustes": encuadre de la foto, estilo de las imágenes (8 tarjetas con miniatura en
-// vivo), texto que acompaña (plantilla de descripción + formato de precio), tu plantilla y datos.
-// CREAR-BRIEF.md, ronda 2026-09-27; ronda "ajustes por estilo" 2026-09-28 (badge "Personalizado" +
-// botón "Editar" por tarjeta); reskin "Organic Minimalist" 2026-09-28
-// (Interfaz/stitch_.../ajustes_de_publicaci_n_natural): tarjetas `.panel` con ícono+título (igual
-// que Secciones/Respaldo), encuadre como selector segmentado, chips de variable que insertan en el
-// editor, editor de plantilla con contador de carácteres real y vista previa de copia. El mock no
-// modela "Estilo de las imágenes" (las 8 tarjetas), "Tu plantilla" ni "Datos" — se mantienen con el
-// mismo lenguaje visual (`.panel` + ícono) porque son funciones reales de la app.
+// Pantalla "Ajustes": encuadre de la foto, texto que acompaña (plantilla de descripción + formato
+// de precio), tu plantilla y datos. CREAR-BRIEF.md, ronda 2026-09-27; ronda "ajustes por estilo"
+// 2026-09-28; reskin "Organic Minimalist" 2026-09-28 (Interfaz/stitch_.../
+// ajustes_de_publicaci_n_natural): tarjetas `.panel` con ícono+título (igual que Secciones/
+// Respaldo), encuadre como selector segmentado, chips de variable que insertan en el editor,
+// editor de plantilla con contador de carácteres real y vista previa de copia. El mock no modela
+// "Tu plantilla" ni "Datos" — se mantienen con el mismo lenguaje visual (`.panel` + ícono) porque
+// son funciones reales de la app.
+// Ronda "orden del diseño" (CREAR-BRIEF.md 2026-09-29): la galería "Estilo de las imágenes" (8
+// tarjetas con miniatura en vivo) se saca de acá — el mock no la tiene entre Encuadre y Texto que
+// acompaña, y la elección de estilo/preset pasa a vivir en la pantalla Plantilla (`tarjetaEstilo`/
+// `mostrarMiniatura` siguen acá, exportadas, porque plantilla.js las reusa para su propia galería
+// de presets). Queda una fila compacta al final ("Estilo de las imágenes: <actual> ›") que abre
+// Plantilla, para no perder el acceso.
 import * as repo from '../repositorio.js';
-import {
-  ESTILOS_IMAGEN,
-  ESTILOS_CON_AJUSTES,
-  ETIQUETA_ESTILO,
-  ENCUADRES_FOTO,
-  ETIQUETA_ENCUADRE_FOTO,
-  aplicarPlantillaDescripcion,
-  resolverDescripcion,
-  esAjustePersonalizado,
-} from '../modelo.js';
-import { componerMiniatura } from '../componer.js';
+import { ETIQUETA_ESTILO, ENCUADRES_FOTO, ETIQUETA_ENCUADRE_FOTO, aplicarPlantillaDescripcion } from '../modelo.js';
 import { mostrarToast } from '../utils/toast.js';
 import { crearIcono } from '../utils/iconos.js';
 import { seccionLaApp } from './ajustes-la-app.js';
 
 let debounce = null;
-let urlsMiniaturas = [];
-
-// Cache en memoria de miniaturas por (estilo, hash de lo que puede cambiar el dibujo, producto):
-// evita rehacer el canvas/JPEG en cada entrada a Ajustes o cambio de un ajuste que no afecta a
-// ESTE estilo (ronda "miniaturas con placeholder", 2026-09-28). Vive mientras dure la pestaña —
-// se guarda el Blob (no la URL: esa se crea/revoca en cada render de la pantalla).
-const cacheMiniaturas = new Map();
 
 // Íconos del encuadre (Material "aspect_ratio"/"fullscreen"): mismo orden que ENCUADRES_FOTO.
 const ICONO_ENCUADRE = { contain: 'encuadre-entero', cover: 'pantalla-completa' };
 
-function hashCadena(texto) {
-  let h = 0;
-  for (let i = 0; i < texto.length; i += 1) h = (Math.imul(31, h) + texto.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(36);
-}
-
 export async function render(contenedor, { navegar }) {
   contenedor.textContent = '';
-  limpiarUrls();
 
   const general = await repo.obtenerAjustesGenerales();
   const plantillaConfig = await repo.obtenerPlantillaConfig();
   const formatoPrecio = { ...plantillaConfig.formatoPrecio };
   const productos = await repo.listarProductos();
-  const productoEjemplo = productos[0] || { nombre: 'Remera básica', precio: 12500, descripcion: '' };
-  const fotoEjemploBlob = productos[0]?.fotoId ? await repo.obtenerFotoBlob(productos[0].fotoId) : null;
 
   const wrap = document.createElement('div');
   wrap.className = 'pila';
@@ -99,7 +78,6 @@ export async function render(contenedor, { navegar }) {
         b.setAttribute('aria-pressed', String(esEste));
       });
       mostrarToast(`Encuadre: ${ETIQUETA_ENCUADRE_FOTO[valor]}`);
-      regenerarMiniaturas();
     });
     segmentado.append(btn);
   }
@@ -110,36 +88,7 @@ export async function render(contenedor, { navegar }) {
   panelEncuadre.append(segmentado, explicacionEncuadre);
   wrap.append(panelEncuadre);
 
-  // --- 2) Estilo de las imágenes: tarjetas seleccionables con miniatura en vivo (no está en el
-  // mock — se mantiene con el mismo lenguaje visual `.panel` que el resto de la pantalla). ---
-  const panelEstilo = panel('galeria', 'Estilo de las imágenes', {
-    subtitulo: 'Elegís cómo se ve el estado de cada producto. Podés cambiarlo por producto en "Opciones avanzadas" del alta/edición.',
-  });
-  const grillaEstilos = document.createElement('div');
-  grillaEstilos.className = 'grilla-estilos';
-  const tarjetasPorEstilo = {};
-  for (const valor of ESTILOS_IMAGEN) {
-    const editable = ESTILOS_CON_AJUSTES.includes(valor);
-    const tarjeta = tarjetaEstilo(valor, general.estiloGeneral === valor, {
-      editable,
-      onSeleccionar: async () => {
-        await repo.guardarEstiloGeneral(valor);
-        general.estiloGeneral = valor;
-        for (const v of ESTILOS_IMAGEN) {
-          tarjetasPorEstilo[v].raiz.classList.toggle('tarjeta-estilo--activa', v === valor);
-          tarjetasPorEstilo[v].btnSeleccionar.setAttribute('aria-pressed', String(v === valor));
-        }
-        mostrarToast(`Estilo general: ${ETIQUETA_ESTILO[valor]}`);
-      },
-      onEditar: editable ? () => navegar(`#/plantilla?estilo=${valor}`) : null,
-    });
-    tarjetasPorEstilo[valor] = tarjeta;
-    grillaEstilos.append(tarjeta.raiz);
-  }
-  panelEstilo.append(grillaEstilos);
-  wrap.append(panelEstilo);
-
-  // --- 3) Texto que acompaña: chips de variable (insertan en el editor), plantilla de
+  // --- 2) Texto que acompaña: chips de variable (insertan en el editor), plantilla de
   // descripción con contador real y vista previa de copia, + formato de precio. ---
   const panelTexto = panel('portapapeles', 'TEXTO QUE ACOMPAÑA', {
     subtitulo:
@@ -226,7 +175,6 @@ export async function render(contenedor, { navegar }) {
     debounce = setTimeout(async () => {
       await repo.guardarDescripcionModelo(textareaModelo.value);
       general.descripcionModelo = textareaModelo.value;
-      regenerarMiniaturas();
     }, 350);
   });
 
@@ -279,7 +227,6 @@ export async function render(contenedor, { navegar }) {
     clearTimeout(debounce);
     debounce = setTimeout(async () => {
       await repo.guardarFormatoPrecio(formatoPrecio);
-      regenerarMiniaturas();
     }, 300);
   }
   casillasPrecision.append(
@@ -325,80 +272,29 @@ export async function render(contenedor, { navegar }) {
   panelDatos.append(resumenDatos, btnRespaldo);
   wrap.append(panelDatos);
 
+  // --- Acceso compacto a "Estilo de las imágenes" (ronda "orden del diseño"): la elección de
+  // estilo/preset vive en Plantilla — acá queda solo una fila chica al final, "<estilo actual> ›",
+  // para no perder el acceso directo desde Ajustes. Mismo componente `fila-acceso` que usa la fila
+  // "Estilo para esta tanda" de la hoja de revisión (js/vistas/revision.js). ---
+  const filaAccesoEstilo = document.createElement('button');
+  filaAccesoEstilo.type = 'button';
+  filaAccesoEstilo.className = 'fila-acceso';
+  filaAccesoEstilo.setAttribute('data-accion', 'ir-plantilla-estilo');
+  const textosAccesoEstilo = document.createElement('span');
+  textosAccesoEstilo.className = 'fila-acceso__textos';
+  const tituloAccesoEstilo = document.createElement('span');
+  tituloAccesoEstilo.className = 'fila-acceso__titulo';
+  tituloAccesoEstilo.textContent = 'Estilo de las imágenes';
+  const valorAccesoEstilo = document.createElement('span');
+  valorAccesoEstilo.className = 'fila-acceso__valor';
+  valorAccesoEstilo.textContent = ETIQUETA_ESTILO[general.estiloGeneral] ?? ETIQUETA_ESTILO['solo-foto'];
+  textosAccesoEstilo.append(tituloAccesoEstilo, valorAccesoEstilo);
+  filaAccesoEstilo.append(textosAccesoEstilo, crearIcono('chevron-derecha'));
+  filaAccesoEstilo.addEventListener('click', () => navegar('#/plantilla'));
+  wrap.append(filaAccesoEstilo);
+
   wrap.append(seccionLaApp());
   contenedor.append(wrap);
-
-  function claveProducto(p) {
-    return { id: p.id ?? null, nombre: p.nombre, precio: p.precio, descripcion: p.descripcion ?? '', fotoId: p.fotoId ?? null };
-  }
-
-  async function regenerarMiniaturas() {
-    const config = await repo.obtenerPlantillaConfig();
-    // siempre se busca: la tarjeta "Mi plantilla" necesita su miniatura aunque no sea el estilo activo.
-    const plantillaBlob = await repo.obtenerImagenPlantillaBlob();
-    const plantillaImagen = await createImageBitmap(plantillaBlob);
-    const fotoImagen = fotoEjemploBlob ? await createImageBitmap(fotoEjemploBlob) : await fotoDeEjemploPorDefecto();
-    const descripcionResuelta = resolverDescripcion(productoEjemplo, { ...general, formatoPrecio: config.formatoPrecio });
-
-    await Promise.all(
-      ESTILOS_IMAGEN.map(async (valor) => {
-        try {
-          const ajustesEstilo = config.ajustesPorEstilo[valor] ?? null;
-          const clave = `${valor}:${hashCadena(
-            JSON.stringify({
-              ajustesEstilo,
-              imagenId: config.imagenId,
-              formatoPrecio: config.formatoPrecio,
-              encuadreFoto: general.encuadreFoto,
-              producto: claveProducto(productoEjemplo),
-              tieneFoto: !!fotoImagen,
-            })
-          )}`;
-          let blob = cacheMiniaturas.get(clave);
-          if (!blob) {
-            blob = await componerMiniatura({
-              estilo: valor,
-              plantillaImagen,
-              fotoImagen,
-              producto: productoEjemplo,
-              ajustes: ajustesEstilo ?? {},
-              formatoPrecio: config.formatoPrecio,
-              descripcion: descripcionResuelta,
-              encuadreFoto: general.encuadreFoto,
-            });
-            cacheMiniaturas.set(clave, blob);
-          }
-          const url = URL.createObjectURL(blob);
-          urlsMiniaturas.push(url);
-          mostrarMiniatura(tarjetasPorEstilo[valor].marco, url, `Vista previa del estilo ${ETIQUETA_ESTILO[valor]}`);
-          if (tarjetasPorEstilo[valor].badge) {
-            const personalizado = ajustesEstilo ? esAjustePersonalizado(valor, ajustesEstilo) : false;
-            tarjetasPorEstilo[valor].badge.hidden = !personalizado;
-          }
-        } catch {
-          // una miniatura que falla no rompe el resto de la pantalla
-        }
-      })
-    );
-  }
-
-  await regenerarMiniaturas();
-}
-
-let bitmapEjemploPorDefecto = null;
-/** Sin ningún producto cargado (recién instalada), las miniaturas usan una foto de ejemplo propia
- * del proyecto en vez de quedar sin foto — assets/ejemplo.jpg (ronda "miniaturas con placeholder",
- * CREAR-BRIEF.md 2026-09-28). Decodificada una sola vez y reusada. */
-async function fotoDeEjemploPorDefecto() {
-  if (bitmapEjemploPorDefecto) return bitmapEjemploPorDefecto;
-  try {
-    const respuesta = await fetch('assets/ejemplo.jpg');
-    const blob = await respuesta.blob();
-    bitmapEjemploPorDefecto = await createImageBitmap(blob);
-  } catch {
-    bitmapEjemploPorDefecto = null;
-  }
-  return bitmapEjemploPorDefecto;
 }
 
 /** Tarjeta `.panel` con ícono + título (igual que Secciones/Respaldo), badge opcional a la derecha
@@ -436,16 +332,20 @@ function panel(icono, titulo, { badge, subtitulo } = {}) {
  * miniatura, BUGS.md ronda "miniaturas con placeholder") + etiqueta, y si `editable` un pie con
  * badge "Personalizado" (oculto hasta que corresponda) y botón "Editar".
  */
-/** Exportada para reusarla en la galería de presets del editor de plantilla (js/vistas/
- * plantilla.js, Fase 4): la misma tarjeta con miniatura en vivo, sin duplicar el componente. */
-export function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar }) {
+/** Exportada para reusarla en las 2 galerías del editor de plantilla (js/vistas/plantilla.js): la
+ * misma tarjeta con miniatura en vivo, sin duplicar el componente. `prefijo` namespacea el
+ * `data-accion` (default `'estilo'`, igual que siempre) — plantilla.js pasa `'estilo-general'`
+ * para su galería "Estilo de las imágenes" (los 8, mueve-y-queda) y así no choca con los
+ * `estilo-<preset>` de su galería "Presets de composición" (los 4, selecciona-y-navega-y-deshace),
+ * que puede convivir en la misma pantalla (ronda "orden del diseño", CREAR-BRIEF.md 2026-09-29). */
+export function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar, prefijo = 'estilo' }) {
   const raiz = document.createElement('div');
   raiz.className = 'tarjeta-estilo' + (activa ? ' tarjeta-estilo--activa' : '');
 
   const btnSeleccionar = document.createElement('button');
   btnSeleccionar.type = 'button';
   btnSeleccionar.className = 'tarjeta-estilo__seleccionar';
-  btnSeleccionar.setAttribute('data-accion', `estilo-${valor}`);
+  btnSeleccionar.setAttribute('data-accion', `${prefijo}-${valor}`);
   btnSeleccionar.setAttribute('aria-pressed', String(activa));
 
   const marco = document.createElement('div');
@@ -484,7 +384,7 @@ export function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar
     const btnEditar = document.createElement('button');
     btnEditar.type = 'button';
     btnEditar.className = 'boton boton--chico boton--fantasma';
-    btnEditar.setAttribute('data-accion', `editar-estilo-${valor}`);
+    btnEditar.setAttribute('data-accion', `editar-${prefijo}-${valor}`);
     btnEditar.textContent = 'Editar';
     btnEditar.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -504,9 +404,4 @@ export function mostrarMiniatura(marco, url, alt) {
   img.alt = alt;
   img.src = url;
   marco.replaceChildren(img);
-}
-
-function limpiarUrls() {
-  urlsMiniaturas.forEach((u) => URL.revokeObjectURL(u));
-  urlsMiniaturas = [];
 }

@@ -726,3 +726,46 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `test/e2e/botones.spec.js` — el locator ahora sube por `.casilla-fila` completa (`page.locator('.casilla-fila', { hasText: ... })`) en vez de por el texto + un solo `'..'`.
 - **Resuelto:** sí.
 - ¿Se repetiría en otro proyecto? Sí, mismo punto que #44/#45: un test que camina el DOM con `'..'` en vez de anclarse a un contenedor con clase/rol estable se rompe apenas se agrega un wrapper intermedio.
+
+### 49. Ronda "orden del diseño" (mover "Estilo de las imágenes" de Ajustes a Plantilla): `ajustes.spec.js`/`presets.spec.js`/`minimo.spec.js` rompen en cadena
+- **Paso:** suite e2e completa tras sacar la galería "Estilo de las imágenes" (8 tarjetas) de Ajustes (el mock `ajustes_de_publicaci_n_natural` no la tiene ahí) y reconstruirla entera dentro de Plantilla, para no perder la función de elegir el estilo general de los 8.
+- **Error exacto (uno de varios, mismo patrón):**
+  ```
+  Error: locator.click: Test timeout of 30000ms exceeded.
+  Call log:
+    - waiting for locator('[data-accion="estilo-mi-plantilla"]')
+  ```
+- **Reproducir:** cualquier test que hiciera `page.goto('/#/ajustes')` y después clickeaba `[data-accion="estilo-<valor>"]` o `[data-accion="editar-estilo-<valor>"]` (`ajustes.spec.js`, `presets.spec.js`, `minimo.spec.js`).
+- **Causa:** no es un bug de la app — es un cambio de pantalla a propósito (CREAR-BRIEF.md 2026-09-29). La galería completa (8 estilos, con "Editar" + badge "Personalizado" por tarjeta) se movió de `ajustes.js` a `plantilla.js`, con un namespace nuevo en `tarjetaEstilo()` (`prefijo: 'estilo-general'` → `data-accion="estilo-general-<valor>"`/`"editar-estilo-general-<valor>"`) para no chocar con los `estilo-<preset>` sin prefijo de la galería "Presets de composición" (4 tarjetas), que YA vivía en Plantilla con otra semántica (selecciona-y-navega-y-permite-deshacer, en vez de solo marcar el general).
+- **Arreglo:** `test/e2e/ajustes.spec.js`, `test/e2e/presets.spec.js`, `test/e2e/minimo.spec.js` — todos los `goto('/#/ajustes')` de estos flujos pasan a `goto('/#/plantilla')`, y los selectores `estilo-<valor>`/`editar-estilo-<valor>` pasan a `estilo-general-<valor>`/`editar-estilo-general-<valor>`. En Ajustes queda un test nuevo para la fila compacta `[data-accion="ir-plantilla-estilo"]` que reemplaza a la galería.
+- **Resuelto:** sí — confirmado con la suite completa (101/101 e2e, 163/163 unit).
+- ¿Se repetiría en otro proyecto? Sí — mover un componente de una pantalla a otra sin cambiarle el `data-accion` puede generar colisiones silenciosas de selector si la pantalla de destino ya tenía algo parecido; namespacear (`prefijo` configurable en el componente compartido) es más seguro que confiar en que nunca van a convivir dos instancias.
+
+### 50. Reskin Plantilla: sumar la galería "Estilo de las imágenes" ARRIBA del lienzo rompió el arrastre (mouse y dedo) y el badge "Personalizado"
+- **Paso:** al mover controles del editor (selector de estilo + subir fondo + deshacer/rehacer/acomodar/restablecer) dentro de una tarjeta `.panel` nueva para acercar el visual al mock `editar_plantilla_natural`.
+- **Error exacto:**
+  ```
+  expect(movido.top).not.toBe(inicial.top)   // tactil.spec.js — no se movió nada
+  Expected: not "76.0417%"
+  ```
+  y, con `elementFromPoint` en el punto donde debería estar `[data-elemento="nombre"]`, aparecía `<button class="nav-inferior__item" data-accion="ir-ajustes">` (la nav inferior fija, tapando el lienzo).
+- **Reproducir:** `#/plantilla?estilo=foto-precio` (nombre/precio arrancan pegados abajo del lienzo por default), viewport 412×915, arrastrar `[data-elemento="nombre"]`.
+- **Causa:** cualquier alto de más ANTES de `previaContenedor` empuja el lienzo hacia abajo — con nombre/precio ya pegados al borde inferior por default, ese empujón extra los manda detrás de la nav inferior `position:fixed`. Ya estaba documentado para `galeriaPresets` (comentario existente en `plantilla.js`, "va al final a propósito"), pero se repitió igual al envolver el resto de los controles en una tarjeta `.panel` (padding + margin de la tarjeta) y al agrandar los botones de la barra deshacer/rehacer a un layout vertical (`min-height: 56px`, antes ~36px). Además, meter la barra `filaHistorial` (que es `position: sticky`) DENTRO de esa misma tarjeta le acortaba el "contenedor de bloque": se despegaba (dejaba de seguir a la vista) apenas se scrolleaba más allá de la tarjeta chica, en vez de seguir toda la pantalla.
+- **Arreglo:** `js/vistas/plantilla.js`/`css/estilos.css` — se revirtió el envoltorio `.panel` de `selectorEstilo`/`grupoSubida`/`filaHistorial` y el alto extra de los botones de la barra; quedan sueltos, como antes, con solo el color de fondo actualizado. `filaHistorial` sigue siendo hermano directo de `wrap`, no anidado. La galería nueva "Estilo de las imágenes" y `galeriaPresets` se mantienen al final, después del lienzo.
+- **Resuelto:** sí — confirmado con `editor.spec.js`, `tactil.spec.js`, `responsive.spec.js` y la suite completa en verde.
+- ¿Se repetiría en otro proyecto? Sí — en cualquier pantalla con un elemento posicionado por default cerca de un borde (o detrás de una barra fija), agregar contenido/padding ANTES en el DOM puede taparlo sin que se note a simple vista; conviene medir con `elementFromPoint` en el punto exacto del drag antes de dar por buena una reordenación visual.
+
+### 51. Same-route re-render (Plantilla → Plantilla): `boundingBox()` devuelve `null` justo después de `toHaveURL`/`toBeVisible`
+- **Paso:** `ajustes.spec.js`, test del badge "Personalizado", tras mover el flujo de Ajustes→Plantilla a Plantilla→Plantilla (ver #49): clic en "Editar" navega con el MISMO módulo ya montado (`#/plantilla` → `#/plantilla?estilo=foto-precio`), no con una carga de pantalla nueva.
+- **Error exacto:**
+  ```
+  TypeError: Cannot read properties of null (reading 'x')
+  > const caja = await page.locator('[data-elemento="nombre"]').boundingBox();
+  >              await page.mouse.move(caja.x + ...)
+  ```
+  y, en otra corrida, `Error: locator.scrollIntoViewIfNeeded: Element is not attached to the DOM`.
+- **Reproducir:** en Plantilla, click en un "Editar" que navega a `?estilo=<mismo o distinto>` y leer `boundingBox()` de un elemento del overlay inmediatamente después de `expect(page).toHaveURL(...)`.
+- **Causa:** no es un bug de la app — `location.hash = ...` cambia la URL de forma síncrona, ANTES de que `plantilla.js` termine de vaciar (`contenedor.textContent = ''`) y volver a construir el DOM (varios `await` de por medio: `repo.obtenerPlantillaConfig()`, `cargarFuentes()`, etc.), y el overlay se redibuja más de una vez mientras se estabiliza (`ResizeObserver`, `requestAnimationFrame`). `boundingBox()` (a diferencia de `expect(locator).toBeVisible()`) no reintenta solo: cae justo en una de esas ventanas donde el elemento no existe todavía o ya no existe más.
+- **Arreglo:** `test/e2e/ajustes.spec.js` — en vez de una sola lectura de `boundingBox()`, se usa `expect.poll(() => page.locator(...).boundingBox().catch(() => null)).toBeTruthy()` (reintenta y vuelve a resolver el locator en cada intento, nunca un handle guardado) antes de leer las coordenadas de verdad.
+- **Resuelto:** sí — confirmado con 6/6 corridas repetidas (`--repeat-each=6`) sin fallos.
+- ¿Se repetiría en otro proyecto? Sí — cualquier test que dependa de `boundingBox()`/`elementHandle` justo después de un cambio de ruta en la MISMA pantalla (sin recarga completa) es candidato a esta carrera; conviene envolver la lectura en `expect.poll` en vez de confiar en que el render ya terminó.

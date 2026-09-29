@@ -29,6 +29,7 @@ import { dibujarSegunEstilo, componerMiniatura, ANCHO, ALTO } from '../componer.
 import { cargarFuentes } from '../fuentes.js';
 import { elementoEnPunto, moverCaja, redimensionarCaja, aplicarSnap, acomodarAutomatico } from '../editor-geometria.js';
 import {
+  ESTILOS_IMAGEN,
   ESTILOS_CON_AJUSTES,
   ETIQUETA_ESTILO,
   FUENTES_DISPONIBLES,
@@ -43,6 +44,7 @@ import {
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { crearIcono } from '../utils/iconos.js';
 import { mostrarToast } from '../utils/toast.js';
+import { fotoDeEjemploPorDefecto } from '../utils/foto-ejemplo.js';
 import { tarjetaEstilo, mostrarMiniatura } from './ajustes.js';
 
 const COLORES_RAPIDOS = ['#ffffff', '#242220', '#3a4d39', '#6e5b49', '#f5a623', '#3f5c38'];
@@ -85,7 +87,11 @@ export async function render(contenedor, { navegar, params } = {}) {
   const productos = await repo.listarProductos();
   const productoEjemplo = productos[0] || { nombre: 'Producto de ejemplo', precio: 12500, descripcion: '' };
   const fotoEjemploBlob = productos[0]?.fotoId ? await repo.obtenerFotoBlob(productos[0].fotoId) : null;
-  const fotoEjemplo = fotoEjemploBlob ? await createImageBitmap(fotoEjemploBlob) : null;
+  // Sin ningún producto cargado (recién instalada), la vista previa y la galería de presets usan la
+  // foto de ejemplo propia del proyecto en vez de quedar sin foto (ronda "orden del diseño",
+  // CREAR-BRIEF.md 2026-09-29 — antes esto solo existía en ajustes.js, y acá se veía el ícono de
+  // imagen rota / el fondo liso sin foto en cuanto la galería de presets se mudó a esta pantalla).
+  const fotoEjemplo = fotoEjemploBlob ? await createImageBitmap(fotoEjemploBlob) : await fotoDeEjemploPorDefecto();
   const descripcionEjemplo = resolverDescripcion(productoEjemplo, { ...general, formatoPrecio });
 
   await cargarFuentes(); // una sola vez: dibujarSegunEstilo es síncrona, asume fuentes ya listas
@@ -103,12 +109,57 @@ export async function render(contenedor, { navegar, params } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'pila editor-plantilla';
 
+  // "← Volver a Ajustes" (editar_plantilla_natural): texto con flecha, sin pill ni borde — mismo
+  // componente `.enlace-volver` que editar_producto_natural, no un `.boton` de caja completa.
   const btnVolver = document.createElement('button');
   btnVolver.type = 'button';
-  btnVolver.className = 'boton boton--fantasma boton--chico';
+  btnVolver.className = 'enlace-volver';
   btnVolver.setAttribute('data-accion', 'ir-ajustes');
-  btnVolver.append(crearIcono('volver'), document.createTextNode('Volver a Ajustes'));
+  const etiquetaVolver = document.createElement('span');
+  etiquetaVolver.textContent = 'Volver a Ajustes';
+  btnVolver.append(crearIcono('volver'), etiquetaVolver);
   btnVolver.addEventListener('click', () => navegar?.('#/ajustes'));
+
+  // --- Galería "Estilo de las imágenes" (los 8 estilos, elegís cuál se aplica por defecto a cada
+  // producto) — vivía en Ajustes hasta la ronda "orden del diseño" (CREAR-BRIEF.md 2026-09-29): el
+  // mock de Ajustes no la tiene entre Encuadre y Texto que acompaña, así que se muda acá entera, con
+  // el MISMO componente (`tarjetaEstilo`/`mostrarMiniatura` de ajustes.js) y el mismo criterio
+  // (seleccionar = solo fijar el estilo general, sin navegar; "Editar" navega a afinarlo acá mismo).
+  // Namespaced como `estilo-general-*`/`editar-estilo-general-*` para no chocar con los
+  // `estilo-*` de "Presets de composición" (grilla más abajo, que sí selecciona-y-navega-y-permite-
+  // deshacer: una interacción distinta, pensada para probar rápido sin salir del editor). ---
+  const panelEstiloGeneral = document.createElement('div');
+  panelEstiloGeneral.className = 'panel';
+  const tituloEstiloGeneral = document.createElement('div');
+  tituloEstiloGeneral.className = 'grupo__titulo';
+  tituloEstiloGeneral.textContent = 'Estilo de las imágenes';
+  const subtituloEstiloGeneral = document.createElement('p');
+  subtituloEstiloGeneral.className = 'panel__subtitulo';
+  subtituloEstiloGeneral.textContent =
+    'Elegís cómo se ve el estado de cada producto por defecto. Podés cambiarlo por producto en "Opciones avanzadas" del alta/edición.';
+  const grillaEstiloGeneral = document.createElement('div');
+  grillaEstiloGeneral.className = 'grilla-estilos grilla-estilos--general';
+  const tarjetasEstiloGeneral = {};
+  for (const valor of ESTILOS_IMAGEN) {
+    const editableGeneral = ESTILOS_CON_AJUSTES.includes(valor);
+    const tarjeta = tarjetaEstilo(valor, general.estiloGeneral === valor, {
+      editable: editableGeneral,
+      onSeleccionar: async () => {
+        await repo.guardarEstiloGeneral(valor);
+        general.estiloGeneral = valor;
+        for (const v of ESTILOS_IMAGEN) {
+          tarjetasEstiloGeneral[v].raiz.classList.toggle('tarjeta-estilo--activa', v === valor);
+          tarjetasEstiloGeneral[v].btnSeleccionar.setAttribute('aria-pressed', String(v === valor));
+        }
+        mostrarToast(`Estilo general: ${ETIQUETA_ESTILO[valor]}`);
+      },
+      onEditar: editableGeneral ? () => navegar(`#/plantilla?estilo=${valor}`) : null,
+      prefijo: 'estilo-general',
+    });
+    tarjetasEstiloGeneral[valor] = tarjeta;
+    grillaEstiloGeneral.append(tarjeta.raiz);
+  }
+  panelEstiloGeneral.append(tituloEstiloGeneral, subtituloEstiloGeneral, grillaEstiloGeneral);
 
   // --- Selector de CUÁL estilo se edita (ya no una "vista previa" sin persistir: cada estilo
   // tiene su propia configuración — cambiarlo navega al editor de ese otro estilo) ---
@@ -150,7 +201,7 @@ export async function render(contenedor, { navegar, params } = {}) {
   // hace el selector de arriba). Queda un "Deshacer" corto para volver al estilo general anterior
   // sin tener que ir a buscarlo a Ajustes.
   const galeriaPresets = document.createElement('div');
-  galeriaPresets.className = 'campo';
+  galeriaPresets.className = 'panel';
   const tituloGaleria = document.createElement('div');
   tituloGaleria.className = 'grupo__titulo';
   tituloGaleria.textContent = 'Presets de composición';
@@ -207,9 +258,9 @@ export async function render(contenedor, { navegar, params } = {}) {
   inputPlantilla.setAttribute('data-accion-input', 'subir-plantilla');
   const btnSubir = document.createElement('button');
   btnSubir.type = 'button';
-  btnSubir.className = 'boton boton--chico';
+  btnSubir.className = 'boton boton--subir-fondo';
   btnSubir.setAttribute('data-accion', 'subir-plantilla');
-  btnSubir.textContent = 'Subir mi fondo (PNG 1080×1920)';
+  btnSubir.append(crearIcono('subir'), document.createTextNode('Subir mi fondo (PNG 1080×1920)'));
   btnSubir.addEventListener('click', () => inputPlantilla.click());
   let plantillaImagenActual = await createImageBitmap(await repo.obtenerImagenPlantillaBlob());
   inputPlantilla.addEventListener('change', async (ev) => {
@@ -239,7 +290,7 @@ export async function render(contenedor, { navegar, params } = {}) {
 
   // --- Panel de propiedades ---
   const panel = document.createElement('div');
-  panel.className = 'grupo editor-plantilla__panel';
+  panel.className = 'panel editor-plantilla__panel';
   panel.hidden = true;
 
   // --- Deshacer / rehacer / Acomodar / Volver al original de este estilo ---
@@ -272,11 +323,16 @@ export async function render(contenedor, { navegar, params } = {}) {
   btnRestablecer.textContent = 'Restablecer';
   filaHistorial.append(btnDeshacer, btnRehacer, btnAcomodar, btnRestablecer);
 
-  // `galeriaPresets` va AL FINAL a propósito (no antes del lienzo): es una sección extra para
-  // "probar otra composición", no la edición principal — empujar el lienzo hacia abajo con esto
-  // arriba dejaba el elemento "nombre" fuera del viewport en 412×915 y rompía el arrastre con
-  // mouse/touch en los tests (BUGS.md).
-  wrap.append(btnVolver, selectorEstilo, grupoSubida, filaHistorial, previaContenedor, capas, panel, galeriaPresets);
+  // OJO (ronda "reskin plantilla", CREAR-BRIEF.md 2026-09-29): esta pantalla es MUY sensible a
+  // cuánto ocupa todo lo que va ANTES de `previaContenedor` — "foto con precio" (y otros estilos)
+  // arrancan con el nombre/precio pegados abajo del lienzo por default, y cualquier alto de más acá
+  // arriba los empuja detrás de la nav inferior fija, rompiendo el arrastre con mouse/dedo (BUGS.md,
+  // ya documentado para `galeriaPresets`/`panelEstiloGeneral`, que por eso van al final). Probado:
+  // envolver `selectorEstilo`/`grupoSubida`/`filaHistorial` en una tarjeta `.panel` (como el
+  // diseño) agrega el padding/margen suficiente para reproducir exactamente ese bug — se mantienen
+  // sueltos, sin envoltorio extra, hasta poder resolverlo con margen para el reskin visual completo.
+  // `galeriaPresets` y `panelEstiloGeneral` van AL FINAL por el mismo motivo.
+  wrap.append(btnVolver, selectorEstilo, grupoSubida, filaHistorial, previaContenedor, capas, panel, galeriaPresets, panelEstiloGeneral);
   contenedor.append(wrap);
 
   actualizarBotonesHistorial();
@@ -284,6 +340,7 @@ export async function render(contenedor, { navegar, params } = {}) {
   ajustarResolucionCanvas();
   solicitarRedibujo();
   generarMiniaturasPresets();
+  generarMiniaturasEstiloGeneral();
 
   const resizeObserver = new ResizeObserver(() => {
     ajustarResolucionCanvas();
@@ -368,6 +425,38 @@ export async function render(contenedor, { navegar, params } = {}) {
           const url = URL.createObjectURL(blob);
           urlsGaleriaPresets.push(url);
           mostrarMiniatura(tarjetasPresets[valor].marco, url, `Vista previa del preset ${ETIQUETA_ESTILO[valor]}`);
+        } catch {
+          // una miniatura que falla no rompe el resto de la galería
+        }
+      })
+    );
+  }
+
+  // Miniaturas REALES de "Estilo de las imágenes" (los 8, ex-Ajustes — ronda "orden del diseño"):
+  // mismo criterio que `generarMiniaturasPresets`, pero para TODOS los estilos, cada uno con sus
+  // propios ajustes guardados (o `{}` para "solo-foto", que no tiene ajustes propios).
+  async function generarMiniaturasEstiloGeneral() {
+    await Promise.all(
+      ESTILOS_IMAGEN.map(async (valor) => {
+        try {
+          const ajustesEstilo = config.ajustesPorEstilo[valor] ?? null;
+          const blob = await componerMiniatura({
+            estilo: valor,
+            plantillaImagen: plantillaImagenActual,
+            fotoImagen: fotoEjemplo,
+            producto: productoEjemplo,
+            ajustes: ajustesEstilo ?? {},
+            formatoPrecio,
+            descripcion: descripcionEjemplo,
+            encuadreFoto: general.encuadreFoto,
+          });
+          const url = URL.createObjectURL(blob);
+          urlsGaleriaPresets.push(url);
+          mostrarMiniatura(tarjetasEstiloGeneral[valor].marco, url, `Vista previa del estilo ${ETIQUETA_ESTILO[valor]}`);
+          if (tarjetasEstiloGeneral[valor].badge) {
+            const personalizado = ajustesEstilo ? esAjustePersonalizado(valor, ajustesEstilo) : false;
+            tarjetasEstiloGeneral[valor].badge.hidden = !personalizado;
+          }
         } catch {
           // una miniatura que falla no rompe el resto de la galería
         }
