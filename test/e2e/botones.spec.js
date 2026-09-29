@@ -16,7 +16,10 @@ test('ir-ajustes / ir-respaldo / ir-lista cambian de pantalla', async ({ page })
   await page.goto('/');
   await page.locator('[data-accion="ir-ajustes"]').first().click();
   await expect(page).toHaveURL(/#\/ajustes$/);
-  await expect(page.locator('#titulo-pantalla')).toHaveText('Ajustes');
+  // Ajustes (ajustes_de_publicaci_n_natural, rediseño-organic): el header ahora muestra la MARCA
+  // ("Estados Rápidos"), no el nombre de la pantalla — el H1 real ("Ajustes") vive en el contenido.
+  await expect(page.locator('#titulo-pantalla')).toHaveText('Estados Rápidos');
+  await expect(page.locator('h1.pagina__titulo')).toHaveText('Ajustes');
 
   // Ajustes también tiene su propio botón "Ir a Respaldo" (sección Datos): apuntar al de la nav.
   await page.locator('.nav-inferior [data-accion="ir-respaldo"]').click();
@@ -143,7 +146,9 @@ test('borrar todos los datos: pide confirmación fuerte y vuelve al vacío sin r
 test('formato de precio con decimales (configurado en Ajustes) se refleja en la lista', async ({ page }) => {
   await page.goto('/');
   await page.locator('[data-accion="ir-ajustes"]').first().click();
-  const casillaDecimales = page.locator('text=Mostrar decimales').locator('..').locator('input[type="checkbox"]');
+  // ajustes.js (reskin "Organic Minimalist"): la casilla es `.casilla-fila` (input + un <div> con
+  // el título y la ayuda) — el título ya no es el hermano directo del checkbox.
+  const casillaDecimales = page.locator('.casilla-fila', { hasText: 'Mostrar decimales' }).locator('input[type="checkbox"]');
   await casillaDecimales.check();
   await page.waitForTimeout(400); // debounce del guardado
 

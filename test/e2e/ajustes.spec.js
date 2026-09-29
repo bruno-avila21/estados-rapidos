@@ -51,7 +51,7 @@ test('la descripción modelo se guarda y se ve en el ejemplo', async ({ page }) 
   const textarea = page.locator('#campo-descripcion-modelo');
   await textarea.fill('{nombre} — {precio}, escribinos');
   await page.waitForTimeout(400); // debounce del guardado
-  await expect(page.locator('[role="status"]', { hasText: /Ejemplo:/ })).toHaveText(/Remera básica — \$ 12\.500, escribinos/);
+  await expect(page.locator('.vista-previa-copia__texto')).toHaveText(/Remera básica — \$ 12\.500, escribinos/);
 
   await page.reload();
   await expect(page.locator('#campo-descripcion-modelo')).toHaveValue('{nombre} — {precio}, escribinos');

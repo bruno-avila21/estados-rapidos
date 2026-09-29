@@ -86,6 +86,58 @@ const ESCENAS = {
       await page.waitForTimeout(150);
     },
   },
+  // ajustes_de_publicaci_n_natural: el mock no muestra ninguna foto/producto real (es una pantalla
+  // de configuración) — catálogo vacío alcanza; las 8 tarjetas de estilo usan la foto de ejemplo
+  // propia del proyecto (assets/ejemplo.jpg, mismo criterio que la app sin productos cargados).
+  ajustes_de_publicaci_n_natural: {
+    titulo: 'Ajustes',
+    async preparar(page) {
+      await page.goto('/#/ajustes');
+      await page.waitForSelector('.tarjeta-estilo__miniatura', { state: 'visible', timeout: 10_000 });
+      await page.waitForTimeout(150);
+    },
+  },
+  // confirmar_publicaci_n_natural: 3 productos EXACTOS del mock (nombre/precio/orden), con sus 3
+  // fotos bajadas de las URLs del code.html a fotos/confirmar-*.jpg — abre la hoja de revisión de
+  // verdad (revision.js), no un mock aparte.
+  confirmar_publicaci_n_natural: {
+    titulo: 'Confirmar publicación',
+    async preparar(page) {
+      const fotosBase64 = {
+        taza: fs.readFileSync(path.join(FOTOS_DIR, 'confirmar-1-taza.jpg')).toString('base64'),
+        vela: fs.readFileSync(path.join(FOTOS_DIR, 'confirmar-2-vela.jpg')).toString('base64'),
+        conejo: fs.readFileSync(path.join(FOTOS_DIR, 'confirmar-3-conejo.jpg')).toString('base64'),
+      };
+      await page.goto('/');
+      const ids = await page.evaluate(async (fotosBase64) => {
+        const repo = await import('/js/repositorio.js');
+        const aBytes = (b64) => {
+          const binario = atob(b64);
+          const bytes = new Uint8Array(binario.length);
+          for (let i = 0; i < binario.length; i += 1) bytes[i] = binario.charCodeAt(i);
+          return bytes;
+        };
+        const datos = [
+          { nombre: 'Taza Cerámica Salvia', precio: 14500, foto: fotosBase64.taza, archivo: 'taza.jpg' },
+          { nombre: 'Vela de Soja Higo & Lavanda', precio: 8900, foto: fotosBase64.vela, archivo: 'vela.jpg' },
+          { nombre: 'Conejo de Lana Fieltro', precio: 12000, foto: fotosBase64.conejo, archivo: 'conejo.jpg' },
+        ];
+        const idsCreados = [];
+        for (const d of datos) {
+          const archivo = new File([aBytes(d.foto)], d.archivo, { type: 'image/jpeg' });
+          const guardado = await repo.guardarProducto({ nombre: d.nombre, precio: d.precio }, archivo);
+          idsCreados.push(guardado.id);
+        }
+        return idsCreados;
+      }, fotosBase64);
+      await page.evaluate(async (idsCreados) => {
+        const revision = await import('/js/vistas/revision.js');
+        await revision.abrirHojaRevision({ ids: idsCreados });
+      }, ids);
+      await page.waitForSelector('.hoja-revision__miniatura', { state: 'visible', timeout: 10_000 });
+      await page.waitForTimeout(200);
+    },
+  },
   gesti_n_de_secciones_natural: {
     titulo: 'Gestión de secciones',
     async preparar(page) {

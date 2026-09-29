@@ -44,7 +44,10 @@ const RUTAS = [
   // CENTRADA acá (gesti_n_de_secciones_natural, code.html línea 148: sin `justify-between` propio,
   // el div de la marca queda en el medio del header) — distinto de Productos/Respaldo.
   { patron: /^#\/secciones$/, modulo: secciones, titulo: 'Estados Rápidos', ruta: '#/', headerClase: 'encabezado--centrado' },
-  { patron: /^#\/ajustes$/, modulo: ajustes, titulo: 'Ajustes', ruta: '#/ajustes' },
+  // ajustes_de_publicaci_n_natural: header con la MARCA (como Productos/Secciones/Respaldo) +
+  // subtítulo "Ajustes de Publicación" (code.html línea 150) — el H1 real "Ajustes" lo dibuja
+  // ajustes.js en el contenido (patrones.md regla 3).
+  { patron: /^#\/ajustes$/, modulo: ajustes, titulo: 'Estados Rápidos', subtitulo: 'Ajustes de Publicación', ruta: '#/ajustes' },
   // "Plantilla" ya no está en la navegación principal: se llega desde Ajustes (botón "Abrir
   // editor de plantilla" o "Editar" de una tarjeta de estilo). `?estilo=` (ronda "ajustes por
   // estilo", 2026-09-28) dice CUÁL de los 3 estilos con texto edita — se lee de `params.query`.

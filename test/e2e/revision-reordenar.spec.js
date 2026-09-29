@@ -95,24 +95,26 @@ test('reordenar arrastrando con el dedo desde la manija cambia el orden', async 
   const antes = await idsDelCarrusel(page);
   expect(antes[0]).not.toBe(antes[2]);
 
-  // Arrastrar la manija del primer item ("Alfa") hasta más allá del centro del tercer item
-  // ("Gama"): con pointer events reales por CDP (Input.dispatchTouchEvent), igual que
+  // Arrastrar la manija del primer item ("Alfa") hasta más abajo del centro del tercer item
+  // ("Gama"): la secuencia ahora es una lista VERTICAL (reskin "Organic Minimalist",
+  // confirmar_publicaci_n_natural), no un carrusel horizontal — el arrastre se hace en el eje Y.
+  // Con pointer events reales por CDP (Input.dispatchTouchEvent), igual que
   // test/e2e/tactil.spec.js — la API HTML5 drag/drop no dispara en Android WebView, por eso el
-  // editor y el carrusel usan pointer events y por eso el test tiene que simular touch real, no
+  // editor y la secuencia usan pointer events y por eso el test tiene que simular touch real, no
   // dragTo() de Playwright (que usa mousedown/mousemove, no pointerdown con setPointerCapture).
   const manijaAlfa = itemPorNombre(page, 'Alfa').locator('[data-accion="arrastrar"]');
   const cajaManija = await manijaAlfa.boundingBox();
   const cajaGama = await itemPorNombre(page, 'Gama').boundingBox();
   const x0 = cajaManija.x + cajaManija.width / 2;
   const y0 = cajaManija.y + cajaManija.height / 2;
-  const x1 = cajaGama.x + cajaGama.width - 5;
+  const y1 = cajaGama.y + cajaGama.height - 5;
 
   const cdp = await page.context().newCDPSession(page);
   const tocar = (type, px, py) =>
     cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: px, y: py }] });
   await tocar('touchStart', x0, y0);
-  for (let i = 1; i <= 6; i++) await tocar('touchMove', x0 + ((x1 - x0) * i) / 6, y0);
-  await tocar('touchEnd', x1, y0);
+  for (let i = 1; i <= 6; i++) await tocar('touchMove', x0, y0 + ((y1 - y0) * i) / 6);
+  await tocar('touchEnd', x0, y1);
 
   const despues = await idsDelCarrusel(page);
   expect(despues).not.toEqual(antes);

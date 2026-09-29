@@ -691,87 +691,245 @@ h3 {
   }
 }
 
-/* ---------- Hoja de revisión (antes de publicar 1 o N) ---------- */
+/* ---------- Hoja de revisión (antes de publicar 1 o N) — reskin "Organic Minimalist"
+   (Interfaz/stitch_.../confirmar_publicaci_n_natural, rediseño-organic 2026-09-28): casi
+   pantalla completa (no una hoja chica), con cabecera "Volver a selección" + H1 serif, lista
+   VERTICAL de tarjetas (no un carrusel horizontal de miniaturas grandes), texto listo para pegar
+   y configuración de salida como en el mock. ---------- */
 .hoja-revision {
   max-width: 480px;
-  max-height: 88vh;
+  max-height: 92vh;
   overflow-y: auto;
+  padding-top: calc(12px + var(--safe-top));
 }
-.hoja-revision__carrusel {
+/* Newsreader/serif + color primario, como el H1 "Confirmar Publicación" del mock — el resto de
+   los diálogos (confirmación de borrado) sigue con `.dialogo__titulo` sans de siempre. */
+.hoja-revision .dialogo__titulo {
+  font-family: var(--font-titulo);
+  font-size: 1.375rem;
+  font-weight: 500;
+  color: var(--color-primario-oscuro);
+  margin-bottom: 0;
+}
+.hoja-revision__cabecera {
+  margin: -4px -4px 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--borde-sutil);
+}
+.hoja-revision__subtitulo {
+  margin: 2px 0 0;
+  font-size: var(--tamano-14);
+  color: var(--color-texto-tenue);
+}
+.hoja-revision__seccion {
+  margin-bottom: 18px;
+}
+.hoja-revision__seccion-cabecera {
   display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  margin-bottom: 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
 }
-.hoja-revision__miniatura {
-  width: 100%;
-  aspect-ratio: 1080 / 1920;
-  object-fit: cover;
-  border-radius: var(--radio-chico);
-  border: 1px solid var(--color-borde);
-  background: var(--color-superficie-alta);
+.hoja-revision__seccion-titulo {
+  font-family: var(--font-cuerpo);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-texto-tenue);
+}
+.hoja-revision__seccion-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  color: var(--color-contorno);
+}
+.hoja-revision__seccion-hint .icono {
+  width: 13px;
+  height: 13px;
+  margin-right: 0;
+}
+.hoja-revision__nota {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 2px 0;
+  font-size: 0.75rem;
+  color: var(--color-contorno);
+}
+.hoja-revision__nota .icono {
+  width: 14px;
+  height: 14px;
+  color: var(--color-primario);
+  margin-right: 0;
 }
 
-/* ---------- Reordenar el carrusel (Fase 3 "M" #1): arrastrar con el dedo desde la manija (pointer
-   events — la API HTML5 drag/drop no anda en Android WebView) o los botones accesibles
-   "Mover antes"/"Mover después", operables por teclado igual que cualquier <button>. ---------- */
-.hoja-revision__item {
-  flex-shrink: 0;
-  width: 108px;
+.hoja-revision__carrusel {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  position: relative;
+  gap: 8px;
+}
+
+/* ---------- Tarjeta de producto en la secuencia: foto cuadrada chica + nombre/precio + manija +
+   descartar. Reordenar (Fase 3 "M" #1) sigue igual: arrastrar con el dedo desde la manija (pointer
+   events — la API HTML5 drag/drop no anda en Android WebView) o los botones accesibles
+   "Mover antes"/"Mover después", visibles solo al enfocarlos con teclado (el mock no los dibuja:
+   confía en drag-and-drop nomás, que no alcanza para un control 100% accesible). ---------- */
+.hoja-revision__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background: var(--color-superficie-baja);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-grande);
+  transition: border-color var(--duracion) var(--ease);
 }
 .hoja-revision__item--arrastrando {
   opacity: 0.85;
-  transform: scale(0.96);
+  transform: scale(0.98);
   transition: transform var(--duracion) var(--ease), opacity var(--duracion) var(--ease);
   z-index: 2;
 }
+.hoja-revision__foto {
+  position: relative;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radio);
+  overflow: hidden;
+  background: var(--color-superficie-alta);
+  border: 1px solid var(--borde-sutil);
+}
+.hoja-revision__miniatura {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--color-superficie-alta);
+}
 .hoja-revision__orden {
   position: absolute;
-  top: 6px;
-  left: 6px;
-  padding: 2px 7px;
+  top: 3px;
+  left: 3px;
+  padding: 1px 5px;
   border-radius: var(--radio-chico);
   background: var(--color-superposicion);
   color: #fff;
-  font-size: var(--tamano-12);
+  font-size: 0.625rem;
   font-weight: 700;
   pointer-events: none;
 }
-.hoja-revision__manija {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: var(--toque-min);
-  height: var(--toque-min);
+.hoja-revision__info {
+  flex: 1;
+  min-width: 0;
+}
+.hoja-revision__paso {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-contorno);
+  margin-bottom: 1px;
+}
+.hoja-revision__paso--portada {
+  display: inline-flex;
+  color: var(--color-primario-oscuro);
+  background: var(--color-superficie);
+  padding: 1px 6px;
+  border-radius: var(--radio-chico);
+}
+.hoja-revision__nombre {
+  display: block;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  color: var(--color-texto);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hoja-revision__precio {
+  margin: 1px 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-texto-tenue);
+  font-weight: 500;
+}
+.hoja-revision__acciones-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.hoja-revision__manija,
+.hoja-revision__descartar {
+  position: relative;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: none;
   border-radius: var(--radio-chico);
-  border: 1px solid var(--color-borde);
-  background: var(--color-superficie-alta);
-  color: var(--color-texto);
-  touch-action: none; /* arrastrar con el dedo no hace scroll horizontal del carrusel */
+  background: transparent;
+  color: var(--color-texto-tenue);
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), color var(--duracion) var(--ease);
+}
+.hoja-revision__manija::after,
+.hoja-revision__descartar::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+.hoja-revision__manija {
+  touch-action: none; /* arrastrar con el dedo no hace scroll de la lista */
   cursor: grab;
 }
 .hoja-revision__manija:active {
   cursor: grabbing;
 }
-.hoja-revision__manija:focus-visible {
+.hoja-revision__manija:hover,
+.hoja-revision__descartar:hover {
+  background: var(--color-superficie);
+}
+.hoja-revision__descartar:hover {
+  color: var(--color-peligro);
+}
+.hoja-revision__manija:focus-visible,
+.hoja-revision__descartar:focus-visible {
   outline: 2px solid var(--color-acento);
   outline-offset: 2px;
 }
+.hoja-revision__manija .icono,
+.hoja-revision__descartar .icono {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
+}
+/* Alternativa accesible a arrastrar con el dedo: el mock no la dibuja (confía en drag-and-drop
+   nomás, que no es 100% operable por teclado) — se mantiene funcional pero fuera de la vista hasta
+   que se la enfoca con teclado, igual que un "saltar al contenido". */
 .hoja-revision__controles {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
   display: flex;
-  gap: 4px;
+  gap: 2px;
+}
+.hoja-revision__controles:focus-within {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  margin-left: 2px;
 }
 .hoja-revision__mover {
-  flex: 1;
-  min-height: var(--toque-min);
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -780,10 +938,6 @@ h3 {
   background: var(--color-superficie);
   color: var(--color-texto);
   cursor: pointer;
-  transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
-}
-.hoja-revision__mover:hover:not(:disabled) {
-  border-color: var(--color-acento);
 }
 .hoja-revision__mover:focus-visible {
   outline: 2px solid var(--color-acento);
@@ -792,6 +946,301 @@ h3 {
 .hoja-revision__mover:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* ---------- Texto listo para pegar ---------- */
+.hoja-revision__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radio-chico);
+  background: var(--color-primario-tinte-suave);
+  color: var(--color-primario-tinte-suave-texto);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+.hoja-revision__pill .icono {
+  width: 13px;
+  height: 13px;
+  margin-right: 0;
+}
+.hoja-revision__pill[hidden] {
+  display: none;
+}
+.hoja-revision__texto-caja {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--color-superficie-baja);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-grande);
+  padding: 12px;
+}
+.hoja-revision__texto-caja > .icono {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--color-primario);
+  margin-top: 2px;
+  margin-right: 0;
+}
+.hoja-revision__texto-contenido {
+  flex: 1;
+  min-width: 0;
+}
+.hoja-revision__texto-contenido textarea {
+  width: 100%;
+  min-height: 64px;
+  border: 1px solid var(--borde-medio);
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie-blanca);
+  padding: 8px 10px;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  color: var(--color-texto);
+  resize: vertical;
+}
+.hoja-revision__texto-contenido textarea:disabled {
+  opacity: 0.55;
+}
+.hoja-revision__texto-pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-superficie);
+}
+.hoja-revision__texto-pie .boton--fantasma {
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: var(--tamano-14);
+  font-weight: 600;
+}
+.hoja-revision__editar-plantilla {
+  border: none;
+  background: none;
+  padding: 6px 4px;
+  color: var(--color-primario-oscuro);
+  font-family: var(--font-cuerpo);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.hoja-revision__editar-plantilla:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Configuración de salida ---------- */
+.hoja-revision__panel-config {
+  background: var(--color-superficie-baja);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-grande);
+  overflow: hidden;
+}
+.hoja-revision__fila-config {
+  padding: 12px;
+  border-bottom: 1px solid var(--borde-sutil);
+}
+.hoja-revision__fila-config:last-child {
+  border-bottom: none;
+}
+.hoja-revision__fila-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+}
+.hoja-revision__fila-switch-textos {
+  min-width: 0;
+}
+.hoja-revision__fila-switch-titulo {
+  display: block;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  color: var(--color-texto);
+}
+.hoja-revision__fila-switch-ayuda {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--color-contorno);
+}
+
+/* Interruptor visual sobre el mismo <input type="checkbox"> real (data-accion se queda en el
+   input): pista + pulgar animado con `:checked`, sin JS extra. */
+.interruptor {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  width: 40px;
+  height: 24px;
+}
+.interruptor input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+.interruptor__pista {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-superficie-maxima);
+  transition: background var(--duracion) var(--ease);
+}
+.interruptor__pista::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform var(--duracion) var(--ease);
+}
+.interruptor input:checked + .interruptor__pista {
+  background: var(--color-primario);
+}
+.interruptor input:checked + .interruptor__pista::after {
+  transform: translateX(16px);
+}
+.interruptor input:focus-visible + .interruptor__pista {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+
+.hoja-revision__destino {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hoja-revision__destino .icono {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--color-primario);
+  margin-right: 0;
+}
+.hoja-revision__destino-textos {
+  min-width: 0;
+}
+.hoja-revision__destino-titulo {
+  display: block;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  color: var(--color-texto);
+}
+.hoja-revision__destino-valor {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-primario);
+}
+
+.hoja-revision__calidad-titulo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  color: var(--color-texto);
+}
+.hoja-revision__calidad-titulo .icono {
+  width: 16px;
+  height: 16px;
+  color: var(--color-primario);
+  margin-right: 0;
+}
+.hoja-revision__calidad-grilla {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.hoja-revision__calidad-opcion {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px;
+  border: 2px solid var(--borde-medio);
+  border-radius: var(--radio);
+  background: var(--color-superficie-blanca);
+  color: var(--color-texto);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--duracion) var(--ease);
+}
+.hoja-revision__calidad-opcion--activa {
+  border-color: var(--color-primario);
+}
+.hoja-revision__calidad-opcion:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.hoja-revision__calidad-nombre {
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.hoja-revision__calidad-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 1px 6px;
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie);
+  color: var(--color-texto-tenue);
+  font-size: 0.625rem;
+  font-weight: 600;
+}
+.hoja-revision__calidad-opcion--activa .hoja-revision__calidad-badge {
+  background: var(--color-primario-tinte-suave);
+  color: var(--color-primario-tinte-suave-texto);
+}
+.hoja-revision__calidad-detalle {
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: var(--color-texto-tenue);
+}
+
+/* ---------- Acciones: apiladas, primaria arriba (el mock no las pone lado a lado) ---------- */
+.hoja-revision .dialogo__acciones {
+  flex-direction: column;
+  gap: 8px;
+}
+.hoja-revision .dialogo__acciones .boton {
+  flex: none;
+}
+.hoja-revision .dialogo__acciones .boton--primario {
+  min-height: 52px;
+}
+.hoja-revision__cancelar {
+  min-height: 44px;
+  border: none;
+  background: none;
+  color: var(--color-texto-tenue);
+}
+.hoja-revision__cancelar:hover {
+  background: var(--color-superficie);
+  color: var(--color-texto);
 }
 
 /* ---------- <select>, opciones avanzadas (<details>/<summary>) ---------- */
@@ -1094,6 +1543,21 @@ details.grupo > .campo {
   justify-content: center;
   z-index: 40;
   animation: aparecer var(--duracion) var(--ease);
+}
+/* Hoja de revisión (confirmar_publicaci_n_natural): el mock es una PANTALLA completa, no una hoja
+   chica desde abajo — sin esto quedaba una franja arriba con el header de la app atenuado detrás
+   del overlay semitransparente, que el mock no tiene (ahí va la propia cabecera de la hoja). */
+.dialogo-overlay--completo {
+  align-items: stretch;
+  background: var(--color-fondo);
+}
+.dialogo-overlay--completo .hoja-revision {
+  max-width: none;
+  max-height: none;
+  height: 100%;
+  border-radius: 0;
+  /* dejar sitio a la nav inferior (fixed, real) que se repite abajo de esta hoja pantalla completa */
+  padding-bottom: calc(var(--espacio-nav) + var(--safe-bottom) + 16px);
 }
 .dialogo {
   background: var(--color-superficie);
@@ -3046,4 +3510,259 @@ details[open] > .grupo__titulo--seccion::after {
   font-size: var(--tamano-14);
   font-weight: 600;
   color: var(--color-texto);
+}
+
+/* =========================================================================================
+   Ajustes de Publicación / Confirmar Publicación (Interfaz/stitch_.../
+   ajustes_de_publicaci_n_natural, confirmar_publicaci_n_natural — rediseño-organic, ronda 2026-09-28).
+   ========================================================================================= */
+
+/* Ajustes: el H1 del mock es "font-medium" (500) con tracking-tight, no el 400 por defecto de
+   `.pagina__titulo` (Secciones/Respaldo usan el peso normal) — modificador, no un cambio global. */
+.pagina__titulo--medio {
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+/* `.panel__subtitulo` por defecto asume que sigue justo a `.panel__cabecera` (margen -8px arriba);
+   como párrafo de PIE (después del selector segmentado) necesita margen normal, no negativo. */
+.panel__subtitulo--pie {
+  margin: 10px 0 0;
+}
+
+/* ---------- Encuadre de la foto: selector segmentado (2 opciones, "radiogroup") ---------- */
+.segmentado {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  background: var(--color-superficie);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio);
+}
+.segmentado__opcion {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 6px;
+  border-radius: var(--radio-chico);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-texto-tenue);
+  font-family: var(--font-cuerpo);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), color var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
+}
+.segmentado__opcion .icono {
+  margin-right: 0;
+  width: 17px;
+  height: 17px;
+}
+.segmentado__opcion:hover {
+  color: var(--color-primario-oscuro);
+}
+.segmentado__opcion:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.segmentado__opcion--activa {
+  background: var(--color-superficie-blanca);
+  border-color: var(--borde-medio);
+  color: var(--color-primario-oscuro);
+  box-shadow: 0 1px 2px rgba(58, 48, 40, 0.06);
+}
+
+/* ---------- Texto que acompaña: chips de variable dinámica ({nombre}/{precio}/{descripcion}),
+   que insertan en el editor de la plantilla de descripción al tocarlas. ---------- */
+.variable-chips {
+  margin: 2px 0 12px;
+}
+.variable-chips__etiqueta {
+  display: block;
+  font-size: 0.6875rem;
+  color: var(--color-texto-tenue);
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+.variable-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--borde-medio);
+  background: var(--color-superficie-blanca);
+  color: var(--color-acento);
+  font-family: var(--font-cuerpo);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--duracion) var(--ease);
+}
+.variable-chip::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+.variable-chip:hover {
+  border-color: var(--color-primario);
+}
+.variable-chip:active {
+  transform: scale(0.96);
+}
+.variable-chip:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.variable-chip .icono {
+  width: 14px;
+  height: 14px;
+  margin-right: 0;
+}
+
+/* Editor de la plantilla de descripción: caja blanca con el textarea + pie (nota + contador real
+   de carácteres, no el "42 carácteres" fijo del mock). */
+.editor-texto {
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--borde-medio);
+  border-radius: var(--radio);
+  padding: 10px;
+  margin-bottom: 12px;
+  transition: border-color var(--duracion) var(--ease);
+}
+.editor-texto:focus-within {
+  border-color: var(--color-primario);
+}
+.editor-texto .campo__etiqueta {
+  display: block;
+  margin-bottom: 6px;
+}
+.editor-texto textarea {
+  display: block;
+  width: 100%;
+  min-height: 72px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  resize: vertical;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-16);
+  color: var(--color-texto);
+  line-height: 1.5;
+}
+.editor-texto textarea:focus-visible {
+  outline: none;
+}
+.editor-texto__pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-superficie);
+  color: var(--color-texto-tenue);
+  font-size: 0.6875rem;
+}
+.editor-texto__pie span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.editor-texto__pie .icono {
+  width: 12px;
+  height: 12px;
+  margin-right: 0;
+}
+
+/* Vista previa de copia: panel gris con etiqueta + ícono "ojo" + el texto de ejemplo resuelto. */
+.vista-previa-copia {
+  background: var(--color-superficie);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio);
+  padding: 10px;
+  margin-bottom: 4px;
+}
+.vista-previa-copia__cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.vista-previa-copia__etiqueta {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-acento);
+}
+.vista-previa-copia__cabecera .icono {
+  width: 16px;
+  height: 16px;
+  color: var(--color-contorno);
+  margin-right: 0;
+}
+.vista-previa-copia__texto {
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(253, 248, 245, 0.8);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-chico);
+  font-size: var(--tamano-14);
+  line-height: 1.4;
+  color: var(--color-texto);
+}
+
+.ajustes__ejemplo {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--color-contorno);
+}
+
+/* Lista de casillas de precisión (separador de miles / mostrar decimales): checkbox + título +
+   ayuda chica, como en el mock (no el `.fila` genérico de antes). */
+.casillas-precision {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--borde-sutil);
+}
+.casilla-fila {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.casilla-fila input[type='checkbox'] {
+  margin-top: 3px;
+  width: 17px;
+  height: 17px;
+  accent-color: var(--color-primario);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.casilla-fila__textos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.casilla-fila__titulo {
+  font-size: var(--tamano-16);
+  color: var(--color-texto);
+  transition: color var(--duracion) var(--ease);
+}
+.casilla-fila:hover .casilla-fila__titulo {
+  color: var(--color-primario-oscuro);
+}
+.casilla-fila__ayuda {
+  font-size: 0.75rem;
+  color: var(--color-texto-tenue);
 }

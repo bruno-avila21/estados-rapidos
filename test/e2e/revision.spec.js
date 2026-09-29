@@ -249,7 +249,9 @@ test('Publicar de una tarjeta no toca la selección múltiple persistente', asyn
 
   await filaDos.locator('[data-accion="publicar"]').click();
   await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
-  await expect(page.locator('.dialogo__titulo')).toHaveText('Revisar antes de publicar');
+  // Reskin "Organic Minimalist" (confirmar_publicaci_n_natural): título fijo "Confirmar
+  // Publicación" (la cantidad va en el subtítulo, no en el título).
+  await expect(page.locator('.dialogo__titulo')).toHaveText('Confirmar Publicación');
   await page.locator('[data-accion="revision-cerrar"]').click();
   await expect(page.locator('.hoja-revision')).toHaveCount(0);
 

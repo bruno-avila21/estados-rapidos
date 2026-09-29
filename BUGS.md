@@ -711,3 +711,18 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `css/estilos.css` — se saca el `margin-left: -6px` de `.enlace-volver` (el padding de 6px del propio botón ya alcanza para el respiro visual, sin necesidad del ajuste óptico).
 - **Resuelto:** sí.
 - ¿Se repetiría en otro proyecto? Sí — un `margin` negativo "óptico" copiado de un mock nunca es seguro sin verificar el padding real del contenedor donde termina viviendo: si el contenedor ya es full-bleed, ese mismo negativo lo manda fuera del viewport.
+
+### 48. Reskin Ajustes/Confirmar Publicación: `casillaDecimales` de `botones.spec.js` no encuentra el checkbox
+- **Paso:** suite e2e completa tras reskinear Ajustes (`ajustes_de_publicaci_n_natural`) con `.casilla-fila` (checkbox + `<div>` con título y ayuda, igual que el mock).
+- **Error exacto:**
+  ```
+  Test timeout of 30000ms exceeded.
+  Error: locator.check: Test timeout of 30000ms exceeded.
+  Call log:
+    - waiting for locator('text=Mostrar decimales').locator('..').locator('input[type="checkbox"]')
+  ```
+- **Reproducir:** `test/e2e/botones.spec.js`, test "formato de precio con decimales (configurado en Ajustes) se refleja en la lista".
+- **Causa:** no es un bug de la app — el test asumía que el `<span>` con el texto "Mostrar decimales" es HERMANO directo del checkbox (`text=... → '..' → input`). El nuevo `.casilla-fila` (mismo layout que el mock: checkbox + columna con título+ayuda) mete el título un nivel más adentro, en un `<div class="casilla-fila__textos">` — el `'..'` del test ya no llega al padre que tiene el input.
+- **Arreglo:** `test/e2e/botones.spec.js` — el locator ahora sube por `.casilla-fila` completa (`page.locator('.casilla-fila', { hasText: ... })`) en vez de por el texto + un solo `'..'`.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí, mismo punto que #44/#45: un test que camina el DOM con `'..'` en vez de anclarse a un contenedor con clase/rol estable se rompe apenas se agrega un wrapper intermedio.
