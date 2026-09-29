@@ -36,9 +36,11 @@ export async function render(contenedor, { navegar }) {
   filaSuperior.className = 'fila secciones__cabecera';
   const btnVolver = document.createElement('button');
   btnVolver.type = 'button';
-  btnVolver.className = 'boton boton--fantasma';
+  btnVolver.className = 'pastilla-volver';
   btnVolver.setAttribute('data-accion', 'volver');
-  btnVolver.append(crearIcono('volver'), document.createTextNode('Volver a Productos'));
+  const etiquetaVolver = document.createElement('span');
+  etiquetaVolver.textContent = 'Volver a Productos';
+  btnVolver.append(crearIcono('volver'), etiquetaVolver);
   btnVolver.addEventListener('click', () => navegar('#/'));
   const kicker = document.createElement('span');
   kicker.className = 'secciones__kicker';
@@ -46,13 +48,28 @@ export async function render(contenedor, { navegar }) {
   filaSuperior.append(btnVolver, kicker);
   raiz.append(filaSuperior);
 
+  // --- H1 real de la pantalla (vive en el contenido: patrones.md regla 3 — el header compartido
+  // ya no es <h1>, ahora muestra la marca "Estados Rápidos", igual que en Productos). ---
+  const cabeceraPagina = document.createElement('div');
+  cabeceraPagina.className = 'pagina__cabecera';
+  const h1Pagina = document.createElement('h1');
+  h1Pagina.className = 'pagina__titulo';
+  h1Pagina.textContent = 'Secciones';
+  const subtituloPagina = document.createElement('p');
+  subtituloPagina.className = 'pagina__subtitulo';
+  subtituloPagina.textContent = 'Agrupá tus productos por día o rubro';
+  const textosPagina = document.createElement('div');
+  textosPagina.append(h1Pagina, subtituloPagina);
+  cabeceraPagina.append(textosPagina);
+  raiz.append(cabeceraPagina);
+
   // --- Panel "Tus secciones" ---
   const panelLista = document.createElement('section');
   panelLista.className = 'panel';
   const cabeceraLista = document.createElement('div');
   cabeceraLista.className = 'panel__cabecera';
   const rotuloLista = document.createElement('span');
-  rotuloLista.className = 'panel__rotulo';
+  rotuloLista.className = 'panel__rotulo panel__rotulo--seccion';
   rotuloLista.style.marginBottom = '0';
   rotuloLista.append(crearIcono('carpeta'), document.createTextNode('Tus secciones'));
   const badgeActivas = document.createElement('span');
@@ -100,8 +117,8 @@ export async function render(contenedor, { navegar }) {
   const panelNueva = document.createElement('section');
   panelNueva.className = 'panel';
   const rotuloNueva = document.createElement('span');
-  rotuloNueva.className = 'panel__rotulo';
-  rotuloNueva.append(crearIcono('agregar'), document.createTextNode('Nueva sección'));
+  rotuloNueva.className = 'panel__rotulo panel__rotulo--seccion';
+  rotuloNueva.append(crearIcono('agregar-circulo'), document.createTextNode('Nueva sección'));
   const explicacionNueva = document.createElement('p');
   explicacionNueva.className = 'panel__subtitulo';
   explicacionNueva.textContent = 'Organizá tus productos para seleccionarlos rápido por día o rubro al publicar.';
@@ -110,6 +127,7 @@ export async function render(contenedor, { navegar }) {
   formNueva.className = 'fila';
   const inputNueva = document.createElement('input');
   inputNueva.type = 'text';
+  inputNueva.className = 'entrada-texto';
   inputNueva.maxLength = 40;
   inputNueva.placeholder = 'Ej: Lunes, Lencería…';
   inputNueva.setAttribute('aria-label', 'Nombre de la nueva sección');
@@ -141,13 +159,20 @@ export async function render(contenedor, { navegar }) {
   // --- Panel "Plantillas sugeridas": un toque, 100% funcional ---
   const panelPresets = document.createElement('section');
   panelPresets.className = 'panel';
+  const cabeceraPresets = document.createElement('div');
+  cabeceraPresets.className = 'panel__cabecera';
   const rotuloPresets = document.createElement('span');
-  rotuloPresets.className = 'panel__rotulo';
+  rotuloPresets.className = 'panel__rotulo panel__rotulo--seccion';
+  rotuloPresets.style.marginBottom = '0';
   rotuloPresets.append(crearIcono('chispa'), document.createTextNode('Plantillas sugeridas'));
+  const unToque = document.createElement('span');
+  unToque.className = 'panel-secciones__untoque';
+  unToque.textContent = 'Un toque';
+  cabeceraPresets.append(rotuloPresets, unToque);
   const explicacionPresets = document.createElement('p');
   explicacionPresets.className = 'panel__subtitulo';
   explicacionPresets.textContent = 'Un toque para crear estructuras frecuentes de tiendas de venta directa:';
-  panelPresets.append(rotuloPresets, explicacionPresets);
+  panelPresets.append(cabeceraPresets, explicacionPresets);
 
   const nombresExistentes = new Set(secciones.map((s) => s.nombre.trim().toLowerCase()));
   for (const preset of PLANTILLAS_SUGERIDAS) {
@@ -233,6 +258,18 @@ function filaSeccion(seccion, indice, total, cantidad, recargar) {
   conteo.append(crearIcono('etiqueta'), document.createTextNode(`${cantidad} producto${cantidad === 1 ? '' : 's'}`));
   info.append(nombre, conteo);
 
+  // Lápiz: no es una acción nueva — enfoca el mismo input de nombre, que ya se renombra al
+  // editarlo y perder el foco (`guardarNombre` arriba). El mock lo dibuja como botón aparte.
+  const btnRenombrar = document.createElement('button');
+  btnRenombrar.type = 'button';
+  btnRenombrar.className = 'boton-icono-mini';
+  btnRenombrar.setAttribute('aria-label', `Renombrar ${seccion.nombre}`);
+  btnRenombrar.append(crearIcono('lapiz'));
+  btnRenombrar.addEventListener('click', () => {
+    nombre.focus();
+    nombre.select();
+  });
+
   const btnBorrar = document.createElement('button');
   btnBorrar.type = 'button';
   btnBorrar.className = 'boton-icono-mini boton-icono-mini--peligro';
@@ -251,7 +288,11 @@ function filaSeccion(seccion, indice, total, cantidad, recargar) {
     recargar();
   });
 
-  fila.append(botonesOrden, info, btnBorrar);
+  const accionesDerecha = document.createElement('div');
+  accionesDerecha.className = 'panel-secciones__acciones-derecha';
+  accionesDerecha.append(btnRenombrar, btnBorrar);
+
+  fila.append(botonesOrden, info, accionesDerecha);
   return fila;
 }
 

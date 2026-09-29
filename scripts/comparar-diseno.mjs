@@ -90,10 +90,20 @@ const ESCENAS = {
     titulo: 'Gestión de secciones',
     async preparar(page) {
       await page.goto('/');
+      // Conteos reales iguales a los del mock (8/12/15 productos): productos "mudos" (sin foto,
+      // no se ven en esta pantalla) asignados a cada sección, no un número maquillado.
       await page.evaluate(async () => {
         const repo = await import('/js/repositorio.js');
-        for (const nombre of ['Novedades de la semana', 'Ofertas especiales', 'Lencería y Textil']) {
-          await repo.crearSeccion(nombre);
+        const plan = [
+          ['Novedades de la semana', 8],
+          ['Ofertas especiales', 12],
+          ['Lencería y Textil', 15],
+        ];
+        for (const [nombreSeccion, cantidad] of plan) {
+          const seccion = await repo.crearSeccion(nombreSeccion);
+          for (let i = 1; i <= cantidad; i += 1) {
+            await repo.guardarProducto({ nombre: `${nombreSeccion} #${i}`, precio: 1000, secciones: [seccion.id] });
+          }
         }
       });
       await page.goto('/#/secciones');
@@ -104,6 +114,21 @@ const ESCENAS = {
     titulo: 'Respaldo',
     async preparar(page) {
       await page.goto('/');
+      // 48 productos · 6 secciones (conteos reales del mock) + un registro de "último respaldo"
+      // (misma clave de localStorage que respaldo.js) simulando una exportación de hoy a las
+      // 10:42 de 24.8 MB — mismo dato que muestra la tarjeta "Estado actual" del mock.
+      await page.evaluate(async () => {
+        const repo = await import('/js/repositorio.js');
+        const secciones = await Promise.all(
+          ['Novedades', 'Ofertas', 'Lencería', 'Hogar', 'Accesorios', 'Varios'].map((n) => repo.crearSeccion(n))
+        );
+        for (let i = 1; i <= 48; i += 1) {
+          await repo.guardarProducto({ nombre: `Producto ${i}`, precio: 1000, secciones: [secciones[i % secciones.length].id] });
+        }
+        const hoy = new Date();
+        hoy.setHours(10, 42, 0, 0);
+        localStorage.setItem('estados-rapidos:ultimo-respaldo', JSON.stringify({ fecha: hoy.getTime(), tamano: Math.round(24.8 * 1024 * 1024) }));
+      });
       await page.goto('/#/respaldo');
       await page.waitForTimeout(150);
     },

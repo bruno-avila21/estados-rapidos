@@ -21,7 +21,11 @@
         <span class="encabezado__menu-icono" data-icono="lista"></span>
       </button>
       <div class="encabezado__textos">
-        <h1 class="encabezado__titulo" id="titulo-pantalla">Productos</h1>
+        <!-- Ya NO es <h1>: en Secciones/Respaldo el header muestra la MARCA ("Estados Rápidos"),
+             no el título de la pantalla — el H1 real vive en el contenido de cada vista (patrones.md
+             regla 3, "un H1 por pantalla"). Productos/Ajustes/Plantilla siguen mostrando su propio
+             título acá (no tienen H1 propio en el contenido). -->
+        <p class="encabezado__titulo" id="titulo-pantalla">Productos</p>
         <p class="encabezado__subtitulo" id="subtitulo-pantalla" hidden></p>
       </div>
       <button type="button" class="encabezado__accion" data-accion="agregar-header" aria-label="Nuevo producto">

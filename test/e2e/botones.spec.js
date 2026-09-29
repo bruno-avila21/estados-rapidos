@@ -21,7 +21,10 @@ test('ir-ajustes / ir-respaldo / ir-lista cambian de pantalla', async ({ page })
   // Ajustes también tiene su propio botón "Ir a Respaldo" (sección Datos): apuntar al de la nav.
   await page.locator('.nav-inferior [data-accion="ir-respaldo"]').click();
   await expect(page).toHaveURL(/#\/respaldo$/);
-  await expect(page.locator('#titulo-pantalla')).toHaveText('Respaldo');
+  // Respaldo (respaldo_natural, Fase 5): el header ahora muestra la MARCA ("Estados Rápidos"), no
+  // el nombre de la pantalla — el H1 real ("Respaldo") vive en el contenido.
+  await expect(page.locator('#titulo-pantalla')).toHaveText('Estados Rápidos');
+  await expect(page.locator('h1.pagina__titulo')).toHaveText('Respaldo');
 
   await page.locator('[data-accion="ir-lista"]').click();
   await expect(page).toHaveURL(/#\/$/);

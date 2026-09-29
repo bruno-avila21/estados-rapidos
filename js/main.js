@@ -13,6 +13,7 @@ import { pedirAlmacenamientoPersistente } from './db.js';
 import { crearIcono } from './utils/iconos.js';
 
 const vista = document.getElementById('vista');
+const encabezado = document.querySelector('.encabezado');
 const titulo = document.getElementById('titulo-pantalla');
 const subtitulo = document.getElementById('subtitulo-pantalla');
 const navBotones = Array.from(document.querySelectorAll('.nav-inferior__item'));
@@ -27,23 +28,28 @@ const RUTAS = [
   // productos_lista_natural/productos_vista_grilla_natural — el resto de las pantallas, fuera del
   // alcance de este rediseño, sigue mostrando el nombre de la pantalla.
   { patron: /^#\/$/, modulo: lista, titulo: 'Estados Rápidos', ruta: '#/', subtitulo: 'Catálogo para estados de WhatsApp' },
-  // Título dinámico (editar_producto_natural): "Agregar Producto" en el alta, "Editar Producto"
-  // al editar uno existente — antes decía "Producto" siempre.
+  // editar_producto_natural: sin header de app (ni marca ni hamburguesa) — detalle.js dibuja su
+  // propia barra "Volver a Productos"/"Descartar" + el H1 en el contenido. `ruta: '#/'` resalta
+  // "Productos" en el nav inferior, igual que en el mock.
   {
     patron: /^#\/producto\/(.+)$/,
     modulo: detalle,
-    titulo: (params) => (!params.id || params.id === 'nuevo' ? 'Agregar Producto' : 'Editar Producto'),
-    subtitulo: 'Foto, precio y secciones del estado',
-    ruta: null,
+    headerOculto: true,
+    ruta: '#/',
   },
   // No está en la navegación principal: se llega desde el chip "⚙ Secciones" de Productos.
-  { patron: /^#\/secciones$/, modulo: secciones, titulo: 'Secciones', subtitulo: 'Agrupá tus productos por día o rubro', ruta: null },
+  // gesti_n_de_secciones_natural: el header muestra la MARCA (como Productos), no "Secciones" — el
+  // H1 real + subtítulo los dibuja secciones.js en el contenido. `ruta: '#/'`: el mock resalta
+  // "Productos" en el nav inferior (Secciones es parte del mismo pilar de catálogo).
+  { patron: /^#\/secciones$/, modulo: secciones, titulo: 'Estados Rápidos', ruta: '#/' },
   { patron: /^#\/ajustes$/, modulo: ajustes, titulo: 'Ajustes', ruta: '#/ajustes' },
   // "Plantilla" ya no está en la navegación principal: se llega desde Ajustes (botón "Abrir
   // editor de plantilla" o "Editar" de una tarjeta de estilo). `?estilo=` (ronda "ajustes por
   // estilo", 2026-09-28) dice CUÁL de los 3 estilos con texto edita — se lee de `params.query`.
   { patron: /^#\/plantilla$/, modulo: plantilla, titulo: 'Plantilla', ruta: null },
-  { patron: /^#\/respaldo$/, modulo: respaldo, titulo: 'Respaldo', subtitulo: 'Copia de seguridad de tu catálogo', ruta: '#/respaldo' },
+  // respaldo_natural: mismo criterio que Secciones — header con la MARCA, H1 "Respaldo" en el
+  // contenido (respaldo.js).
+  { patron: /^#\/respaldo$/, modulo: respaldo, titulo: 'Estados Rápidos', ruta: '#/respaldo' },
 ];
 
 function navegar(hash) {
@@ -61,7 +67,9 @@ async function enrutar() {
   const match = hash.match(encontrada.patron);
   const params = { id: match?.[1], query: new URLSearchParams(queryString || '') };
 
-  titulo.textContent = typeof encontrada.titulo === 'function' ? encontrada.titulo(params) : encontrada.titulo;
+  encabezado.hidden = !!encontrada.headerOculto;
+  const textoTitulo = typeof encontrada.titulo === 'function' ? encontrada.titulo(params) : encontrada.titulo;
+  titulo.textContent = textoTitulo || '';
   const textoSubtitulo = typeof encontrada.subtitulo === 'function' ? encontrada.subtitulo(params) : encontrada.subtitulo;
   subtitulo.textContent = textoSubtitulo || '';
   subtitulo.hidden = !textoSubtitulo;

@@ -181,6 +181,13 @@ const TRAZOS = Object.freeze({
   fuego: [
     ['path', { d: 'M12 3.2c1 2.6-2.6 3.6-2.6 6.4a2.6 2.6 0 0 0 5.2 0c0-.8-.6-1.5-.6-1.5 1.6.9 2.6 2.6 2.6 4.4a5 5 0 0 1-10 0c0-4 3.6-4.9 5.4-9.3z' }],
   ],
+  // "add_circle": cruz dentro de un círculo — cabecera "Nueva sección" (distinto de `agregar`,
+  // que es la cruz sola, usada en botones y chips).
+  'agregar-circulo': [
+    ['circle', { cx: 12, cy: 12, r: 8.5 }],
+    ['line', { x1: 12, y1: 8.5, x2: 12, y2: 15.5 }],
+    ['line', { x1: 8.5, y1: 12, x2: 15.5, y2: 12 }],
+  ],
   // "auto_awesome": destello de 4 puntas — cabecera de "Plantillas sugeridas".
   chispa: [
     ['line', { x1: 12, y1: 3, x2: 12, y2: 9 }],

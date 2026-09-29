@@ -226,6 +226,12 @@ h3 {
      Bruno, APK 1.1. La cubre el .encabezado sticky de más abajo, con su propio fondo. */
 }
 
+/* Más específico que `.encabezado { display: flex }`: si no, el atributo `hidden` (que puso
+   main.js para editar_producto_natural, sin marca ni hamburguesa) no alcanzaba a ganarle al
+   `display` explícito de la regla de abajo (misma especificidad, pero de origen "autor" los dos). */
+.encabezado[hidden] {
+  display: none;
+}
 .encabezado {
   position: sticky;
   top: 0;
@@ -773,8 +779,8 @@ h3 {
 .campo select {
   min-height: var(--toque-min);
   border-radius: var(--radio-chico);
-  border: 1px solid var(--color-borde);
-  background: var(--color-superficie);
+  border: 1px solid var(--borde-medio);
+  background: var(--color-superficie-blanca);
   color: var(--color-texto);
   padding: 8px 12px;
   font-family: var(--font-cuerpo);
@@ -881,8 +887,10 @@ details.grupo > .campo {
 .campo textarea {
   min-height: var(--toque-min);
   border-radius: var(--radio-chico);
-  border: 1px solid var(--color-borde);
-  background: var(--color-superficie);
+  /* Blanco + borde suave (diseño Stitch: "surface-container-lowest" + "outline-variant/50"), no el
+     gris con borde oscuro de antes — Bruno lo marcó en la revisión de Fase 5. */
+  border: 1px solid var(--borde-medio);
+  background: var(--color-superficie-blanca);
   color: var(--color-texto);
   padding: 10px 12px;
   font-family: var(--font-cuerpo);
@@ -2375,7 +2383,9 @@ details[open] > .grupo__titulo--seccion::after {
 }
 .panel__badge {
   flex-shrink: 0;
-  font-family: var(--font-datos);
+  /* NO monospace (`--font-datos`): es una pastilla de texto normal ("3 activas"), no un dato
+     numérico tabular — Bruno lo marcó en la revisión de Fase 5. */
+  font-family: var(--font-cuerpo);
   font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -2485,8 +2495,9 @@ details[open] > .grupo__titulo--seccion::after {
   min-height: var(--toque-min);
   padding: 10px 6px;
   border-radius: var(--radio-chico);
-  border: 1px solid var(--color-borde);
-  background: var(--color-superficie);
+  border: 1px solid var(--borde-medio);
+  /* Blanca como en el diseño ("bg-surface"), no beige (`--color-superficie`). */
+  background: var(--color-superficie-blanca);
   color: var(--color-texto-tenue);
   cursor: pointer;
   transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
@@ -2779,4 +2790,219 @@ details[open] > .grupo__titulo--seccion::after {
   width: 15px;
   height: 15px;
   margin-right: 0;
+}
+
+/* =========================================================================================
+   Ronda de correcciones tras la 1ª revisión de Bruno sobre las 3 comparaciones (PNG). Ver el
+   commit de esta ronda para el detalle completo de qué cambió y por qué.
+   ========================================================================================= */
+
+/* Input "suelto" fuera de `.campo` (ej. "Nueva sección"): mismo blanco + borde suave que los de
+   `.campo`, pero con `flex: 1` porque vive dentro de una `.fila` (flex row) que no estira a sus
+   hijos como `.campo` (flex column). */
+.entrada-texto {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--toque-min);
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--borde-medio);
+  background: var(--color-superficie-blanca);
+  color: var(--color-texto);
+  padding: 10px 12px;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-16);
+  transition: border-color var(--duracion) var(--ease);
+}
+.entrada-texto:focus-visible {
+  outline: none;
+  border-color: var(--color-acento);
+}
+
+/* ---------- Cabecera de página EN EL CONTENIDO (Secciones/Respaldo/Editar Producto): el H1 real
+   de la pantalla, que en el diseño Stitch vive bajo el TopAppBar (marca) o reemplaza al header
+   entero (Editar Producto) — nunca en el `.encabezado` compartido. ---------- */
+.pagina__cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 2px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--borde-sutil);
+}
+.pagina__titulo {
+  font-family: var(--font-titulo);
+  font-size: 1.75rem;
+  line-height: 2.25rem;
+  font-weight: 400;
+  color: var(--color-primario-oscuro);
+}
+.pagina__subtitulo {
+  margin: 2px 0 0;
+  font-size: var(--tamano-14);
+  color: var(--color-texto-tenue);
+}
+.pagina__cabecera-icono {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie);
+  color: var(--color-acento);
+}
+.pagina__cabecera-icono .icono {
+  width: 20px;
+  height: 20px;
+  margin-right: 0;
+}
+
+/* ---------- Barra "Volver a Productos" / "Descartar" (Editar Producto): reemplaza al
+   `.encabezado` compartido en esta pantalla (`headerOculto`, main.js) — necesita su propio padding
+   de barra de estado (`--safe-top`), igual que `.encabezado`. ---------- */
+.barra-volver {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  background: var(--color-fondo);
+  padding: calc(var(--safe-top) + 10px) 4px 8px;
+  margin: 0 -16px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--borde-sutil);
+}
+/* Los 2 botones son flex-items sin `min-width:0`: por defecto no se encogen por debajo de su
+   contenido, así que a 320px + fuente grande del sistema "Descartar" se salía del viewport
+   (BUGS.md #46) — con esto se encogen y el texto interno (envuelto en <span>) hace ellipsis. */
+.barra-volver > * {
+  min-width: 0;
+}
+.barra-volver__descartar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  color: var(--color-texto-tenue);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radio-chico);
+}
+.pastilla-volver span,
+.barra-volver__descartar span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.barra-volver__descartar:hover {
+  color: var(--color-peligro);
+  background: var(--color-superficie);
+}
+.barra-volver__descartar:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: -2px;
+}
+.barra-volver__descartar .icono {
+  width: 17px;
+  height: 17px;
+  margin-right: 0;
+}
+
+/* Pastilla chica "← Volver a Productos" (Secciones/Editar Producto): visual compacto (~32px de
+   alto), objetivo táctil de 48px con el mismo truco que `.chip` (`::after` inset negativo). */
+.pastilla-volver {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--radio-grande);
+  border: 1px solid var(--borde-medio);
+  background: var(--color-superficie);
+  color: var(--color-primario-oscuro);
+  font-family: var(--font-cuerpo);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pastilla-volver::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+.pastilla-volver:hover {
+  background: var(--color-superficie-alta);
+}
+.pastilla-volver:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.pastilla-volver .icono {
+  width: 14px;
+  height: 14px;
+  margin-right: 0;
+}
+
+/* Rótulo de panel en mayúsculas (Secciones: "TUS SECCIONES"/"NUEVA SECCIÓN"/"PLANTILLAS
+   SUGERIDAS") — modificador de `.panel__rotulo`, que en Editar Producto/Respaldo va en minúsculas
+   normales (no todos los rótulos del sistema son uppercase, solo los de esta pantalla). */
+.panel__rotulo--seccion {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* Texto "Un toque" a la derecha del rótulo "PLANTILLAS SUGERIDAS". */
+.panel-secciones__untoque {
+  flex-shrink: 0;
+  color: var(--color-acento);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+}
+/* Grupo de íconos a la derecha de una fila de sección (lápiz + tacho) — separado del grupo de
+   subir/bajar, que va a la izquierda en el lugar de la manija del diseño. */
+.panel-secciones__acciones-derecha {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+/* Botón "blanco con borde" (Respaldo: "Seleccionar copia para restaurar") — variante de `.boton`
+   sin relleno gris. */
+.boton--contorno {
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--borde-medio);
+  color: var(--color-texto);
+}
+.boton--contorno:hover {
+  background: var(--color-superficie);
+}
+/* "Zona de peligro" con el mismo lenguaje que el resto del sistema (borde/texto rojo), no un
+   bloque sólido — el diseño no la modela, pero la app la necesita para borrar datos reales. */
+.boton--peligro-contorno {
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--color-peligro);
+  color: var(--color-peligro);
+}
+.boton--peligro-contorno:hover {
+  background: #ffdad6;
+}
+/* Título chico en sans (Respaldo: "Estado actual") — a diferencia de `.panel__titulo` (serif
+   grande, headline-sm), este es label-lg: 14px/600, mismo peso que `.panel__rotulo` pero sin
+   ícono ni mayúsculas. */
+.panel__titulo-chico {
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  color: var(--color-texto);
 }

@@ -678,3 +678,23 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `test/e2e/botones.spec.js` — `'..'` → `'../..'` para subir hasta `.campo` antes de buscar `.campo__error`.
 - **Resuelto:** sí.
 - ¿Se repetiría en otro proyecto? Sí, es el mismo punto que #44: un test que asume una estructura de DOM exacta (en vez de un `data-*`/rol estable) se rompe apenas se agrega un wrapper intermedio: preferible pero no bloqueante para este cambio puntual.
+
+### 46. Ronda 2 de Fase 5 (header=marca, H1 en contenido): `botones.spec.js` y `overflow-fuente-grande.spec.js` rompen
+- **Paso:** suite completa de e2e tras mover el H1 de Secciones/Respaldo al contenido (el header compartido ahora muestra "Estados Rápidos") y agregar la barra "Volver a Productos"/"Descartar" de Editar Producto.
+- **Error exacto (1/2):**
+  ```
+  Error: expect(locator).toHaveText(expected) failed
+  Locator: locator('#titulo-pantalla')
+  Expected: "Respaldo"
+  Received: "Estados Rápidos"
+  ```
+- **Error exacto (2/2):**
+  ```
+  Edición (nombre largo): scrollOverflow=false
+  BUTTON.barra-volver__descartar right=325 left=194 "Descartar"
+  ```
+- **Reproducir:** (1) `#/respaldo`, chequeo de `#titulo-pantalla`. (2) `#/producto/<id>`, viewport 320-360px + fuente 130-160%.
+- **Causa:** (1) no es un bug — el test asumía el comportamiento VIEJO (header = título de pantalla), que Bruno pidió cambiar a propósito en la revisión de las 3 comparaciones (el header ahora es la marca, el H1 real vive en el contenido). (2) `.barra-volver` (flex, `justify-content: space-between`) tiene 2 botones sin `min-width: 0`: un `<button>` flex-item por defecto no se encoge por debajo de su contenido (`min-width: auto`), así que a 320px + fuente grande "Volver a Productos" + "Descartar" juntos no entran y "Descartar" se sale del viewport.
+- **Arreglo:** `test/e2e/botones.spec.js` — chequea `#titulo-pantalla` = "Estados Rápidos" y agrega el chequeo del H1 real (`h1.pagina__titulo` = "Respaldo"). `css/estilos.css` — `.barra-volver > *` con `min-width: 0`, y el texto de ambos botones envuelto en `<span>` con `overflow: hidden; text-overflow: ellipsis; white-space: nowrap` (trunca en vez de desbordar).
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — mismo punto que #44: cualquier fila flex con 2+ botones de texto variable necesita `min-width: 0` en los flex-items + ellipsis en el texto, nunca confiar en que "total de textos < ancho de pantalla" a fuente por defecto.

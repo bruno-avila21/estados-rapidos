@@ -27,6 +27,58 @@ export async function render(contenedor, { navegar, params }) {
   const fotoBlobActual = producto?.fotoId ? await repo.obtenerFotoBlob(producto.fotoId) : null;
   let urlPreviaActual = fotoBlobActual ? URL.createObjectURL(fotoBlobActual) : null;
 
+  // Borrar producto: una sola función para las 2 entradas reales (el "Descartar" de la barra
+  // superior y el "Borrar producto" del pie), mismo criterio que "2 botones, 1 acción" del mock.
+  async function borrarProductoActual() {
+    const ok = await pedirConfirmacion({
+      titulo: 'Borrar producto',
+      mensaje: `Se va a borrar "${producto.nombre}" y su foto. Esta acción no se puede deshacer.`,
+    });
+    if (!ok) return;
+    await repo.borrarProducto(producto.id);
+    mostrarToast('Producto borrado');
+    navegar('#/');
+  }
+
+  // --- Barra "Volver a Productos" / "Descartar": reemplaza al `.encabezado` compartido en esta
+  // pantalla (headerOculto en main.js) — el mock no tiene marca/hamburguesa acá. ---
+  const barraVolver = document.createElement('div');
+  barraVolver.className = 'barra-volver';
+  const btnVolverBarra = document.createElement('button');
+  btnVolverBarra.type = 'button';
+  btnVolverBarra.className = 'pastilla-volver';
+  btnVolverBarra.setAttribute('data-accion', 'volver-header');
+  const etiquetaVolverBarra = document.createElement('span');
+  etiquetaVolverBarra.textContent = 'Volver a Productos';
+  btnVolverBarra.append(crearIcono('volver'), etiquetaVolverBarra);
+  btnVolverBarra.addEventListener('click', () => navegar('#/'));
+  barraVolver.append(btnVolverBarra);
+  if (!esNuevo) {
+    const btnDescartarBarra = document.createElement('button');
+    btnDescartarBarra.type = 'button';
+    btnDescartarBarra.className = 'barra-volver__descartar';
+    btnDescartarBarra.setAttribute('data-accion', 'descartar-header');
+    const etiquetaDescartar = document.createElement('span');
+    etiquetaDescartar.textContent = 'Descartar';
+    btnDescartarBarra.append(crearIcono('borrar'), etiquetaDescartar);
+    btnDescartarBarra.addEventListener('click', borrarProductoActual);
+    barraVolver.append(btnDescartarBarra);
+  }
+
+  // --- H1 real de la pantalla (vive en el contenido: patrones.md regla 3, "un H1 por pantalla" —
+  // el header compartido ya no es <h1>). ---
+  const cabeceraPagina = document.createElement('div');
+  cabeceraPagina.className = 'pagina__cabecera';
+  const textosCabecera = document.createElement('div');
+  const h1Pagina = document.createElement('h1');
+  h1Pagina.className = 'pagina__titulo';
+  h1Pagina.textContent = esNuevo ? 'Agregar Producto' : 'Editar Producto';
+  const subtituloPagina = document.createElement('p');
+  subtituloPagina.className = 'pagina__subtitulo';
+  subtituloPagina.textContent = 'Detalles y contenido del estado';
+  textosCabecera.append(h1Pagina, subtituloPagina);
+  cabeceraPagina.append(textosCabecera);
+
   const form = document.createElement('form');
   form.className = 'pila';
   form.noValidate = true;
@@ -34,10 +86,18 @@ export async function render(contenedor, { navegar, params }) {
   // --- Panel 1: fotografía (lo que se usa siempre) ---
   const panelFoto = document.createElement('section');
   panelFoto.className = 'panel foto-picker';
+  const cabeceraFoto = document.createElement('div');
+  cabeceraFoto.className = 'panel__cabecera';
+  cabeceraFoto.style.marginBottom = '10px';
   const rotuloFoto = document.createElement('span');
   rotuloFoto.className = 'panel__rotulo';
+  rotuloFoto.style.marginBottom = '0';
   rotuloFoto.textContent = 'Fotografía principal';
-  panelFoto.append(rotuloFoto);
+  const badgeAspecto = document.createElement('span');
+  badgeAspecto.className = 'panel__badge';
+  badgeAspecto.textContent = 'Vertical 9:16'; // 1080×1920 real (CLAUDE.md), no "1:1" del mock
+  cabeceraFoto.append(rotuloFoto, badgeAspecto);
+  panelFoto.append(cabeceraFoto);
 
   const marcoFoto = document.createElement('div');
   marcoFoto.className = 'foto-picker__marco';
@@ -328,16 +388,7 @@ export async function render(contenedor, { navegar, params }) {
     btnBorrar.className = 'boton boton--peligro boton--ancho';
     btnBorrar.setAttribute('data-accion', 'borrar');
     btnBorrar.append(crearIcono('borrar'), document.createTextNode('Borrar producto'));
-    btnBorrar.addEventListener('click', async () => {
-      const ok = await pedirConfirmacion({
-        titulo: 'Borrar producto',
-        mensaje: `Se va a borrar "${producto.nombre}" y su foto. Esta acción no se puede deshacer.`,
-      });
-      if (!ok) return;
-      await repo.borrarProducto(producto.id);
-      mostrarToast('Producto borrado');
-      navegar('#/');
-    });
+    btnBorrar.addEventListener('click', borrarProductoActual);
     form.append(separador, btnBorrar);
   }
 
@@ -388,7 +439,7 @@ export async function render(contenedor, { navegar, params }) {
     }
   }
 
-  contenedor.append(form);
+  contenedor.append(barraVolver, cabeceraPagina, form);
 }
 
 function botonFoto({ icono, texto, accion }) {

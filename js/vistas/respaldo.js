@@ -49,6 +49,26 @@ export async function render(contenedor) {
   const wrap = document.createElement('div');
   wrap.className = 'pila';
 
+  // --- H1 real de la pantalla (vive en el contenido: patrones.md regla 3 — el header compartido
+  // ya no es <h1>, ahora muestra la marca "Estados Rápidos"). El ícono de escudo de la derecha es
+  // el mismo elemento decorativo del mock (estado del respaldo local, no un candado de nube). ---
+  const cabeceraPagina = document.createElement('div');
+  cabeceraPagina.className = 'pagina__cabecera';
+  const h1Pagina = document.createElement('h1');
+  h1Pagina.className = 'pagina__titulo';
+  h1Pagina.textContent = 'Respaldo';
+  const subtituloPagina = document.createElement('p');
+  subtituloPagina.className = 'pagina__subtitulo';
+  subtituloPagina.textContent = 'Copia de seguridad de tu catálogo';
+  const textosPagina = document.createElement('div');
+  textosPagina.append(h1Pagina, subtituloPagina);
+  const iconoEscudo = document.createElement('span');
+  iconoEscudo.className = 'pagina__cabecera-icono';
+  iconoEscudo.setAttribute('aria-hidden', 'true');
+  iconoEscudo.append(crearIcono('escudo'));
+  cabeceraPagina.append(textosPagina, iconoEscudo);
+  wrap.append(cabeceraPagina);
+
   const info = document.createElement('p');
   info.className = 'texto-tenue';
   info.textContent =
@@ -61,12 +81,11 @@ export async function render(contenedor) {
   const cabeceraEstado = document.createElement('div');
   cabeceraEstado.className = 'panel-respaldo__estado';
   const tituloEstado = document.createElement('h2');
-  tituloEstado.className = 'panel__titulo';
-  tituloEstado.style.marginBottom = '0';
-  tituloEstado.textContent = 'Estado del respaldo';
+  tituloEstado.className = 'panel__titulo-chico';
+  tituloEstado.textContent = 'Estado actual';
   const pastilla = document.createElement('span');
   pastilla.className = 'panel-respaldo__pastilla';
-  pastilla.append(crearIcono(ultimoRespaldo ? 'check' : 'info'), document.createTextNode(ultimoRespaldo ? 'Copia local guardada' : 'Sin copia todavía'));
+  pastilla.append(crearIcono(ultimoRespaldo ? 'check' : 'info'), document.createTextNode(ultimoRespaldo ? 'Copia actualizada' : 'Sin copia todavía'));
   cabeceraEstado.append(tituloEstado, pastilla);
 
   const datos = document.createElement('dl');
@@ -74,7 +93,10 @@ export async function render(contenedor) {
   datos.append(
     filaDato('Último respaldo', ultimoRespaldo ? formatearFecha(ultimoRespaldo.fecha) : 'Nunca'),
     filaDato('Tamaño del archivo', ultimoRespaldo ? formatearTamano(ultimoRespaldo.tamano) : '—'),
-    filaDato('Contenido actual', `${productos.length} producto${productos.length === 1 ? '' : 's'} · ${secciones.length} sección${secciones.length === 1 ? '' : 'es'}`)
+    filaDato('Contenido', `${productos.length} producto${productos.length === 1 ? '' : 's'} · ${secciones.length} sección${secciones.length === 1 ? '' : 'es'}`),
+    // El mock dice "Destino en la nube: Google Drive" — no hay nube: el único destino real es el
+    // archivo que el navegador/SAF guarda en el celular.
+    filaDato('Destino', 'Archivo .json en este celular')
   );
 
   const btnExportar = document.createElement('button');
@@ -132,7 +154,7 @@ export async function render(contenedor) {
   inputArchivo.setAttribute('data-accion-input', 'importar');
   const btnImportar = document.createElement('button');
   btnImportar.type = 'button';
-  btnImportar.className = 'boton boton--ancho panel-respaldo__boton-secundario';
+  btnImportar.className = 'boton boton--contorno boton--ancho panel-respaldo__boton-secundario';
   btnImportar.setAttribute('data-accion', 'importar');
   btnImportar.append(crearIcono('carpeta'), document.createTextNode('Elegir archivo…'));
   btnImportar.addEventListener('click', () => inputArchivo.click());
@@ -200,7 +222,7 @@ export async function render(contenedor) {
   avisoPeligro.textContent = 'Borra productos, fotos, secciones y la plantilla de este celular. No se puede deshacer.';
   const btnBorrarTodo = document.createElement('button');
   btnBorrarTodo.type = 'button';
-  btnBorrarTodo.className = 'boton boton--peligro boton--ancho';
+  btnBorrarTodo.className = 'boton boton--peligro-contorno boton--ancho';
   btnBorrarTodo.setAttribute('data-accion', 'borrar-todo');
   btnBorrarTodo.append(crearIcono('borrar'), document.createTextNode('Borrar todos los datos'));
   btnBorrarTodo.addEventListener('click', async () => {
