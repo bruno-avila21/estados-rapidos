@@ -78,3 +78,41 @@
 - Firma verificada con `apksigner verify --print-certs` sobre ambos APKs (1.4 y el 1.3 reconstruido): mismo DN (`CN=Estados rapidos, O=Bruno Avila, C=AR`) y mismo SHA-256 (`5d043d0f7642a77aa6469c3e9106780cfc57f97a97aa49da5c004efa0b27dfb4`) — misma llave. `aapt dump badging`: `versionCode='5' versionName='1.4'`.
 - Emulador restaurado al terminar: app desinstalada, foto de prueba borrada de `/sdcard/Pictures`.
 - No verificado en esta ronda: cámara física (limitación del emulador, ya conocida de rondas anteriores).
+
+### Re-build 2026-09-29 (mismo `versionCode` 5 / `1.4`, ahora con los 4 presets de composición, la
+copia automática de respaldo y el reordenamiento de secciones — commits `a791848`..`f20562c` de
+`rediseno-organic`)
+- Clean build real: `_sitio/` y `movil/app/build/` borrados antes de correr `movil/build-apk.ps1`
+  (que reconstruye `_sitio/` con `armar-sitio.mjs` y dispara `copiarApp`/`armarSitio` en Gradle), para
+  garantizar que no quedara nada cacheado del build de `cc7eb96`. `estados-rapidos-1.4.apk` quedó en
+  3.07 MB (antes 2.91 MB, por las 4 fuentes Newsreader + `geometria-presets.js` + los módulos de
+  copia automática/reordenamiento).
+- Verificado que el `.apk` contiene los archivos de la rama actual y no versiones viejas: comparación
+  byte a byte entre `assets/app/js/geometria-presets.js` y `assets/app/js/respaldo-automatico.js`
+  dentro del `.apk` contra los fuente del repo (`diff`, sin diferencias); presentes también los 4
+  `fonts/newsreader-*.woff2`/`manrope-*.woff2` y `js/utils/respaldo-copia.js`.
+- Firma: `apksigner verify --print-certs` → mismo DN y mismo SHA-256
+  (`5d043d0f7642a77aa6469c3e9106780cfc57f97a97aa49da5c004efa0b27dfb4`, misma llave que la 1.3).
+  `aapt dump badging`: `versionCode='5' versionName='1.4'`.
+- **Verificado en emulador (AVD `docuvoz`), 1.3 → 1.4 con datos cargados**: `estados-rapidos-1.3.apk`
+  (copia archivada en `_INSTALABLES`, no había quedado en la raíz por el `.gitignore`) instalado
+  limpio (uninstall real primero — quedaba data vieja de una ronda anterior en el mismo AVD, contaminando
+  la primera prueba), se cargó 1 producto ("Veri", foto de la cámara del emulador — el PNG fixture de
+  los E2E no lo pudo decodificar el `BitmapFactory` nativo, la cámara sí), se subió a 1.4 con
+  `adb install -r` y **el producto sobrevivió** (nombre y foto intactos, agrupado en "Sin sección");
+  la 1.4 abre con el rediseño "Organic Minimalist" completo (header "Estados Rápidos" + tagline,
+  tarjeta "Consejo de publicación", toggle Lista/Grilla).
+- Publicar con el preset **Editorial** desde la hoja de revisión: generó la imagen (`image/jpeg` en el
+  intent de `ACTION_CHOOSER`, confirma que `componer.js` ahora exporta JPEG y no PNG) y abrió el
+  selector de WhatsApp sin errores en `logcat` (sin `FATAL`/`AndroidRuntime`/`chromium ERROR`).
+  Verificación por `uiautomator dump` + `logcat` (no CDP contra el WebView: `agent-browser`/CDP contra
+  este WebView de release rompió la app al intentar `DOM.setFileInputFiles`, ver BUGS.md/nota abajo).
+- Emulador restaurado al terminar: app desinstalada, foto de prueba borrada de `/sdcard/Pictures`,
+  emulador apagado (`adb emu kill`).
+- **Nota para la próxima ronda**: conectar `agent-browser`/CDP contra el WebView de este APK (release,
+  sin `BuildConfig.DEBUG`) vía `adb forward` a `webview_devtools_remote_<pid>` funciona para navegar y
+  leer (`snapshot`, `get text`), pero el comando `upload` (`DOM.setFileInputFiles`) sobre el `<input
+  type=file>` terminó el proceso renderer con "bad IPC message" y mató la app entera (WebView Android,
+  no pasa en Chrome de escritorio). Para adjuntar fotos en este WebView conviene UI nativa (galería o
+  cámara reales vía `adb shell input tap` + `uiautomator dump` para ubicar botones) en vez de
+  `agent-browser upload`.

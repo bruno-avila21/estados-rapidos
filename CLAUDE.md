@@ -100,12 +100,15 @@ propósito desde la pestaña "Respaldo" — y ese archivo tampoco se commitea (v
 - `js/geometria-presets.js` — geometría pura (sin canvas) de los 4 presets de composición de Fase 4
   (banner inferior, editorial, polaroid, story inmersiva): rectángulos de foto/zona decorativa/
   textos según si el producto tiene precio y/o descripción.
-- `js/componer.js` — dibuja en un canvas 1080×1920 → Blob PNG; `componerSegunEstilo` elige entre
-  `componerSoloFoto`, `componerFotoConPrecio`, `componerFotoConDescripcion`, `componerImagen` ("Mi
-  plantilla") y los 4 presets de `geometria-presets.js`; nombre/precio/descripción comparten los
-  mismos `ajustes`.
+- `js/componer.js` — dibuja en un canvas 1080×1920 → Blob **JPEG** (calidad Estándar 0.85 / Alta
+  0.95, elegible en la hoja de revisión); `componerSegunEstilo` elige entre `componerSoloFoto`,
+  `componerFotoConPrecio`, `componerFotoConDescripcion`, `componerImagen` ("Mi plantilla") y los 4
+  presets de `geometria-presets.js`; nombre/precio/descripción comparten los mismos `ajustes`.
 - `js/db.js` / `js/repositorio.js` — IndexedDB y las operaciones de dominio (selección persistente,
-  ajustes generales, normalización de ajustes al leer/importar).
+  ajustes generales, normalización de ajustes al leer/importar, reordenamiento de secciones
+  arrastrando).
+- `js/respaldo-automatico.js` / `js/utils/respaldo-copia.js` — copia automática diaria del respaldo
+  (APK + PWA) a la carpeta pública, con rotación (máximo 7 copias).
 - `js/vistas/*.js` — pantallas: `lista` (productos + selección + barra "Publicar N"), `detalle`
   (alta/edición, con override de estilo en "Opciones avanzadas"), `ajustes` (tarjetas de estilo con
   miniatura en vivo, descripción modelo, formato de precio), `plantilla` (editor de plantilla
