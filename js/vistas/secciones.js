@@ -1,17 +1,25 @@
 // Pantalla "Secciones": gestión de las etiquetas que agrupan/filtran Productos (días para publicar,
-// rubros, lo que sea — CREAR-BRIEF.md, ronda "secciones"). Crear, renombrar, reordenar (subir/bajar,
-// sin drag obligatorio) y borrar (nunca borra productos, solo los desasigna, con su propia
-// confirmación).
+// rubros, lo que sea — CREAR-BRIEF.md, ronda "secciones"). Crear, renombrar, reordenar y borrar
+// (nunca borra productos, solo los desasigna, con su propia confirmación).
 // Reskin "Organic Minimalist" (Interfaz/stitch_.../gesti_n_de_secciones_natural): 3 tarjetas ("Tus
 // secciones", "Nueva sección", "Plantillas sugeridas") + el consejo de uso, en vez de la pila plana
-// anterior. El mock reordena con drag-and-drop y muestra una "prioridad" por sección — la app no
-// tiene ninguna de las 2 cosas, así que se mantienen subir/bajar (real) y se saca la prioridad
-// (inventada, ver el commit de esta ronda para el detalle).
+// anterior. El mock muestra una "prioridad" por sección — la app no tiene ese concepto, así que se
+// saca (inventada, ver el commit de la ronda "Fase 5" para el detalle).
+// Reordenar arrastrando (ronda "reordenar arrastrando", 2026-09-29): la manija de 6 puntos del mock
+// (antes: botones subir/bajar) con arrastre real por pointer events — reusa js/reordenar.js
+// (moverElemento/indiceDesdePosicion), MISMO patrón que la manija de la hoja de revisión
+// (revision.js `habilitarArrastre`): centros medidos una sola vez al empezar, reordena moviendo
+// nodos del DOM (nunca los reclona) para no perder el foco, y persiste con `repo.reordenarSecciones`
+// solo al soltar/al terminar el paso de teclado (no en cada pointermove, para no golpear la base).
+// El teclado (flechas arriba/abajo con foco en la manija) es la alternativa 100% accesible que el
+// mock no dibuja (confía solo en drag-and-drop) — con `progresoOrden` (aria-live) anunciando la
+// nueva posición.
 import * as repo from '../repositorio.js';
 import { validarNombreSeccion, contarProductosPorSeccion } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 import { crearIcono } from '../utils/iconos.js';
+import { moverElemento, indiceDesdePosicion } from '../reordenar.js';
 
 // Plantillas sugeridas (mock "PLANTILLAS SUGERIDAS"): un toque crea la sección de una, con el
 // nombre sugerido — a diferencia del mock, esto es 100% funcional (no un catálogo decorativo).
@@ -25,7 +33,10 @@ export async function render(contenedor, { navegar }) {
   contenedor.textContent = '';
   // Las dos lecturas en paralelo (CREAR-BRIEF.md, mismo criterio que lista.js): el conteo por
   // sección (Fase 2, "S" #2) necesita los productos además de las secciones.
-  const [secciones, productos] = await Promise.all([repo.listarSecciones(), repo.listarProductos()]);
+  // `let`, no `const`: el arrastre/teclado (ronda "reordenar arrastrando") reasignan esta variable
+  // a una copia con el nuevo orden (`moverElemento`, nunca muta el array en el lugar) — mismo
+  // criterio que `productos` en revision.js.
+  let [secciones, productos] = await Promise.all([repo.listarSecciones(), repo.listarProductos()]);
   const conteos = contarProductosPorSeccion(productos, secciones);
   const recargar = () => render(contenedor, { navegar });
 
@@ -81,10 +92,17 @@ export async function render(contenedor, { navegar }) {
   explicacionLista.className = 'panel__subtitulo';
   explicacionLista.textContent =
     secciones.length > 0
-      ? 'Subí o bajá el orden con las flechas, tocá el nombre para renombrarla, o asignala a un producto desde su ficha.'
+      ? 'Arrastrá la manija para reordenar, tocá el nombre para renombrarla, o asignala a un producto desde su ficha.'
       : 'Usalas para agrupar productos por día para publicar ("Lunes", "Martes") o por rubro ("Lencería", "Electrodomésticos") — un producto puede estar en varias a la vez.';
 
-  panelLista.append(cabeceraLista, explicacionLista);
+  // Anuncia la nueva posición tras un arrastre/paso de teclado (aria-live) — visualmente oculto,
+  // mismo truco que `.campo-oculto` (1x1px, sigue en el árbol de accesibilidad).
+  const progresoOrden = document.createElement('p');
+  progresoOrden.className = 'campo-oculto panel-secciones__progreso-orden';
+  progresoOrden.setAttribute('role', 'status');
+  progresoOrden.setAttribute('aria-live', 'polite');
+
+  panelLista.append(cabeceraLista, explicacionLista, progresoOrden);
 
   // Resumen "Sin sección" (Fase 2, "S" #2): mismo dato que el chip de la lista de Productos, para
   // saber de un vistazo si conviene asignar los que quedaron sueltos — solo si hay productos y al
@@ -99,16 +117,110 @@ export async function render(contenedor, { navegar }) {
 
   const lista = document.createElement('div');
   lista.className = 'lista-secciones';
+
+  /** Reordena SOLO el DOM (mueve los nodos existentes, nunca los reclona — no pierde foco ni
+   * miniaturas) para que coincida con el orden actual de `secciones`, y refresca el aria-label de
+   * cada manija con la posición nueva. Mismo patrón que `sincronizarDomConProductos` en
+   * revision.js. */
+  function sincronizarFilasConSecciones() {
+    const total = secciones.length;
+    for (const seccion of secciones) {
+      const fila = lista.querySelector(`[data-id="${seccion.id}"]`);
+      if (fila) lista.append(fila);
+    }
+    secciones.forEach((seccion, i) => {
+      const manija = lista.querySelector(`[data-id="${seccion.id}"] [data-accion="arrastrar-seccion"]`);
+      if (manija) {
+        manija.setAttribute(
+          'aria-label',
+          `Reordenar ${seccion.nombre}, posición ${i + 1} de ${total}. Arrastrar, o usar las flechas arriba y abajo.`
+        );
+      }
+    });
+  }
+
+  /** Mueve `desde` a `hasta` en memoria + DOM, sin persistir (el llamador decide cuándo guardar:
+   * en cada pointermove sería demasiado tráfico a IndexedDB). */
+  function moverSeccionEnPantalla(desde, hasta) {
+    secciones = moverElemento(secciones, desde, hasta);
+    sincronizarFilasConSecciones();
+  }
+
+  async function persistirOrdenSecciones() {
+    await repo.reordenarSecciones(secciones.map((s) => s.id));
+  }
+
+  /** Alternativa accesible al arrastre (flechas arriba/abajo con foco en la manija, sin drag
+   * obligatorio — mismo criterio que antes con subir/bajar): mueve `id` un lugar y persiste. */
+  async function moverPorTeclado(id, delta) {
+    const desde = secciones.findIndex((s) => s.id === id);
+    if (desde === -1) return;
+    const hasta = desde + delta;
+    if (hasta < 0 || hasta >= secciones.length) return;
+    moverSeccionEnPantalla(desde, hasta);
+    await persistirOrdenSecciones();
+    lista.querySelector(`[data-id="${id}"] [data-accion="arrastrar-seccion"]`)?.focus();
+    progresoOrden.textContent = `${secciones[hasta].nombre} — posición ${hasta + 1} de ${secciones.length}.`;
+  }
+
+  /** Arrastre con el dedo (pointer events, SOLO desde la manija — la API HTML5 drag/drop no
+   * dispara en Android WebView) — mismo patrón que `habilitarArrastre` en revision.js, pero
+   * vertical (clientY) y persistiendo en IndexedDB solo al soltar. */
+  function habilitarArrastreSeccion(fila, manija, id) {
+    let activo = false;
+    let indiceActual = -1;
+    let centros = [];
+
+    const empezar = (ev) => {
+      if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+      activo = true;
+      indiceActual = secciones.findIndex((s) => s.id === id);
+      centros = Array.from(lista.children).map((el) => {
+        const r = el.getBoundingClientRect();
+        return r.top + r.height / 2;
+      });
+      fila.classList.add('panel-secciones__fila--arrastrando');
+      try {
+        manija.setPointerCapture(ev.pointerId);
+      } catch {
+        /* entorno de test sin soporte real de Pointer Capture: el arrastre sigue funcionando */
+      }
+    };
+    const mover = (ev) => {
+      if (!activo) return;
+      ev.preventDefault();
+      const destino = indiceDesdePosicion(centros, ev.clientY);
+      if (destino !== indiceActual && destino >= 0 && destino < secciones.length) {
+        moverSeccionEnPantalla(indiceActual, destino);
+        indiceActual = destino;
+      }
+    };
+    const terminar = async () => {
+      if (!activo) return;
+      activo = false;
+      fila.classList.remove('panel-secciones__fila--arrastrando');
+      if (indiceActual >= 0 && secciones[indiceActual]) {
+        await persistirOrdenSecciones();
+        progresoOrden.textContent = `${secciones[indiceActual].nombre} — posición ${indiceActual + 1} de ${secciones.length}.`;
+      }
+    };
+    manija.addEventListener('pointerdown', empezar);
+    manija.addEventListener('pointermove', mover);
+    manija.addEventListener('pointerup', terminar);
+    manija.addEventListener('pointercancel', terminar);
+  }
+
   if (secciones.length === 0) {
     const vacio = document.createElement('p');
     vacio.className = 'texto-tenue';
     vacio.textContent = 'Todavía no creaste ninguna. Empezá con el formulario de abajo o con una plantilla sugerida.';
     lista.append(vacio);
   } else {
-    secciones.forEach((seccion, indice) => {
+    secciones.forEach((seccion) => {
       const cantidad = conteos.porSeccion.get(seccion.id) || 0;
-      lista.append(filaSeccion(seccion, indice, secciones.length, cantidad, recargar));
+      lista.append(filaSeccion(seccion, cantidad, recargar, { moverPorTeclado, habilitarArrastreSeccion }));
     });
+    sincronizarFilasConSecciones(); // aria-label inicial de cada manija con su posición real
   }
   panelLista.append(lista);
   raiz.append(panelLista);
@@ -194,36 +306,28 @@ export async function render(contenedor, { navegar }) {
   contenedor.append(raiz);
 }
 
-function filaSeccion(seccion, indice, total, cantidad, recargar) {
+function filaSeccion(seccion, cantidad, recargar, { moverPorTeclado, habilitarArrastreSeccion }) {
   const fila = document.createElement('div');
   fila.className = 'fila fila-seccion panel-secciones__fila';
   fila.setAttribute('data-id', seccion.id);
 
-  const botonesOrden = document.createElement('div');
-  botonesOrden.className = 'panel-secciones__acciones';
-  const btnSubir = document.createElement('button');
-  btnSubir.type = 'button';
-  btnSubir.className = 'boton-icono-mini';
-  btnSubir.setAttribute('data-accion', 'subir-seccion');
-  btnSubir.setAttribute('aria-label', `Subir ${seccion.nombre}`);
-  btnSubir.append(crearIcono('flecha-arriba'));
-  btnSubir.disabled = indice === 0;
-  btnSubir.addEventListener('click', async () => {
-    await repo.reordenarSeccion(seccion.id, 'subir');
-    recargar();
+  // Manija de arrastre (6 puntos, a la izquierda de la fila — mock "gesti_n_de_secciones_natural"):
+  // reemplaza los botones subir/bajar de antes. Arrastre real con el dedo (pointer events,
+  // `habilitarArrastreSeccion`, inyectado desde render()) + flechas arriba/abajo por teclado con el
+  // foco puesto acá (alternativa accesible que el mock no dibuja). El aria-label con la posición
+  // real lo completa `sincronizarFilasConSecciones` apenas se monta.
+  const manija = document.createElement('button');
+  manija.type = 'button';
+  manija.className = 'fila-seccion__manija';
+  manija.setAttribute('data-accion', 'arrastrar-seccion');
+  manija.setAttribute('aria-label', `Reordenar ${seccion.nombre}`);
+  manija.append(crearIcono('arrastrar'));
+  manija.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
+    ev.preventDefault();
+    moverPorTeclado(seccion.id, ev.key === 'ArrowUp' ? -1 : 1);
   });
-  const btnBajar = document.createElement('button');
-  btnBajar.type = 'button';
-  btnBajar.className = 'boton-icono-mini';
-  btnBajar.setAttribute('data-accion', 'bajar-seccion');
-  btnBajar.setAttribute('aria-label', `Bajar ${seccion.nombre}`);
-  btnBajar.append(crearIcono('flecha-abajo'));
-  btnBajar.disabled = indice === total - 1;
-  btnBajar.addEventListener('click', async () => {
-    await repo.reordenarSeccion(seccion.id, 'bajar');
-    recargar();
-  });
-  botonesOrden.append(btnSubir, btnBajar);
+  habilitarArrastreSeccion(fila, manija, seccion.id);
 
   const info = document.createElement('div');
   info.className = 'panel-secciones__info';
@@ -292,7 +396,7 @@ function filaSeccion(seccion, indice, total, cantidad, recargar) {
   accionesDerecha.className = 'panel-secciones__acciones-derecha';
   accionesDerecha.append(btnRenombrar, btnBorrar);
 
-  fila.append(botonesOrden, info, accionesDerecha);
+  fila.append(manija, info, accionesDerecha);
   return fila;
 }
 

@@ -210,6 +210,10 @@ const ESCENAS = {
   },
   respaldo_natural: {
     titulo: 'Respaldo',
+    // El mock dibuja el interruptor "Copia automática diaria" ya activado (aria-checked="true") —
+    // se siembra igual, para que la comparación muestre la MISMA maqueta en el estado real que
+    // tendría alguien que la prendió (ronda "copia automática").
+    segundaCaptura: { textoDiseno: 'Preferencias de respaldo', selectorApp: '.panel-respaldo__preferencia' },
     async preparar(page) {
       await page.goto('/');
       // 48 productos · 6 secciones (conteos reales del mock) + un registro de "último respaldo"
@@ -226,6 +230,7 @@ const ESCENAS = {
         const hoy = new Date();
         hoy.setHours(10, 42, 0, 0);
         localStorage.setItem('estados-rapidos:ultimo-respaldo', JSON.stringify({ fecha: hoy.getTime(), tamano: Math.round(24.8 * 1024 * 1024) }));
+        await repo.guardarCopiaAutomaticaHabilitada(true);
       });
       await page.goto('/#/respaldo');
       await page.waitForTimeout(150);

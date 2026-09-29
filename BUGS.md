@@ -785,3 +785,50 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `test/e2e/ajustes.spec.js` — en vez de una sola lectura de `boundingBox()`, se usa `expect.poll(() => page.locator(...).boundingBox().catch(() => null)).toBeTruthy()` (reintenta y vuelve a resolver el locator en cada intento, nunca un handle guardado) antes de leer las coordenadas de verdad.
 - **Resuelto:** sí — confirmado con 6/6 corridas repetidas (`--repeat-each=6`) sin fallos.
 - ¿Se repetiría en otro proyecto? Sí — cualquier test que dependa de `boundingBox()`/`elementHandle` justo después de un cambio de ruta en la MISMA pantalla (sin recarga completa) es candidato a esta carrera; conviene envolver la lectura en `expect.poll` en vez de confiar en que el render ya terminó.
+
+### 52. Ronda "copia automática": `plataforma.test.js` — la última parte del streaming no mide lo que decía el comentario
+- **Paso:** `npm test`, test nuevo `guardarCopiaAutomaticaApk: contenido grande se manda en varias partes...`.
+- **Error exacto:**
+  ```
+  Expected values to be strictly equal:
+  1000001 !== 1
+  ```
+- **Reproducir:** `node --test test/plataforma.test.js` con el test de streaming de `guardarCopiaAutomaticaApk` (contenido de 5.000.001 caracteres, partes de 2.000.000).
+- **Causa:** error de cuentas en el test, no de la función: 5.000.001 = 2.000.000 + 2.000.000 + 1.000.001 (el resto de la división), no "+1" como decía el comentario.
+- **Arreglo:** `test/plataforma.test.js` — la aserción de la tercera parte pasa a `1_000_001`.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? No especialmente — es aritmética de test, no un patrón reutilizable.
+
+### 53. Ronda "reordenar arrastrando": `reordenar-secciones.spec.js` — el `pointerup` sintético de CDP no cierra el arrastre
+- **Paso:** `npx playwright test reordenar-secciones.spec.js`, test "arrastrar la manija con el dedo cambia el orden y se persiste".
+- **Error exacto:**
+  ```
+  Error: expect(locator).toContainText(expected) failed
+  Locator: locator('.panel-secciones__progreso-orden')
+  Expected substring: "posición 3 de 3"
+  Received string:    ""
+  ```
+  (el orden en el DOM SÍ cambiaba bien — el fallo era solo el aria-live, que se escribe en `pointerup`/`pointercancel`).
+- **Reproducir:** arrastrar con `cdp.send('Input.dispatchTouchEvent', ...)` (mismo patrón que `revision-reordenar.spec.js`) sobre la manija de Secciones y esperar el texto de `progresoOrden` tras el `touchEnd`.
+- **Causa:** no es un bug de la app — confirmado agregando un `console.log` temporal en `terminar()` (secciones.js): nunca se imprimía, es decir el `pointerup` real jamás llegaba al listener. `Input.dispatchTouchEvent` con `type: 'touchEnd'` no siempre se traduce en Chromium en un evento `pointerup` de verdad sobre el elemento que tiene `setPointerCapture()` — limitación conocida del harness de CDP, no del gesto en un dispositivo físico (en un celu real, levantar el dedo SÍ dispara `pointerup`). `revision-reordenar.spec.js` tiene el mismo patrón de arrastre y nunca lo notó porque su test solo verifica el ORDEN final (que se fija en cada `pointermove`, no en el `pointerup`), nunca el texto de `progreso` después de soltar.
+- **Arreglo:** `test/e2e/reordenar-secciones.spec.js` — después de la secuencia de `touchStart/touchMove/touchEnd` por CDP, se dispara a mano `locator.dispatchEvent('pointerup', {...})` sobre la manija (localizada por `data-id`, no por posición, porque la fila se mueve durante el propio arrastre) para cerrar el gesto de forma determinista.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — cualquier E2E que simule un arrastre por pointer events con CDP `Input.dispatchTouchEvent` y verifique algo que dependa del `pointerup`/`pointercancel` (no solo del `pointermove`) puede necesitar el mismo `dispatchEvent('pointerup', ...)` manual de cierre. Vale la pena revisar si `revision-reordenar.spec.js` también debería cerrarlo así en vez de confiar en que CDP lo haga solo, aunque hoy no le hace falta porque no verifica nada post-soltar.
+
+### 54. Ronda "reordenar arrastrando": `reordenar-secciones.spec.js` (teclado) — flaky por una carrera `reload()` vs. la escritura a IndexedDB
+- **Paso:** suite completa (`npx playwright test`, no al correr el archivo solo): test "flechas arriba/abajo con foco en la manija reordenan y anuncian la posición (teclado)", última aserción tras `page.reload()`.
+- **Error exacto:**
+  ```
+  Error: expect(received).toEqual(expected) // deep equality
+  Array [
+  -   "743aab52-...",
+      "e8e33036-...",
+  +   "743aab52-...",
+  ]
+  ```
+  (el orden en pantalla, ANTES de recargar, ya estaba bien — lo que volvía mal era lo persistido).
+- **Reproducir:** presionar ArrowDown (o ArrowUp) en la manija y llamar `page.reload()` inmediatamente después, sin esperar ninguna señal de que `repo.reordenarSecciones(...)` ya escribió en IndexedDB.
+- **Causa:** no es un bug de la app — `moverPorTeclado` (secciones.js) hace `moverSeccionEnPantalla` (síncrono, ya se ve en el DOM) y DESPUÉS `await persistirOrdenSecciones()` (async, IndexedDB) antes de escribir el aria-live. El test comprobaba el DOM (ya actualizado) y recargaba enseguida, sin esperar a que la escritura async terminara — carrera clásica entre "se ve bien en pantalla" y "ya se guardó", más fácil de gatillar corriendo la suite entera (más contención de I/O) que el archivo solo.
+- **Arreglo:** `test/e2e/reordenar-secciones.spec.js` — esperar `.panel-secciones__progreso-orden` con el texto del paso ANTES de `page.reload()`: como el aria-live se escribe recién después del `await` de persistencia, es la señal de que ya se guardó.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — cualquier E2E que recargue la página justo después de una acción cuya persistencia es async y no está atada a nada visible (spinner, toast, aria-live) es candidato a esta carrera; conviene esperar una señal post-escritura antes de recargar, no asumir que terminó.

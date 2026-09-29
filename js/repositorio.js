@@ -131,6 +131,25 @@ export async function reordenarSeccion(id, direccion) {
   return await listarSecciones();
 }
 
+/** Reordenamiento COMPLETO (arrastre con el dedo, reskin "gesti_n_de_secciones_natural"): recibe
+ * los ids YA en el orden final y reasigna `orden` = índice para cada uno — mismo campo que
+ * `reordenarSeccion`, pero de un saque, porque un drag puede soltar varias posiciones más allá del
+ * vecino inmediato (que es lo único que `reordenarSeccion` sabe mover). Ids que no existan más se
+ * ignoran (no rompe si la base y la lista en pantalla quedaron un instante desincronizadas). */
+export async function reordenarSecciones(nuevoOrdenIds) {
+  const secciones = await listarSecciones();
+  const porId = new Map(secciones.map((s) => [s.id, s]));
+  let indice = 0;
+  for (const id of nuevoOrdenIds) {
+    const seccion = porId.get(id);
+    if (!seccion) continue;
+    seccion.orden = indice;
+    indice += 1;
+    await db.guardar('secciones', seccion);
+  }
+  return await listarSecciones();
+}
+
 /** Borrar una sección NO borra productos: solo los desasigna (quita su id de `producto.secciones`).
  * La confirmación la pide quien llama (pantalla de gestión). */
 export async function borrarSeccion(id) {
@@ -276,6 +295,10 @@ export async function obtenerAjustesGenerales() {
     // revisión; por defecto 'estandar' (mismo criterio que los campos de arriba: un registro de
     // antes de esta ronda no lo trae y queda con el valor por defecto).
     calidadImagen: CALIDAD_IMAGEN_POR_DEFECTO,
+    // Copia automática diaria (ronda "copia automática", Respaldo → "Preferencias de respaldo"):
+    // apagada por defecto — un respaldo/uso de antes de esta ronda no la trae y arranca sin
+    // escribir nada solo hasta que la persona la prenda a propósito.
+    copiaAutomaticaHabilitada: false,
   };
   return guardado ? { ...base, ...guardado } : base;
 }
@@ -316,6 +339,14 @@ export async function guardarIncluirTextoAlCompartir(incluirTextoAlCompartir) {
 export async function guardarCalidadImagen(calidadImagen) {
   const config = await obtenerAjustesGenerales();
   config.calidadImagen = calidadImagen;
+  await db.guardar('config', config);
+  return config;
+}
+
+/** Interruptor "Copia automática diaria" de Respaldo → "Preferencias de respaldo". */
+export async function guardarCopiaAutomaticaHabilitada(habilitada) {
+  const config = await obtenerAjustesGenerales();
+  config.copiaAutomaticaHabilitada = !!habilitada;
   await db.guardar('config', config);
   return config;
 }

@@ -1,34 +1,25 @@
 // Pantalla "Respaldo": exportar/importar un .json con productos, fotos (base64) y plantilla.
-// Reskin "Organic Minimalist" (Interfaz/stitch_.../respaldo_natural): 3 tarjetas ("Estado del
-// respaldo", "Restaurar catálogo", "Zona de peligro"). El mock original promete backup automático
-// en Google Drive, historial de copias anteriores y export a CSV/Excel — nada de eso existe (la app
-// no tiene backend ni nube): se muestran datos REALES (cuántos productos/secciones hay ahora, cuándo
-// se generó el último .json, con qué tamaño) en vez de esas promesas. Detalle de lo que se dejó
-// afuera en el commit de esta ronda.
+// Reskin "Organic Minimalist" (Interfaz/stitch_.../respaldo_natural): 4 tarjetas ("Estado del
+// respaldo", "Restaurar catálogo", "Preferencias de respaldo", "Zona de peligro"). El mock original
+// promete backup automático en Google Drive, historial de copias anteriores y export a CSV/Excel —
+// nada de eso existe (la app no tiene backend ni nube): se muestran datos REALES (cuántos
+// productos/secciones hay ahora, cuándo se generó el último .json, con qué tamaño) en vez de esas
+// promesas. Detalle de lo que se dejó afuera en el commit de esta ronda.
+//
+// "Preferencias de respaldo" (ronda "copia automática", 2026-09-29): el mock dibuja 3
+// interruptores ("Copia automática diaria", "Incluir fotos en alta resolución", "Solo con conexión
+// Wi-Fi"). Solo el primero es real acá: las fotos se guardan YA achicadas al elegirlas (no hay
+// "alta resolución" que preservar) y la app no usa red en absoluto (ni tiene el permiso INTERNET),
+// así que "Wi-Fi" no significa nada — dibujarlos apagados/deshabilitados sería prometer una función
+// que no hace nada, mismo criterio que ya dejó afuera Google Drive/CSV en la ronda anterior.
 import * as repo from '../repositorio.js';
 import { validarRespaldo } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 import { enApk, guardarArchivoApk } from '../utils/plataforma.js';
 import { crearIcono } from '../utils/iconos.js';
-
-const CLAVE_ULTIMO_RESPALDO = 'estados-rapidos:ultimo-respaldo';
-
-function leerUltimoRespaldo() {
-  try {
-    return JSON.parse(localStorage.getItem(CLAVE_ULTIMO_RESPALDO) || 'null');
-  } catch {
-    return null;
-  }
-}
-
-function guardarUltimoRespaldo(datos) {
-  try {
-    localStorage.setItem(CLAVE_ULTIMO_RESPALDO, JSON.stringify(datos));
-  } catch {
-    /* localStorage puede fallar en modo privado; no es crítico para el export en sí */
-  }
-}
+import { leerUltimoRespaldo } from '../utils/respaldo-estado.js';
+import { generarYGuardarRespaldo } from '../utils/respaldo-copia.js';
 
 // Formato relativo, como el mock ("Hoy, 10:42 AM"): "Hoy"/"Ayer" + hora si es reciente, la fecha
 // completa si no (evita un "Hoy" engañoso para un respaldo de hace semanas).
@@ -50,10 +41,15 @@ function formatearTamano(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export async function render(contenedor) {
+export async function render(contenedor, { navegar } = {}) {
   contenedor.textContent = '';
 
-  const [productos, secciones] = await Promise.all([repo.listarProductos(), repo.listarSecciones()]);
+  const recargar = () => render(contenedor, { navegar });
+  const [productos, secciones, general] = await Promise.all([
+    repo.listarProductos(),
+    repo.listarSecciones(),
+    repo.obtenerAjustesGenerales(),
+  ]);
   const ultimoRespaldo = leerUltimoRespaldo();
 
   const wrap = document.createElement('div');
@@ -94,15 +90,28 @@ export async function render(contenedor) {
   pastilla.append(crearIcono(ultimoRespaldo ? 'check' : 'info'), document.createTextNode(ultimoRespaldo ? 'Copia actualizada' : 'Sin copia todavía'));
   cabeceraEstado.append(tituloEstado, pastilla);
 
+  // "Última copia (manual o automática)": el mismo registro sirve para las 3 formas de generarla
+  // (botón, disparador de 24h en el APK, toque de "Descargar" del aviso en la PWA) — el sufijo
+  // "(automática)" es la única diferencia visual entre ellas.
+  const valorUltimoRespaldo = ultimoRespaldo
+    ? `${formatearFecha(ultimoRespaldo.fecha)}${ultimoRespaldo.automatico ? ' (automática)' : ''}`
+    : 'Nunca';
+
   const datos = document.createElement('dl');
   datos.className = 'panel-respaldo__datos';
   datos.append(
-    filaDato('Último respaldo', ultimoRespaldo ? formatearFecha(ultimoRespaldo.fecha) : 'Nunca'),
+    filaDato('Último respaldo', valorUltimoRespaldo),
     filaDato('Tamaño del archivo', ultimoRespaldo ? formatearTamano(ultimoRespaldo.tamano) : '—'),
     filaDato('Contenido', `${productos.length} producto${productos.length === 1 ? '' : 's'} · ${secciones.length} sección${secciones.length === 1 ? '' : 'es'}`),
-    // El mock dice "Destino en la nube: Google Drive" — no hay nube: el único destino real es el
-    // archivo que el navegador/SAF guarda en el celular.
-    filaDato('Destino', 'Archivo .json en este celular')
+    // El mock dice "Destino en la nube: Google Drive" — no hay nube. El destino real cambia según
+    // la plataforma: en el APK, el manual lo elige la persona (SAF) y la copia automática siempre
+    // va a la misma carpeta pública; en el navegador, ambas caen en la carpeta de Descargas.
+    filaDato(
+      'Destino',
+      enApk()
+        ? 'Elegís la carpeta al exportar · la copia automática va a Documentos/EstadosRapidos'
+        : 'Descarga de tu navegador (carpeta de Descargas)'
+    )
   );
 
   const btnExportar = document.createElement('button');
@@ -113,26 +122,9 @@ export async function render(contenedor) {
   btnExportar.addEventListener('click', async () => {
     btnExportar.disabled = true;
     try {
-      const respaldo = await repo.exportarRespaldo();
-      const contenido = JSON.stringify(respaldo);
-      const nombreArchivo = `estados-rapidos-${new Date().toISOString().slice(0, 10)}.json`;
-      guardarUltimoRespaldo({ fecha: Date.now(), tamano: new Blob([contenido]).size });
-      if (enApk()) {
-        // <a download> con un blob: no descarga nada confiable dentro de un WebView: el
-        // usuario elige dónde guardarlo con el selector del sistema (SAF).
-        guardarArchivoApk({ nombre: nombreArchivo, mime: 'application/json', contenido });
-      } else {
-        const blob = new Blob([contenido], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = nombreArchivo;
-        document.body.append(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 4000);
-        mostrarToast('Respaldo descargado');
-      }
+      await generarYGuardarRespaldo('manual');
+      if (!enApk()) mostrarToast('Respaldo descargado');
+      recargar();
     } catch (error) {
       mostrarToast('No se pudo exportar: ' + error.message);
     } finally {
@@ -216,7 +208,53 @@ export async function render(contenedor) {
   panelImportar.append(rotuloImportar, avisoImportar, btnImportar, inputArchivo, errorImportar);
   wrap.append(panelImportar);
 
-  // --- Panel 3: zona de peligro (sin equivalente en el mock, que no la modela — se mantiene
+  // --- Panel 3 (mock: "Preferencias de respaldo"): copia automática diaria ---
+  const panelPreferencias = document.createElement('section');
+  panelPreferencias.className = 'panel';
+  const tituloPreferencias = document.createElement('h2');
+  tituloPreferencias.className = 'panel__titulo-chico';
+  tituloPreferencias.textContent = 'Preferencias de respaldo';
+  panelPreferencias.append(tituloPreferencias);
+
+  const filaAuto = document.createElement('label');
+  filaAuto.className = 'panel-respaldo__preferencia';
+  const infoAuto = document.createElement('div');
+  infoAuto.className = 'panel-respaldo__preferencia-info';
+  const iconoAuto = document.createElement('span');
+  iconoAuto.className = 'panel-respaldo__preferencia-icono';
+  iconoAuto.append(crearIcono('actualizar'));
+  const textosAuto = document.createElement('div');
+  const tituloAuto = document.createElement('span');
+  tituloAuto.className = 'panel-respaldo__preferencia-titulo';
+  tituloAuto.textContent = 'Copia automática diaria';
+  const subtituloAuto = document.createElement('span');
+  subtituloAuto.className = 'panel-respaldo__preferencia-subtitulo';
+  // Texto real (no el "Sincronización a medianoche" del mock: no hay ningún proceso a medianoche,
+  // el disparador es la app abriéndose/volviendo a primer plano).
+  subtituloAuto.textContent = 'Al abrir la app, una vez por día.';
+  textosAuto.append(tituloAuto, subtituloAuto);
+  infoAuto.append(iconoAuto, textosAuto);
+
+  const interruptorAuto = document.createElement('span');
+  interruptorAuto.className = 'interruptor';
+  const checkAuto = document.createElement('input');
+  checkAuto.type = 'checkbox';
+  checkAuto.id = 'respaldo-copia-automatica';
+  checkAuto.setAttribute('data-accion', 'copia-automatica');
+  checkAuto.checked = !!general.copiaAutomaticaHabilitada;
+  const pistaAuto = document.createElement('span');
+  pistaAuto.className = 'interruptor__pista';
+  interruptorAuto.append(checkAuto, pistaAuto);
+  checkAuto.addEventListener('change', async () => {
+    await repo.guardarCopiaAutomaticaHabilitada(checkAuto.checked);
+    mostrarToast(checkAuto.checked ? 'Copia automática activada' : 'Copia automática desactivada');
+  });
+
+  filaAuto.append(infoAuto, interruptorAuto);
+  panelPreferencias.append(filaAuto);
+  wrap.append(panelPreferencias);
+
+  // --- Panel 4: zona de peligro (sin equivalente en el mock, que no la modela — se mantiene
   // porque borra datos reales del celular y tiene que seguir accesible). ---
   const panelPeligro = document.createElement('section');
   panelPeligro.className = 'panel';

@@ -302,6 +302,15 @@ const TRAZOS = Object.freeze({
   ],
   // "chevron_right": flecha chica a la derecha — filas "<label + valor> · Cambiar ›".
   'chevron-derecha': [['polyline', { points: '9,6 15,12 9,18' }]],
+  // "refresh" (Material): 2 flechas circulares — interruptor "Copia automática diaria" de Respaldo
+  // → "Preferencias de respaldo" (ronda "copia automática"). Redibujado con arcos simples, mismo
+  // criterio que el resto del set (nada de curvas complejas).
+  actualizar: [
+    ['path', { d: 'M4.5 4.5v5h5' }],
+    ['path', { d: 'M4.5 9.5A8 8 0 0 1 19 8' }],
+    ['path', { d: 'M19.5 19.5v-5h-5' }],
+    ['path', { d: 'M19.5 14.5A8 8 0 0 1 5 16' }],
+  ],
 });
 
 /**

@@ -3337,6 +3337,7 @@ details[open] > .grupo__titulo--seccion::after {
 /* ---------- Gestión de secciones (#/secciones): tarjetas "Tus secciones" / "Nueva sección" /
    "Plantillas sugeridas" / consejo — reemplaza la pila plana anterior. ---------- */
 .panel-secciones__fila {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3349,6 +3350,15 @@ details[open] > .grupo__titulo--seccion::after {
 }
 .panel-secciones__fila:last-child {
   margin-bottom: 0;
+}
+/* Arrastrando con el dedo (reskin "gesti_n_de_secciones_natural", reemplaza subir/bajar): mismo
+   tratamiento que .hoja-revision__item--arrastrando (revision.js) — opacidad + achique chico,
+   respeta prefers-reduced-motion vía la media query general del final del archivo. */
+.panel-secciones__fila--arrastrando {
+  opacity: 0.85;
+  transform: scale(0.98);
+  transition: transform var(--duracion) var(--ease), opacity var(--duracion) var(--ease);
+  z-index: 2;
 }
 .panel-secciones__info {
   min-width: 0;
@@ -3383,29 +3393,49 @@ details[open] > .grupo__titulo--seccion::after {
   height: 13px;
   margin-right: 0;
 }
-/* Apiladas verticalmente (no lado a lado): 2 botones de 48px de ancho lado a lado se comían casi
-   la mitad de una fila de 380px y el nombre de una sección larga quedaba sin espacio (BUGS.md,
-   ronda "Fase 5"). Visual de 32px (como el ícono suelto del mock) con el objetivo táctil de 48px
-   restaurado por un `::after` con inset negativo (patrones.md regla 6), mismo truco que `.chip`. */
-.panel-secciones__acciones {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  flex-shrink: 0;
-}
-.panel-secciones__acciones .boton-icono-mini {
+/* Manija de arrastre (reskin "gesti_n_de_secciones_natural", reemplaza los botones subir/bajar de
+   antes — ronda "reordenar arrastrando"): arrastre real con el dedo (pointer events, reusa
+   js/reordenar.js — la API HTML5 drag/drop no dispara en Android WebView) a la IZQUIERDA de la
+   fila, como en el mock. También operable por teclado (flechas arriba/abajo con el foco puesto
+   acá) — el mock confía solo en drag-and-drop, que no es 100% accesible. Mismo tamaño/objetivo
+   táctil que `.hoja-revision__manija` (revision.js): visual de 36px con el hit-area de 48px
+   restaurado por un `::after` con inset negativo (patrones.md regla 6). */
+.fila-seccion__manija {
   position: relative;
-  width: 32px;
-  height: 32px;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--color-contorno);
+  cursor: grab;
+  touch-action: none; /* arrastrar con el dedo no hace scroll de la lista */
+  transition: background var(--duracion) var(--ease), color var(--duracion) var(--ease);
 }
-.panel-secciones__acciones .boton-icono-mini::after {
+.fila-seccion__manija::after {
   content: '';
   position: absolute;
-  inset: -8px;
+  inset: -6px;
 }
-.panel-secciones__acciones .boton-icono-mini .icono {
-  width: 16px;
-  height: 16px;
+.fila-seccion__manija:active {
+  cursor: grabbing;
+}
+.fila-seccion__manija:hover {
+  background: var(--color-superficie);
+  color: var(--color-texto);
+}
+.fila-seccion__manija:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.fila-seccion__manija .icono {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
 }
 .panel-secciones__preset {
   display: flex;
@@ -3507,6 +3537,87 @@ details[open] > .grupo__titulo--seccion::after {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+/* "Preferencias de respaldo" (ronda "copia automática"): fila-interruptor, mismo lenguaje visual
+   que los presets de Secciones (icono cuadrado + textos) — el <label> entero es clicable, no solo
+   el interruptor (patrones.md regla 6, target táctil grande). */
+.panel-respaldo__preferencia {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+.panel-respaldo__preferencia-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.panel-respaldo__preferencia-icono {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie);
+  color: var(--color-texto-tenue);
+}
+.panel-respaldo__preferencia-icono .icono {
+  width: 16px;
+  height: 16px;
+  margin-right: 0;
+}
+.panel-respaldo__preferencia-titulo {
+  display: block;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  color: var(--color-texto);
+}
+.panel-respaldo__preferencia-subtitulo {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.75rem;
+  color: var(--color-texto-tenue);
+}
+
+/* Aviso "hace más de un día que no guardás una copia" (solo PWA, sin puente nativo): banner no
+   bloqueante en el shell de la app, no una pantalla propia — mismo patrón que #aviso-version/
+   #aviso-offline (index.html), apilado encima del anterior si los dos llegaran a coincidir. */
+.aviso-respaldo {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 10px); /* arriba de la nav inferior */
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-grande);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  color: var(--color-texto);
+}
+.aviso-respaldo--oculto {
+  display: none;
+}
+.aviso-respaldo__texto {
+  flex: 1;
+  min-width: 0;
+}
+.aviso-respaldo__acciones {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .secciones__cabecera {

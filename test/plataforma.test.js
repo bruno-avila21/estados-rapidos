@@ -11,9 +11,8 @@ Object.defineProperty(global, 'navigator', {
   value: { clipboard: { writeText: async () => {} } },
 });
 
-const { enApk, copiarTexto, guardarArchivoApk, compartirImagenesApk, versionApk } = await import(
-  '../js/utils/plataforma.js'
-);
+const { enApk, copiarTexto, guardarArchivoApk, guardarCopiaAutomaticaApk, compartirImagenesApk, versionApk } =
+  await import('../js/utils/plataforma.js');
 
 test('enApk: false sin window ni window.Android (navegador / test)', () => {
   assert.equal(enApk(), false);
@@ -124,6 +123,55 @@ test('guardarArchivoApk: llama a Android.guardarArchivo con nombre/mime/contenid
     guardarArchivoApk({ nombre: 'x.json', mime: 'application/json', contenido: '{"a":1}' });
     assert.equal(guardarArchivo.mock.calls.length, 1);
     assert.deepEqual(guardarArchivo.mock.calls[0].arguments, ['x.json', 'application/json', '{"a":1}']);
+  } finally {
+    delete global.window;
+  }
+});
+
+// --- Copia automática diaria (ronda "copia automática"): streaming abrir/N partes/cerrar ---
+
+test('guardarCopiaAutomaticaApk: contenido chico -> abrir, UNA parte, cerrar, en orden', async () => {
+  const llamadas = [];
+  global.window = {
+    Android: {
+      copiaAutomaticaAbrir: (...args) => llamadas.push(['abrir', ...args]),
+      copiaAutomaticaEscribir: (...args) => llamadas.push(['escribir', ...args]),
+      copiaAutomaticaCerrar: (...args) => llamadas.push(['cerrar', ...args]),
+    },
+  };
+  try {
+    await guardarCopiaAutomaticaApk({ nombre: 'estados-rapidos-2026-09-29.json', contenido: '{"a":1}' });
+    assert.deepEqual(llamadas, [
+      ['abrir', 'estados-rapidos-2026-09-29.json'],
+      ['escribir', '{"a":1}'],
+      ['cerrar'],
+    ]);
+  } finally {
+    delete global.window;
+  }
+});
+
+test('guardarCopiaAutomaticaApk: contenido grande se manda en varias partes, ninguna de más de 2.000.000 de caracteres', async () => {
+  const partes = [];
+  let cerrado = false;
+  global.window = {
+    Android: {
+      copiaAutomaticaAbrir: mock.fn(),
+      copiaAutomaticaEscribir: (fragmento) => partes.push(fragmento),
+      copiaAutomaticaCerrar: () => {
+        cerrado = true;
+      },
+    },
+  };
+  try {
+    const contenido = 'x'.repeat(5_000_001); // 3 partes: 2M + 2M + 1.000.001
+    await guardarCopiaAutomaticaApk({ nombre: 'estados-rapidos-2026-09-29.json', contenido });
+    assert.equal(partes.length, 3);
+    assert.equal(partes[0].length, 2_000_000);
+    assert.equal(partes[1].length, 2_000_000);
+    assert.equal(partes[2].length, 1_000_001);
+    assert.equal(partes.join(''), contenido);
+    assert.equal(cerrado, true);
   } finally {
     delete global.window;
   }

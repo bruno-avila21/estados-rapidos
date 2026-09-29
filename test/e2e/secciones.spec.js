@@ -56,10 +56,13 @@ test('crear, renombrar, reordenar y borrar una sección (borrar NO borra product
   await crearSeccion(page, 'Lunes');
   await crearSeccion(page, 'Martes');
 
-  // Reordenar: "Martes" sube por encima de "Lunes".
+  // Reordenar (ronda "reordenar arrastrando": la manija reemplazó los botones subir/bajar) —
+  // acá con teclado (foco en la manija + flecha arriba), el arrastre con el dedo tiene su propio
+  // test en reordenar-secciones.spec.js: "Martes" sube por encima de "Lunes".
   const filas = page.locator('.fila-seccion');
   await expect(filas).toHaveCount(2);
-  await filas.nth(1).locator('[data-accion="subir-seccion"]').click();
+  await filas.nth(1).locator('[data-accion="arrastrar-seccion"]').focus();
+  await page.keyboard.press('ArrowUp');
   // El nombre vive en el `value` de un input editable, no en el texto (BUGS.md #36).
   await expect(filas.nth(0).locator('[data-accion="renombrar"]')).toHaveValue('Martes');
   await expect(filas.nth(1).locator('[data-accion="renombrar"]')).toHaveValue('Lunes');

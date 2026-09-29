@@ -9,8 +9,14 @@ import * as secciones from './vistas/secciones.js';
 import * as ajustes from './vistas/ajustes.js';
 import * as plantilla from './vistas/plantilla.js';
 import * as respaldo from './vistas/respaldo.js';
+import * as repo from './repositorio.js';
 import { pedirAlmacenamientoPersistente } from './db.js';
 import { crearIcono } from './utils/iconos.js';
+import { enApk } from './utils/plataforma.js';
+import { tocaCopiarAutomatica } from './respaldo-automatico.js';
+import { leerUltimoRespaldo, avisoRespaldoDescartadoHoy, marcarAvisoRespaldoDescartado } from './utils/respaldo-estado.js';
+import { generarYGuardarRespaldo } from './utils/respaldo-copia.js';
+import { mostrarToast } from './utils/toast.js';
 
 const vista = document.getElementById('vista');
 const encabezado = document.querySelector('.encabezado');
@@ -129,6 +135,60 @@ actualizarOffline();
 
 enrutar();
 pedirAlmacenamientoPersistente();
+
+// --- Copia automática diaria (ronda "copia automática", Respaldo → "Preferencias de respaldo") ---
+// Se revisa al abrir la app Y al volver de segundo plano (`visibilitychange`, no solo `load`: en el
+// APK la app casi nunca se "abre" de cero, vuelve de segundo plano) — dispara la copia SILENCIOSA
+// en el APK (streaming al puente nativo, sin picker) o, si no hay puente (PWA en el navegador, que
+// no puede escribir sin un gesto de la persona), muestra `#aviso-respaldo` con un botón de un toque.
+const avisoRespaldo = document.getElementById('aviso-respaldo');
+
+async function revisarCopiaAutomatica() {
+  let general;
+  try {
+    general = await repo.obtenerAjustesGenerales();
+  } catch {
+    return; // sin IndexedDB disponible (ej. algún entorno de test): no hay nada que revisar
+  }
+  const ultimo = leerUltimoRespaldo();
+  const toca = tocaCopiarAutomatica({ habilitada: general.copiaAutomaticaHabilitada, ultimaCopia: ultimo?.fecha ?? null });
+  if (!toca) return;
+
+  if (enApk()) {
+    try {
+      await generarYGuardarRespaldo('automatico');
+      // El puente nativo YA muestra su propio Toast ("Copia automática guardada en
+      // Documentos/EstadosRapidos") — no se duplica acá con mostrarToast.
+    } catch {
+      /* si falla, se reintenta solo la próxima vez que se cumplan las 24h — no se avisa con un
+       * error bloqueante por algo que corre en segundo plano sin que la persona lo pidiera */
+    }
+    return;
+  }
+
+  if (avisoRespaldoDescartadoHoy()) return; // ya lo cerró hoy: no insistir hasta que cambie el día
+  avisoRespaldo?.classList.remove('aviso-respaldo--oculto');
+}
+
+avisoRespaldo?.querySelector('[data-accion="descargar-respaldo-aviso"]')?.addEventListener('click', async () => {
+  try {
+    await generarYGuardarRespaldo('automatico');
+    mostrarToast('Respaldo descargado');
+  } catch (error) {
+    mostrarToast('No se pudo descargar: ' + error.message);
+  } finally {
+    avisoRespaldo.classList.add('aviso-respaldo--oculto');
+  }
+});
+avisoRespaldo?.querySelector('[data-accion="descartar-aviso-respaldo"]')?.addEventListener('click', () => {
+  marcarAvisoRespaldoDescartado();
+  avisoRespaldo.classList.add('aviso-respaldo--oculto');
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') revisarCopiaAutomatica();
+});
+revisarCopiaAutomatica();
 
 // El shell del APK (PantallaPrincipal.kt) pregunta esto antes de decidir si el botón Atrás
 // nativo sale de la app. `true` = "ya hice algo (cerrar la hoja de revisión/un modal / volver a la

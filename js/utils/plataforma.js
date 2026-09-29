@@ -88,6 +88,29 @@ export function guardarArchivoApk({ nombre, mime, contenido }) {
   window.Android.guardarArchivo(nombre, mime, contenido);
 }
 
+// Copia automática diaria (ronda "copia automática", Respaldo → "Preferencias de respaldo"): a
+// diferencia de `guardarArchivoApk` (SAF, el usuario elige carpeta con un picker), esta va SOLA a
+// Documents/EstadosRapidos/ vía MediaStore, sin picker ni gesto — por eso no puede pasar por
+// `guardarArchivo` (ese contrato es un solo Uri elegido por persona). Con 50 productos con foto el
+// JSON pesa varios MB de base64: se manda en partes (streaming) para no tenerlo entero de los 2
+// lados de memoria a la vez ni pegarle una string gigante al puente de un saque (mismo criterio que
+// `compartirImagenesApk`, que ya manda una imagen por vez en vez de juntarlas).
+const TAMANO_PARTE_COPIA_AUTOMATICA = 2_000_000; // caracteres por parte (~2 MB de texto UTF-16 en JS)
+
+/**
+ * @param {{nombre: string, contenido: string}} datos - `contenido` es el JSON ya serializado
+ * (mismo formato que exportarRespaldo/JSON.stringify). El puente nativo escribe en streaming a un
+ * único hilo (orden garantizado: abrir → N partes → cerrar), así que no hace falta esperar cada
+ * llamada — igual se expone como función async para no atarse a esa garantía interna.
+ */
+export async function guardarCopiaAutomaticaApk({ nombre, contenido }) {
+  window.Android.copiaAutomaticaAbrir(nombre);
+  for (let i = 0; i < contenido.length; i += TAMANO_PARTE_COPIA_AUTOMATICA) {
+    window.Android.copiaAutomaticaEscribir(contenido.slice(i, i + TAMANO_PARTE_COPIA_AUTOMATICA));
+  }
+  window.Android.copiaAutomaticaCerrar();
+}
+
 /** El número de versión que muestra Ajustes → "La app" cuando corre empaquetada. */
 export function versionApk() {
   if (!enApk() || typeof window.Android.version !== 'function') return null;
