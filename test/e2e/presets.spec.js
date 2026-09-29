@@ -121,3 +121,42 @@ test('Publicar con un preset de composición elegido genera una imagen final 108
   expect(dimensiones[0]).toMatchObject({ w: 1080, h: 1920, tipo: 'image/jpeg' });
   expect(dimensiones[0].bytes).toBeGreaterThan(0);
 });
+
+// --- "Datos del negocio" (ronda 2026-09-29): "Nombre del negocio" (banner-inferior/editorial) y
+// "Texto del botón" (solo banner-inferior) — ajustes GENERALES, se guardan y solo se muestran
+// mientras se edita un preset que efectivamente los dibuja. ---
+
+test('Plantilla: "Datos del negocio" solo aparece en los presets que los dibujan (banner-inferior/editorial), no en polaroid/story', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Datos del negocio', precio: '5000' });
+
+  await page.goto('/#/plantilla?estilo=banner-inferior');
+  await expect(page.locator('#campo-nombre-negocio')).toBeVisible();
+  await expect(page.locator('#campo-texto-boton')).toBeVisible();
+
+  await page.goto('/#/plantilla?estilo=editorial');
+  await expect(page.locator('#campo-nombre-negocio')).toBeVisible();
+  await expect(page.locator('#campo-texto-boton')).toBeHidden();
+
+  await page.goto('/#/plantilla?estilo=polaroid');
+  await expect(page.locator('#campo-nombre-negocio')).toBeHidden();
+  await expect(page.locator('#campo-texto-boton')).toBeHidden();
+
+  await page.goto('/#/plantilla?estilo=story-inmersiva');
+  await expect(page.locator('#campo-nombre-negocio')).toBeHidden();
+  await expect(page.locator('#campo-texto-boton')).toBeHidden();
+});
+
+test('Plantilla: "Nombre del negocio"/"Texto del botón" se guardan y persisten entre visitas', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Persistencia negocio', precio: '5000' });
+  await page.goto('/#/plantilla?estilo=banner-inferior');
+
+  await page.locator('#campo-nombre-negocio').fill('Taller Tierra Firme');
+  await page.locator('#campo-texto-boton').fill('Escribime');
+  await page.waitForTimeout(450); // debounce de guardado (350ms)
+
+  await page.reload();
+  await expect(page.locator('#campo-nombre-negocio')).toHaveValue('Taller Tierra Firme');
+  await expect(page.locator('#campo-texto-boton')).toHaveValue('Escribime');
+});

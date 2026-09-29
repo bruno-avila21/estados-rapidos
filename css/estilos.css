@@ -1460,6 +1460,14 @@ details.grupo > .campo {
   gap: 6px;
   margin-bottom: 16px;
 }
+/* El atributo `hidden` de por sí ya no alcanza acá: `display:flex` de arriba pisa el `display:none`
+   por defecto del navegador (misma trampa que ya resolvía `.fila[hidden]`/`.tarjeta-estilo__badge
+   [hidden]` más arriba) — "Datos del negocio" de plantilla.js (los 4 presets de composición, ronda
+   2026-09-29) son `.campo` que se ocultan con `hidden` según el preset y quedaban visibles vacíos
+   sin este override (BUGS.md). */
+.campo[hidden] {
+  display: none;
+}
 .campo__etiqueta {
   font-size: var(--tamano-14);
   color: var(--color-texto-tenue);

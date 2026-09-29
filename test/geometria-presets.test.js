@@ -61,7 +61,15 @@ test('geometriaBannerInferior: sin precio, no hay caja de precio y el nombre ocu
   const sinPrecio = geometriaBannerInferior({ conPrecio: false });
   assert.equal(sinPrecio.precio, null);
   assert.ok(sinPrecio.nombre.w > conPrecio.nombre.w);
-  assert.equal(sinPrecio.nombre.w, ANCHO_LIENZO - 56 * 2);
+  assert.equal(sinPrecio.nombre.w, ANCHO_LIENZO - 48 * 2);
+});
+
+test('geometriaBannerInferior: sin sección, no hay caja de label y la franja es más baja', () => {
+  const conSeccion = geometriaBannerInferior({ conSeccion: true });
+  const sinSeccion = geometriaBannerInferior({ conSeccion: false });
+  assert.equal(sinSeccion.seccion, null);
+  assert.ok(sinSeccion.franja.h < conSeccion.franja.h);
+  assert.ok(dentroDelLienzo(sinSeccion.franja));
 });
 
 test('geometriaBannerInferior: sin descripción, la franja es más baja (no queda un hueco vacío)', () => {
@@ -84,11 +92,25 @@ test('geometriaEditorial: el marco 4:5 queda arriba y el texto debajo, todo dent
   assertCoverFitValido(geo.marco);
 });
 
-test('geometriaEditorial: sin precio ni descripción, no rompe y no deja cajas colgadas', () => {
-  const geo = geometriaEditorial({ conPrecio: false, conDescripcion: false });
+test('geometriaEditorial: sin precio, sin sección, sin descripción y sin nombre del negocio, no rompe y no deja cajas colgadas', () => {
+  const geo = geometriaEditorial({ conPrecio: false, conDescripcion: false, conSeccion: false, conNombreNegocio: false });
   assert.equal(geo.precio, null);
   assert.equal(geo.descripcion, null);
+  assert.equal(geo.pie, null);
   assert.ok(dentroDelLienzo(geo.nombre));
+});
+
+test('geometriaEditorial: sin precio pero CON sección, la línea combinada sigue mostrándose (no depende solo del precio)', () => {
+  const geo = geometriaEditorial({ conPrecio: false, conSeccion: true });
+  assert.ok(geo.precio);
+  assert.ok(dentroDelLienzo(geo.precio));
+});
+
+test('geometriaEditorial: sin nombre del negocio, no hay pie (nada inventado en el hueco)', () => {
+  const conNegocio = geometriaEditorial({ conNombreNegocio: true });
+  const sinNegocio = geometriaEditorial({ conNombreNegocio: false });
+  assert.ok(conNegocio.pie);
+  assert.equal(sinNegocio.pie, null);
 });
 
 // --- Polaroid ---
@@ -116,27 +138,44 @@ test('geometriaStoryInmersiva: foto de fondo a pantalla completa, contenido ancl
   const geo = geometriaStoryInmersiva();
   assert.deepEqual(geo.foto, { x: 0, y: 0, w: ANCHO_LIENZO, h: ALTO_LIENZO });
   assert.ok(dentroDelLienzo(geo.scrim));
+  assert.ok(dentroDelLienzo(geo.seccion));
   assert.ok(dentroDelLienzo(geo.nombre));
   assert.ok(dentroDelLienzo(geo.precio));
   assert.ok(dentroDelLienzo(geo.descripcion));
-  // orden visual de arriba hacia abajo: nombre, luego precio, luego descripción (la más pegada al margen inferior).
+  // orden visual de arriba hacia abajo: sección, nombre, y una ÚLTIMA fila con el pill de precio +
+  // la descripción LADO A LADO (mismo renglón, no apilados — así calza con el mock).
+  assert.ok(geo.seccion.y < geo.nombre.y);
   assert.ok(geo.nombre.y < geo.precio.y);
-  assert.ok(geo.precio.y < geo.descripcion.y);
+  assert.equal(geo.precio.y, geo.descripcion.y);
   assertCoverFitValido(geo.foto);
 });
 
-test('geometriaStoryInmersiva: sin precio, el nombre baja hasta pegarse a la descripción (no queda un hueco en el medio)', () => {
-  const conPrecio = geometriaStoryInmersiva({ conPrecio: true });
-  const sinPrecio = geometriaStoryInmersiva({ conPrecio: false });
+test('geometriaStoryInmersiva: sin sección, no hay pill (la sección es lo más arriba del stack: sacarla no mueve el resto)', () => {
+  const conSeccion = geometriaStoryInmersiva({ conSeccion: true });
+  const sinSeccion = geometriaStoryInmersiva({ conSeccion: false });
+  assert.equal(sinSeccion.seccion, null);
+  assert.equal(sinSeccion.nombre.y, conSeccion.nombre.y);
+  assert.ok(dentroDelLienzo(sinSeccion.nombre));
+});
+
+test('geometriaStoryInmersiva: sin precio, la descripción ocupa todo el ancho de la fila (nunca queda un hueco al lado)', () => {
+  const conPrecio = geometriaStoryInmersiva({ conPrecio: true, conDescripcion: true });
+  const sinPrecio = geometriaStoryInmersiva({ conPrecio: false, conDescripcion: true });
   assert.equal(sinPrecio.precio, null);
-  // la descripción sigue anclada al mismo margen inferior (es el ÚLTIMO elemento del stack):
-  // lo que cambia es que el nombre, al no tener precio en el medio, baja y queda pegado a ella.
-  assert.equal(sinPrecio.descripcion.y, conPrecio.descripcion.y);
-  assert.ok(sinPrecio.nombre.y > conPrecio.nombre.y);
+  assert.ok(sinPrecio.descripcion.w > conPrecio.descripcion.w);
+  assert.equal(sinPrecio.descripcion.x, conPrecio.precio.x); // arranca donde arrancaba el pill de precio
+  assert.equal(sinPrecio.nombre.y, conPrecio.nombre.y); // la fila sigue ocupando el mismo lugar
 });
 
 test('geometriaStoryInmersiva: sin descripción tampoco rompe', () => {
   const geo = geometriaStoryInmersiva({ conDescripcion: false });
+  assert.equal(geo.descripcion, null);
+  assert.ok(dentroDelLienzo(geo.nombre));
+});
+
+test('geometriaStoryInmersiva: sin precio NI descripción, no queda ninguna fila y no rompe', () => {
+  const geo = geometriaStoryInmersiva({ conPrecio: false, conDescripcion: false });
+  assert.equal(geo.precio, null);
   assert.equal(geo.descripcion, null);
   assert.ok(dentroDelLienzo(geo.nombre));
 });

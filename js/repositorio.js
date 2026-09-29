@@ -7,6 +7,8 @@ import {
   DESCRIPCION_MODELO_POR_DEFECTO,
   ENCUADRE_FOTO_POR_DEFECTO,
   CALIDAD_IMAGEN_POR_DEFECTO,
+  NOMBRE_NEGOCIO_POR_DEFECTO,
+  TEXTO_BOTON_POR_DEFECTO,
   construirRespaldo,
   migrarAjustesPorEstilo,
   normalizarAjustesPorEstilo,
@@ -299,6 +301,10 @@ export async function obtenerAjustesGenerales() {
     // apagada por defecto — un respaldo/uso de antes de esta ronda no la trae y arranca sin
     // escribir nada solo hasta que la persona la prenda a propósito.
     copiaAutomaticaHabilitada: false,
+    // Datos de marca de los 4 presets de composición (ronda 2026-09-29): un registro de antes de
+    // esta ronda no los trae, quedan en sus defaults (nombre vacío = no se dibuja).
+    nombreNegocio: NOMBRE_NEGOCIO_POR_DEFECTO,
+    textoBoton: TEXTO_BOTON_POR_DEFECTO,
   };
   return guardado ? { ...base, ...guardado } : base;
 }
@@ -351,6 +357,23 @@ export async function guardarCopiaAutomaticaHabilitada(habilitada) {
   return config;
 }
 
+/** "Nombre del negocio" de los 4 presets de composición (editable en Plantilla): vacío = no se
+ * dibuja en ningún preset. */
+export async function guardarNombreNegocio(nombreNegocio) {
+  const config = await obtenerAjustesGenerales();
+  config.nombreNegocio = String(nombreNegocio ?? '').slice(0, 60);
+  await db.guardar('config', config);
+  return config;
+}
+
+/** "Texto del botón/llamado" del preset "Banner inferior" (editable en Plantilla). */
+export async function guardarTextoBoton(textoBoton) {
+  const config = await obtenerAjustesGenerales();
+  config.textoBoton = String(textoBoton ?? '').slice(0, 40) || TEXTO_BOTON_POR_DEFECTO;
+  await db.guardar('config', config);
+  return config;
+}
+
 export async function exportarRespaldo() {
   const productos = await listarProductos();
   const productosConFoto = await Promise.all(
@@ -375,6 +398,8 @@ export async function exportarRespaldo() {
       encuadreFoto: general.encuadreFoto,
       incluirTextoAlCompartir: general.incluirTextoAlCompartir,
       calidadImagen: general.calidadImagen,
+      nombreNegocio: general.nombreNegocio,
+      textoBoton: general.textoBoton,
     },
     secciones,
   });
@@ -447,5 +472,7 @@ export async function importarRespaldo(respaldo) {
     encuadreFoto: respaldo.general?.encuadreFoto || ENCUADRE_FOTO_POR_DEFECTO,
     incluirTextoAlCompartir: respaldo.general?.incluirTextoAlCompartir ?? true,
     calidadImagen: respaldo.general?.calidadImagen || CALIDAD_IMAGEN_POR_DEFECTO,
+    nombreNegocio: respaldo.general?.nombreNegocio ?? NOMBRE_NEGOCIO_POR_DEFECTO,
+    textoBoton: respaldo.general?.textoBoton || TEXTO_BOTON_POR_DEFECTO,
   });
 }

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { REGISTRO_FUENTES } from '../js/fuentes.js';
 import {
   formatearPrecio,
   parsearPrecio,
@@ -443,11 +444,19 @@ test('AJUSTES_POR_DEFECTO_POR_ESTILO: los 4 presets de composición truncan con 
   }
 });
 
-test('AJUSTES_POR_DEFECTO_POR_ESTILO: los 4 presets de composición solo usan las 6 tipografías OFL disponibles', () => {
+// Ronda 2026-09-29 ("presets calzan con los mocks"): los 4 presets de composición dejan de usar
+// las 6 tipografías OFL ELEGIBLES a mano en el editor (`FUENTES_DISPONIBLES`) — cada mock Stitch usa
+// Newsreader (serif de títulos/precio) + Manrope (sans de cuerpo/etiquetas), FIJAS por diseño, igual
+// que la franja/marco/tarjeta/scrim tampoco son editables. El test verifica contra el registro REAL
+// de fuentes cargables en canvas (`fuentes.js`), no contra la lista de elegibles: así sigue
+// detectando un typo de familia inexistente, solo que ya no exige que sea una de las 6 de siempre.
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: los 4 presets de composición usan tipografía real (Newsreader/Manrope fijos, no elegibles)', () => {
   for (const preset of PRESETS_COMPOSICION) {
     const d = AJUSTES_POR_DEFECTO_POR_ESTILO[preset];
     for (const clave of ['nombre', 'precio', 'descripcion']) {
-      assert.ok(FUENTES_DISPONIBLES.includes(d[clave].familia), `${preset}.${clave}.familia`);
+      const familia = d[clave].familia;
+      assert.ok(REGISTRO_FUENTES[familia], `${preset}.${clave}.familia ("${familia}") no está en el registro de fuentes de canvas`);
+      assert.ok(!FUENTES_DISPONIBLES.includes(familia), `${preset}.${clave}.familia ("${familia}") debería ser Newsreader/Manrope, no una de las 6 elegibles`);
     }
   }
 });

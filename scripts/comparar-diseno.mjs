@@ -238,6 +238,153 @@ const ESCENAS = {
   },
 };
 
+// --- Los 4 presets de composición ("plantilla_preset_<nombre>"): a diferencia de las pantallas de
+// arriba (una captura de VIEWPORT de una pantalla de la app), acá se compara la IMAGEN FINAL
+// 1080×1920 que arma `js/componer.js` (lo que de verdad se comparte a WhatsApp) contra el `screen.png`
+// ya exportado de cada mock — no se re-renderiza el code.html con Tailwind/Google Fonts vía file://
+// porque el preview de cada preset vive DENTRO de un mockup de teléfono a un ancho de frame fijo
+// (290/275/280/310px, medido a mano en geometria-presets.js): la foto que ya exportó Stitch a
+// `screen.png` es la referencia real, más fiel que re-renderizar el mock con un viewport adivinado.
+// Misma foto que cada mock (bajada UNA vez de la URL de su code.html a Interfaz/comparacion/fotos/
+// preset-<nombre>.jpg, igual que las demás pantallas) y los mismos textos reales del mock.
+const PRESETS = {
+  'banner-inferior': {
+    carpetaMock: 'plantilla_preset_banner_inferior',
+    producto: {
+      nombre: 'Taza de Gres Calma',
+      precio: 4500,
+      descripcion: 'Gres artesanal esmaltado a mano con acabado mate sedoso. Pieza única horneada a alta temperatura.',
+    },
+    seccionNombre: 'Colección Hogar',
+    general: { nombreNegocio: 'Taller Hogar', textoBoton: 'Pedir por privado' },
+    posicion: { n: 1, m: 1 },
+  },
+  editorial: {
+    carpetaMock: 'plantilla_preset_editorial',
+    producto: {
+      nombre: 'Taza de Gres Artesanal',
+      precio: 4500,
+      descripcion: 'Elaborada a torno con arcilla silícea de grano medio y esmalte satinado libre de plomo. Apta para microondas y lavavajillas.',
+    },
+    seccionNombre: 'Colección Botánica',
+    general: { nombreNegocio: 'Taller Tierra Firme', textoBoton: 'Pedir por privado' },
+    posicion: { n: 4, m: 12 },
+  },
+  polaroid: {
+    carpetaMock: 'plantilla_preset_polaroid',
+    producto: { nombre: 'Taza de gres artesanal', precio: 4500, descripcion: 'Edición limitada en salvia' },
+    seccionNombre: '',
+    general: { nombreNegocio: '', textoBoton: 'Pedir por privado' },
+    posicion: { n: 1, m: 1 },
+  },
+  'story-inmersiva': {
+    carpetaMock: 'plantilla_preset_story_inmersiva',
+    producto: { nombre: 'Taza Botánica Salvia', precio: 4500, descripcion: 'Gres esmaltado a mano' },
+    seccionNombre: 'Colección Botánica',
+    general: { nombreNegocio: '', textoBoton: '' },
+    posicion: { n: 1, m: 1 },
+  },
+};
+
+/** Compone la imagen final 1080×1920 de un preset EN EL NAVEGADOR (mismo `componer.js` real que usa
+ * la app), y la devuelve ya redimensionada a la altura de comparación (mismo criterio que las
+ * capturas de las demás pantallas: alto fijo, ancho proporcional). */
+async function componerPreset(page, { nombre, producto, seccionNombre, general, posicion }) {
+  const fotoBase64 = fs.readFileSync(path.join(FOTOS_DIR, `preset-${nombre}.jpg`)).toString('base64');
+  const dataUrlBase64 = await page.evaluate(
+    async ({ nombre, fotoBase64, producto, seccionNombre, general, posicion, altoSalida }) => {
+      const [{ dibujarSegunEstilo, ANCHO, ALTO }, { cargarFuentes }, { AJUSTES_POR_DEFECTO_POR_ESTILO, FORMATO_PRECIO_POR_DEFECTO }] =
+        await Promise.all([import('/js/componer.js'), import('/js/fuentes.js'), import('/js/modelo.js')]);
+      await cargarFuentes();
+      const fotoBlob = await (await fetch(`data:image/jpeg;base64,${fotoBase64}`)).blob();
+      const fotoImagen = await createImageBitmap(fotoBlob);
+      const canvas = document.createElement('canvas');
+      canvas.width = ANCHO;
+      canvas.height = ALTO;
+      const ctx = canvas.getContext('2d');
+      dibujarSegunEstilo(ctx, {
+        estilo: nombre,
+        fotoImagen,
+        plantillaImagen: null,
+        producto,
+        ajustes: AJUSTES_POR_DEFECTO_POR_ESTILO[nombre],
+        formatoPrecio: FORMATO_PRECIO_POR_DEFECTO,
+        descripcion: producto.descripcion,
+        encuadreFoto: 'cover',
+        general,
+        seccionNombre,
+        posicion,
+      });
+      const anchoSalida = Math.round((ANCHO / ALTO) * altoSalida);
+      const chico = document.createElement('canvas');
+      chico.width = anchoSalida;
+      chico.height = altoSalida;
+      chico.getContext('2d').drawImage(canvas, 0, 0, anchoSalida, altoSalida);
+      const blob = await new Promise((resolve) => chico.toBlob(resolve, 'image/png'));
+      const buffer = await blob.arrayBuffer();
+      let binario = '';
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.length; i += 1) binario += String.fromCharCode(bytes[i]);
+      return btoa(binario);
+    },
+    { nombre, fotoBase64, producto, seccionNombre, general, posicion, altoSalida: ALTO }
+  );
+  return Buffer.from(dataUrlBase64, 'base64');
+}
+
+async function compararPreset(nombre, { browser, servidorUrl }) {
+  const cfg = PRESETS[nombre];
+  const mockScreenPng = path.join(RAIZ, 'Interfaz', 'stitch_whatsapp_status_uploader_ui', cfg.carpetaMock, 'screen.png');
+  if (!fs.existsSync(mockScreenPng)) {
+    console.error(`No existe ${mockScreenPng}`);
+    process.exit(1);
+  }
+
+  const pagina = await browser.newPage({ viewport: { width: 800, height: 600 } });
+  await pagina.goto(servidorUrl);
+  const appPng = await componerPreset(pagina, {
+    nombre,
+    producto: cfg.producto,
+    seccionNombre: cfg.seccionNombre,
+    general: cfg.general,
+    posicion: cfg.posicion,
+  });
+  await pagina.close();
+
+  const disenoPng = fs.readFileSync(mockScreenPng);
+  const destino = path.join(RAIZ, 'Interfaz', 'comparacion', `preset-${nombre}.png`);
+  await componerPresetLadoALado(browser, { disenoPng, appPng, titulo: `Preset: ${nombre}`, destino });
+  console.log(`Comparación guardada: ${path.relative(RAIZ, destino)}`);
+}
+
+/** Como `componerLadoALado`, pero para los presets: las 2 imágenes NO comparten tamaño/aspecto
+ * (el `screen.png` del mock es la página de configuración entera; nuestro render es el 1080×1920
+ * final) — se muestran cada una a su alto natural (max-height fijo), no forzadas al mismo box. */
+async function componerPresetLadoALado(browser, { disenoPng, appPng, titulo, destino }) {
+  const disenoB64 = disenoPng.toString('base64');
+  const appB64 = appPng.toString('base64');
+  const altoFigura = 1600;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+    body { margin:0; background:#1c1b1a; font-family: system-ui, sans-serif; }
+    .fila { display:flex; gap:24px; padding:24px; align-items:flex-start; }
+    figure { margin:0; background:#0d0f1a; border-radius:8px; padding:12px 12px 16px; }
+    figure img { display:block; height:${altoFigura}px; width:auto; border-radius:4px; }
+    figcaption { color:#eee; text-align:center; margin-top:10px; font-size:15px; font-weight:600; }
+    h1 { color:#fff; font-size:18px; margin:0 0 4px 24px; padding-top:20px; }
+  </style></head><body>
+    <h1>${titulo}</h1>
+    <div class="fila">
+      <figure><img src="data:image/png;base64,${appB64}"><figcaption>APP (nuestro render, 1080×1920)</figcaption></figure>
+      <figure><img src="data:image/png;base64,${disenoB64}"><figcaption>MOCK STITCH (screen.png)</figcaption></figure>
+    </div>
+  </body></html>`;
+  const page = await browser.newPage({ viewport: { width: 2200, height: altoFigura + 140 } });
+  await page.setContent(html);
+  await page.locator('img').first().waitFor({ state: 'visible' });
+  await page.screenshot({ path: destino, fullPage: true });
+  await page.close();
+}
+
 function esperarLinea(child, contiene) {
   return new Promise((resolve, reject) => {
     let salida = '';
@@ -343,9 +490,33 @@ async function componerLadoALado(browser, { disenoPng, appPng, titulo, destino }
 
 async function main() {
   const pantalla = process.argv[2];
+
+  // Los 4 presets de composición (`banner-inferior`/`editorial`/`polaroid`/`story-inmersiva`):
+  // comparan la imagen FINAL de `componer.js` contra el `screen.png` del mock, no una captura de
+  // viewport — recorrido totalmente distinto al de `ESCENAS` (ver `compararPreset`). Sin argumento
+  // o con "presets", corre los 4 de una.
+  if (pantalla === 'presets' || PRESETS[pantalla]) {
+    const nombres = pantalla === 'presets' ? Object.keys(PRESETS) : [pantalla];
+    fs.mkdirSync(path.join(RAIZ, 'Interfaz', 'comparacion'), { recursive: true });
+    const puertoPresets = 8198;
+    const servidorPresets = await arrancarServidor(puertoPresets);
+    const browserPresets = await chromium.launch();
+    try {
+      for (const nombre of nombres) {
+        await compararPreset(nombre, { browser: browserPresets, servidorUrl: `http://127.0.0.1:${puertoPresets}/` });
+      }
+    } finally {
+      await browserPresets.close();
+      servidorPresets.kill();
+    }
+    return;
+  }
+
   const escena = ESCENAS[pantalla];
   if (!escena) {
-    console.error(`Pantalla desconocida: "${pantalla}".\nDisponibles: ${Object.keys(ESCENAS).join(', ')}`);
+    console.error(
+      `Pantalla desconocida: "${pantalla}".\nDisponibles: ${Object.keys(ESCENAS).join(', ')}, ${Object.keys(PRESETS).join(', ')}`
+    );
     process.exit(1);
   }
 
