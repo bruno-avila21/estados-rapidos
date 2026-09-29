@@ -14,6 +14,7 @@ import { crearIcono } from './utils/iconos.js';
 
 const vista = document.getElementById('vista');
 const titulo = document.getElementById('titulo-pantalla');
+const subtitulo = document.getElementById('subtitulo-pantalla');
 const navBotones = Array.from(document.querySelectorAll('.nav-inferior__item'));
 
 // Íconos de la nav inferior: SVG inline (reskin "Organic Minimalist"), no glifos unicode.
@@ -22,7 +23,10 @@ document.querySelectorAll('[data-icono]').forEach((cont) => {
 });
 
 const RUTAS = [
-  { patron: /^#\/$/, modulo: lista, titulo: 'Productos', ruta: '#/' },
+  // El h1 dice "Estados Rápidos" (no "Productos"): así lo pinta el TopAppBar de
+  // productos_lista_natural/productos_vista_grilla_natural — el resto de las pantallas, fuera del
+  // alcance de este rediseño, sigue mostrando el nombre de la pantalla.
+  { patron: /^#\/$/, modulo: lista, titulo: 'Estados Rápidos', ruta: '#/', subtitulo: 'Catálogo para estados de WhatsApp' },
   { patron: /^#\/producto\/(.+)$/, modulo: detalle, titulo: 'Producto', ruta: null },
   // No está en la navegación principal: se llega desde el chip "⚙ Secciones" de Productos.
   { patron: /^#\/secciones$/, modulo: secciones, titulo: 'Secciones', ruta: null },
@@ -50,6 +54,8 @@ async function enrutar() {
   const params = { id: match?.[1], query: new URLSearchParams(queryString || '') };
 
   titulo.textContent = encontrada.titulo;
+  subtitulo.textContent = encontrada.subtitulo || '';
+  subtitulo.hidden = !encontrada.subtitulo;
   navBotones.forEach((b) => b.classList.toggle('activo', b.dataset.ruta === encontrada.ruta));
 
   try {
@@ -71,6 +77,14 @@ navBotones.forEach((b) => {
     if (b.dataset.ruta) navegar(b.dataset.ruta);
   });
 });
+
+// Header (reskin "Organic Minimalist", Interfaz/stitch_.../productos_lista_natural): el botón
+// izquierdo del diseño es un menú hamburguesa sin destino real (la app no tiene cajón lateral) —
+// se conecta a "ir al inicio" (acción real y trivial) en vez de dejarlo muerto. El de la derecha
+// replica el "+" que ya existe como FAB (mismo destino, dos entradas al mismo lugar como en el
+// diseño original).
+document.querySelector('[data-accion="ir-inicio"]')?.addEventListener('click', () => navegar('#/'));
+document.querySelector('[data-accion="agregar-header"]')?.addEventListener('click', () => navegar('#/producto/nuevo'));
 
 window.addEventListener('error', () => {
   document.body.classList.add('error');

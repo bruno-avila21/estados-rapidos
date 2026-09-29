@@ -51,7 +51,7 @@ test('la selección de cada producto persiste tras recargar', async ({ page }) =
   await checks.nth(0).uncheck();
   // esperar la confirmación visible de que la escritura async en IndexedDB terminó, antes de
   // recargar: uncheck() resuelve al despachar el evento, no al terminar el handler (BUGS.md #12).
-  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1');
+  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1 producto');
   await page.reload();
   await expect(page.locator('[data-accion="seleccionar"]').nth(0)).not.toBeChecked();
   await expect(page.locator('[data-accion="seleccionar"]').nth(1)).toBeChecked();
@@ -72,7 +72,7 @@ test('marcar todos / desmarcar afectan a todos los productos', async ({ page }) 
   for (const check of await page.locator('[data-accion="seleccionar"]').all()) {
     await expect(check).toBeChecked();
   }
-  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 2');
+  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 2 productos');
 });
 
 test('hoja de revisión con 3 productos: arma 3 imágenes 1080x1920, texto editable, comparte todo junto', async ({ page }) => {
@@ -245,7 +245,7 @@ test('Publicar de una tarjeta no toca la selección múltiple persistente', asyn
 
   // ambos arrancan seleccionados (CREAR-BRIEF.md); se desmarca uno para tener un estado no trivial
   await filaUno.locator('[data-accion="seleccionar"]').uncheck();
-  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1');
+  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1 producto');
 
   await filaDos.locator('[data-accion="publicar"]').click();
   await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
@@ -256,7 +256,7 @@ test('Publicar de una tarjeta no toca la selección múltiple persistente', asyn
   // la selección múltiple queda EXACTAMENTE como estaba antes de publicar de a una
   await expect(filaUno.locator('[data-accion="seleccionar"]')).not.toBeChecked();
   await expect(filaDos.locator('[data-accion="seleccionar"]')).toBeChecked();
-  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1');
+  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1 producto');
 });
 
 // --- Fase 2, "S" #4: "Copiar descripción" ---

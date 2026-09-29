@@ -25,7 +25,7 @@ test('ir-ajustes / ir-respaldo / ir-lista cambian de pantalla', async ({ page })
 
   await page.locator('[data-accion="ir-lista"]').click();
   await expect(page).toHaveURL(/#\/$/);
-  await expect(page.locator('#titulo-pantalla')).toHaveText('Productos');
+  await expect(page.locator('#titulo-pantalla')).toHaveText('Estados Rápidos');
 });
 
 test('agregar abre el alta y cancelar vuelve sin guardar', async ({ page }) => {

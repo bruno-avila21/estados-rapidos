@@ -135,6 +135,8 @@ export async function render(contenedor, { navegar }) {
       piezas.push(botonPublicarSeccion(visibles));
     }
 
+    if (prefs.vista !== 'grilla' && visibles.length > 0) piezas.push(consejoPublicacion());
+
     const seleccionados = productos.filter((p) => p.seleccionado);
     if (seleccionados.length > 0) piezas.push(barraPublicarFija(seleccionados));
   }
@@ -144,7 +146,7 @@ export async function render(contenedor, { navegar }) {
   fab.className = 'fab';
   fab.setAttribute('data-accion', 'agregar');
   fab.setAttribute('aria-label', 'Agregar producto');
-  fab.textContent = '+';
+  fab.append(crearIcono('agregar'));
   fab.addEventListener('click', () => navegar('#/producto/nuevo'));
   piezas.push(fab);
 
@@ -212,16 +214,19 @@ function estadoVacioFiltro() {
   return div;
 }
 
-// --- Fila de filtro por sección: chips con scroll horizontal PROPIO ("Todas" + cada sección +
-// "Sin sección", con contador), la elegida se recuerda (CREAR-BRIEF.md). ---
+// --- Fila de filtro por sección: chips con scroll horizontal PROPIO ("Todas" + "Sin sección" +
+// cada sección, con contador — mismo orden que productos_lista_natural), la elegida se recuerda
+// (CREAR-BRIEF.md). Nota: el orden del AGRUPADO ("Todas", vistaAgrupada) es otro — ahí "Sin
+// sección" va al final a propósito (test "Sin sección queda al final del agrupado Todas"); acá es
+// solo el orden de los chips del filtro, sin relación con ese. ---
 function filaFiltro(secciones, conteos, prefs, { navegar, recargar }) {
   const cont = document.createElement('div');
   cont.className = 'filtro-secciones';
 
   const definiciones = [
     { id: 'todas', nombre: 'Todas', cantidad: conteos.todas },
-    ...secciones.map((s) => ({ id: s.id, nombre: s.nombre, cantidad: conteos.porSeccion.get(s.id) || 0 })),
     { id: ID_SIN_SECCION, nombre: 'Sin sección', cantidad: conteos.sinSeccion },
+    ...secciones.map((s) => ({ id: s.id, nombre: s.nombre, cantidad: conteos.porSeccion.get(s.id) || 0 })),
   ];
 
   for (const def of definiciones) {
@@ -244,17 +249,18 @@ function filaFiltro(secciones, conteos, prefs, { navegar, recargar }) {
   btnGestionar.type = 'button';
   btnGestionar.className = 'chip chip--fantasma';
   btnGestionar.setAttribute('data-accion', 'gestionar-secciones');
-  btnGestionar.append(crearIcono('etiqueta'), document.createTextNode('Secciones'));
+  btnGestionar.append(crearIcono('engranaje'), document.createTextNode('Secciones'));
   btnGestionar.addEventListener('click', () => navegar('#/secciones'));
   cont.append(btnGestionar);
 
   return cont;
 }
 
-// --- Conmutador de vista: lista compacta / grilla, se recuerda (CREAR-BRIEF.md). ---
+// --- Conmutador de vista: lista compacta / grilla, se recuerda (CREAR-BRIEF.md). Segmented
+// control (productos_lista_natural): pista con las 2 opciones, la activa con fondo propio. ---
 function conmutadorVista(prefs, recargar) {
   const cont = document.createElement('div');
-  cont.className = 'fila conmutador-vista';
+  cont.className = 'conmutador-vista';
   const opciones = [
     { valor: 'compacta', icono: 'lista', etiqueta: 'Lista' },
     { valor: 'grilla', icono: 'grilla', etiqueta: 'Grilla' },
@@ -263,7 +269,7 @@ function conmutadorVista(prefs, recargar) {
     const btn = document.createElement('button');
     btn.type = 'button';
     const activo = prefs.vista === op.valor;
-    btn.className = 'boton boton--chico ' + (activo ? 'boton--primario' : 'boton--fantasma');
+    btn.className = 'conmutador-vista__opcion' + (activo ? ' conmutador-vista__opcion--activa' : '');
     btn.setAttribute('data-accion', `vista-${op.valor}`);
     btn.setAttribute('aria-pressed', String(activo));
     btn.append(crearIcono(op.icono), document.createTextNode(op.etiqueta));
@@ -277,13 +283,15 @@ function conmutadorVista(prefs, recargar) {
   return cont;
 }
 
+// --- Barra de selección rápida: "Marcar todos" / "Desmarcar" (productos_lista_natural: pastillas
+// con borde, no botones fantasma genéricos). ---
 function barraSeleccion(visibles, recargar) {
   const div = document.createElement('div');
-  div.className = 'fila barra-seleccion';
+  div.className = 'barra-seleccion';
 
   const btnMarcarTodos = document.createElement('button');
   btnMarcarTodos.type = 'button';
-  btnMarcarTodos.className = 'boton boton--chico boton--fantasma';
+  btnMarcarTodos.className = 'barra-seleccion__boton';
   btnMarcarTodos.setAttribute('data-accion', 'marcar-todos');
   btnMarcarTodos.textContent = 'Marcar todos';
   btnMarcarTodos.addEventListener('click', async () => {
@@ -295,7 +303,7 @@ function barraSeleccion(visibles, recargar) {
 
   const btnDesmarcar = document.createElement('button');
   btnDesmarcar.type = 'button';
-  btnDesmarcar.className = 'boton boton--chico boton--fantasma';
+  btnDesmarcar.className = 'barra-seleccion__boton barra-seleccion__boton--fantasma';
   btnDesmarcar.setAttribute('data-accion', 'desmarcar-todos');
   btnDesmarcar.textContent = 'Desmarcar';
   btnDesmarcar.addEventListener('click', async () => {
@@ -307,6 +315,20 @@ function barraSeleccion(visibles, recargar) {
   return div;
 }
 
+// --- Tarjeta "Consejo de publicación" (productos_lista_natural, pie de la lista): texto estático,
+// solo en la vista lista (la grilla del diseño no la incluye). ---
+function consejoPublicacion() {
+  const div = document.createElement('div');
+  div.className = 'consejo';
+  div.append(crearIcono('info'));
+  const texto = document.createElement('p');
+  const fuerte = document.createElement('strong');
+  fuerte.textContent = 'Consejo de publicación: ';
+  texto.append(fuerte, document.createTextNode('las fotos seleccionadas se envían a tu WhatsApp en calidad original, como estado de 24 horas.'));
+  div.append(texto);
+  return div;
+}
+
 function barraPublicarFija(seleccionados) {
   const div = document.createElement('div');
   div.className = 'barra-publicar';
@@ -314,7 +336,11 @@ function barraPublicarFija(seleccionados) {
   btn.type = 'button';
   btn.className = 'boton boton--primario boton--ancho';
   btn.setAttribute('data-accion', 'publicar-seleccionados');
-  btn.textContent = `Publicar ${seleccionados.length}`;
+  // "Publicar N producto(s)" (productos_lista_natural/productos_vista_grilla_natural). El ícono no
+  // suma texto (SVG sin nodos de texto), así que `toHaveText(...)` en los tests sigue matcheando
+  // exacto aunque el botón ya no sea solo un nodo de texto.
+  const palabra = seleccionados.length === 1 ? 'producto' : 'productos';
+  btn.append(crearIcono('enviar'), document.createTextNode(`Publicar ${seleccionados.length} ${palabra}`));
   btn.addEventListener('click', () => abrirHojaRevision({ ids: seleccionados.map((p) => p.id) }));
   div.append(btn);
   return div;
@@ -344,9 +370,25 @@ function vistaAgrupada(productos, secciones, prefs, recargar, ctx) {
     const detalle = document.createElement('details');
     detalle.className = 'grupo grupo-seccion';
     detalle.open = !prefs.gruposPlegados?.[clave];
+    // Los 2 diseños dibujan este mismo encabezado distinto: productos_lista_natural usa una
+    // etiqueta chica en mayúsculas; productos_vista_grilla_natural, un título editorial grande.
     const resumen = document.createElement('summary');
-    resumen.className = 'grupo__titulo';
-    resumen.textContent = `${grupo.nombre} (${grupo.productos.length})`;
+    resumen.className = `grupo__titulo grupo__titulo--seccion grupo__titulo--seccion-${ctx.vista === 'grilla' ? 'grilla' : 'lista'}`;
+    const nombreYContador = document.createElement('span');
+    nombreYContador.className = 'grupo__titulo-grupo';
+    const nombre = document.createElement('span');
+    nombre.className = 'grupo__titulo-texto';
+    nombre.textContent = grupo.nombre;
+    const contador = document.createElement('span');
+    // Si hay marcados en el grupo, el contador lo dice (productos_lista_natural: "3 seleccionados");
+    // si no, es la cuenta neutra del grupo (productos_vista_grilla_natural: "3").
+    const marcados = grupo.productos.filter((p) => p.seleccionado).length;
+    contador.className = 'grupo__contador' + (marcados > 0 ? ' grupo__contador--seleccion' : '');
+    contador.textContent = marcados > 0 ? `${marcados} seleccionados` : String(grupo.productos.length);
+    nombreYContador.append(nombre, contador);
+    // El texto empieza siempre por el nombre del grupo (sin espacio antes del contador): los tests
+    // que chequean el prefijo de `summary.textContent` (ej. "Sin sección...") siguen pasando.
+    resumen.append(nombreYContador);
     detalle.append(resumen);
     detalle.append(ctx.vista === 'grilla' ? grilla(grupo.productos, ctx) : listaCompacta(grupo.productos, ctx));
     detalle.addEventListener('toggle', () => {
@@ -373,6 +415,11 @@ function filaCompacta(producto, ctx) {
   fila.className = 'fila-compacta';
   fila.setAttribute('data-id', producto.id);
 
+  // La casilla se ve del tamaño del diseño (24px) pero el área táctil real es más grande: un
+  // envoltorio con padding + margen negativo (no en la casilla misma, que necesita apariencia
+  // nativa/appearance:none intacta para el estilo custom) — mismo criterio que patrones.md regla 6.
+  const cajaCheckbox = document.createElement('span');
+  cajaCheckbox.className = 'fila-compacta__seleccion-caja';
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
   checkbox.className = 'fila-compacta__seleccion';
@@ -380,6 +427,7 @@ function filaCompacta(producto, ctx) {
   checkbox.setAttribute('data-accion', 'seleccionar');
   checkbox.setAttribute('aria-label', `Seleccionar ${producto.nombre} para publicar`);
   checkbox.addEventListener('change', () => ctx.onToggle(producto, checkbox.checked));
+  cajaCheckbox.append(checkbox);
 
   const url = ctx.fotoUrlPorId.get(producto.id);
   let foto;
@@ -397,12 +445,25 @@ function filaCompacta(producto, ctx) {
     foto.append(crearIcono('camara'));
   }
 
+  // Bloque de metadatos (productos_lista_natural): nombre + subtítulo (la descripción, si tiene) +
+  // precio en línea propia, todo dentro de una sola columna angosta.
+  const meta = document.createElement('div');
+  meta.className = 'fila-compacta__meta';
+
   const nombre = document.createElement('button');
   nombre.type = 'button';
   nombre.className = 'fila-compacta__nombre';
   nombre.setAttribute('data-accion', 'editar');
   nombre.textContent = producto.nombre;
   nombre.addEventListener('click', () => ctx.navegar(`#/producto/${producto.id}`));
+  meta.append(nombre);
+
+  if (producto.descripcion) {
+    const subtitulo = document.createElement('p');
+    subtitulo.className = 'fila-compacta__subtitulo';
+    subtitulo.textContent = producto.descripcion;
+    meta.append(subtitulo);
+  }
 
   const inputPrecio = document.createElement('input');
   inputPrecio.type = 'text';
@@ -435,10 +496,14 @@ function filaCompacta(producto, ctx) {
   inputPrecio.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') inputPrecio.blur();
   });
+  meta.append(inputPrecio);
+
+  const acciones = document.createElement('div');
+  acciones.className = 'fila-compacta__acciones';
 
   const btnPublicar = document.createElement('button');
   btnPublicar.type = 'button';
-  btnPublicar.className = 'boton-icono';
+  btnPublicar.className = 'boton-icono boton-icono-mini boton-icono-mini--lleno';
   btnPublicar.setAttribute('data-accion', 'publicar');
   btnPublicar.setAttribute('aria-label', `Publicar ${producto.nombre}`);
   btnPublicar.append(crearIcono('subir'));
@@ -446,7 +511,7 @@ function filaCompacta(producto, ctx) {
 
   const btnBorrar = document.createElement('button');
   btnBorrar.type = 'button';
-  btnBorrar.className = 'boton-icono';
+  btnBorrar.className = 'boton-icono boton-icono-mini boton-icono-mini--peligro';
   btnBorrar.setAttribute('data-accion', 'borrar');
   btnBorrar.setAttribute('aria-label', `Borrar ${producto.nombre}`);
   btnBorrar.append(crearIcono('borrar'));
@@ -460,8 +525,9 @@ function filaCompacta(producto, ctx) {
     mostrarToast('Producto borrado');
     ctx.recargar();
   });
+  acciones.append(btnPublicar, btnBorrar);
 
-  fila.append(checkbox, foto, nombre, inputPrecio, btnPublicar, btnBorrar);
+  fila.append(cajaCheckbox, foto, meta, acciones);
   return fila;
 }
 
@@ -498,6 +564,11 @@ function tarjetaGrilla(producto, ctx) {
     }
   });
 
+  // productos_vista_grilla_natural: la foto vive en un contenedor propio (relative) para poder
+  // superponer la casilla (arriba-izq.) y la pastilla "Listo" (abajo-der., solo si está marcado).
+  const fotoCaja = document.createElement('div');
+  fotoCaja.className = 'grilla-item__foto-caja';
+
   const url = ctx.fotoUrlPorId.get(producto.id);
   let foto;
   if (url) {
@@ -514,6 +585,14 @@ function tarjetaGrilla(producto, ctx) {
     foto.append(crearIcono('camara'));
   }
 
+  // Misma idea que en la fila compacta: casilla visualmente chica (24px, igual al diseño) con un
+  // envoltorio con área táctil más grande (patrones.md regla 6). Es un <label> (no un <span>): así
+  // tocar el aro de relleno también alterna la casilla sin JS aparte, y lleva el mismo
+  // `data-accion="seleccionar"` para que `esControl` (más abajo) no confunda ese toque con "abrir".
+  const cajaCheckbox = document.createElement('label');
+  cajaCheckbox.className = 'grilla-item__seleccion-caja';
+  cajaCheckbox.setAttribute('data-accion', 'seleccionar');
+  cajaCheckbox.addEventListener('click', (ev) => ev.stopPropagation());
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
   checkbox.className = 'grilla-item__seleccion';
@@ -522,6 +601,14 @@ function tarjetaGrilla(producto, ctx) {
   checkbox.setAttribute('aria-label', `Seleccionar ${producto.nombre} para publicar`);
   checkbox.addEventListener('click', (ev) => ev.stopPropagation());
   checkbox.addEventListener('change', () => ctx.onToggle(producto, checkbox.checked));
+  cajaCheckbox.append(checkbox);
+
+  const listo = document.createElement('span');
+  listo.className = 'grilla-item__listo';
+  listo.textContent = 'Listo';
+  listo.setAttribute('aria-hidden', 'true');
+
+  fotoCaja.append(foto, cajaCheckbox, listo);
 
   const nombre = document.createElement('div');
   nombre.className = 'grilla-item__nombre';
@@ -530,13 +617,18 @@ function tarjetaGrilla(producto, ctx) {
   const precio = document.createElement('div');
   precio.className = 'grilla-item__precio';
   precio.textContent = producto.precio != null ? formatearPrecio(producto.precio, formatoPrecioCache) : 'Sin precio';
+  precio.classList.toggle('grilla-item__precio--vacio', producto.precio == null);
 
-  const acciones = document.createElement('div');
-  acciones.className = 'grilla-item__acciones';
+  const pie = document.createElement('div');
+  pie.className = 'grilla-item__pie';
 
+  // El diseño usa un lápiz para "Editar producto" y un avión de papel para "Compartir en
+  // WhatsApp"; acá el lápiz sigue editando el PRECIO (el modal rápido que ya existía y tienen
+  // tests, Fase 3 "M" #2) — tocar el resto de la tarjeta ya abre la edición completa del producto,
+  // así que no se pierde ninguna acción, solo se reparte distinto.
   const btnPrecio = document.createElement('button');
   btnPrecio.type = 'button';
-  btnPrecio.className = 'grilla-item__accion';
+  btnPrecio.className = 'grilla-item__accion boton-icono-mini';
   btnPrecio.setAttribute('data-accion', 'grilla-precio');
   btnPrecio.setAttribute('aria-label', `Editar precio de ${producto.nombre}`);
   btnPrecio.append(crearIcono('lapiz'));
@@ -545,22 +637,23 @@ function tarjetaGrilla(producto, ctx) {
     const guardado = await abrirModalPrecio(producto);
     if (guardado) {
       precio.textContent = producto.precio != null ? formatearPrecio(producto.precio, formatoPrecioCache) : 'Sin precio';
+      precio.classList.toggle('grilla-item__precio--vacio', producto.precio == null);
     }
   });
 
   const btnPublicar = document.createElement('button');
   btnPublicar.type = 'button';
-  btnPublicar.className = 'grilla-item__accion';
+  btnPublicar.className = 'grilla-item__accion boton-icono-mini boton-icono-mini--lleno';
   btnPublicar.setAttribute('data-accion', 'grilla-publicar');
   btnPublicar.setAttribute('aria-label', `Publicar ${producto.nombre}`);
-  btnPublicar.append(crearIcono('subir'));
+  btnPublicar.append(crearIcono('enviar'));
   btnPublicar.addEventListener('click', (ev) => {
     ev.stopPropagation();
     abrirHojaRevision({ ids: [producto.id] });
   });
 
-  acciones.append(btnPrecio, btnPublicar);
-  div.append(foto, checkbox, nombre, precio, acciones);
+  pie.append(btnPrecio, btnPublicar);
+  div.append(fotoCaja, nombre, precio, pie);
   return div;
 }
 

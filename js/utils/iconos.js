@@ -26,11 +26,49 @@ const TRAZOS = Object.freeze({
     ['line', { x1: 4, y1: 18, x2: 20, y2: 18 }],
     ['circle', { cx: 11, cy: 18, r: 2 }],
   ],
+  // Nav inferior "Respaldo" (Material "backup"): nube + flecha subiendo — antes eran 2 flechas
+  // sueltas (import/export), sin forma de nube; redibujado para la comparación con el diseño Stitch.
   respaldo: [
-    ['line', { x1: 9, y1: 4, x2: 9, y2: 13 }],
-    ['polyline', { points: '6,7 9,4 12,7' }],
-    ['line', { x1: 15, y1: 20, x2: 15, y2: 11 }],
-    ['polyline', { points: '12,17 15,20 18,17' }],
+    ['path', { d: 'M7 18a4 4 0 0 1-.6-7.96A5 5 0 0 1 16.2 8.2 4.5 4.5 0 0 1 17 17h-1' }],
+    ['line', { x1: 12, y1: 11, x2: 12, y2: 19 }],
+    ['polyline', { points: '9,14 12,11 15,14' }],
+  ],
+  // Nav inferior "Productos" (Material "inventory_2"): caja con tapa — distinto del glifo `lista`
+  // (view_list, 3 líneas) que se usa en el conmutador Lista/Grilla; comparten forma antes por error.
+  inventario: [
+    ['rect', { x: 3.5, y: 9, width: 17, height: 11, rx: 1.5 }],
+    ['path', { d: 'M3 8.5 5.5 4.5h13L21 8.5' }],
+    ['line', { x1: 9.5, y1: 13, x2: 14.5, y2: 13 }],
+  ],
+  // Botón "Secciones" del filtro (Material "settings"): engranaje — antes usaba `etiqueta`, que
+  // sigue existiendo para el estado vacío (semántica distinta, no se toca).
+  engranaje: [
+    ['circle', { cx: 12, cy: 12, r: 2.8 }],
+    ['path', {
+      d: 'M12 3.5v2.4M12 18.1v2.4M20.5 12h-2.4M5.9 12H3.5M17.7 6.3l-1.7 1.7M8 16l-1.7 1.7M17.7 17.7 16 16M8 8 6.3 6.3',
+    }],
+  ],
+  // Ícono "add" (Material "add"): cruz — el FAB usaba el carácter "+" de texto, no un SVG.
+  agregar: [
+    ['line', { x1: 12, y1: 5, x2: 12, y2: 19 }],
+    ['line', { x1: 5, y1: 12, x2: 19, y2: 12 }],
+  ],
+  // Ícono "send" (Material "send"): avión de papel — barra de publicar fija y acción "Compartir en
+  // WhatsApp" de la grilla.
+  enviar: [['path', { d: 'M4 12 20 4 13 20 11 13 4 12z' }], ['line', { x1: 11, y1: 13, x2: 20, y2: 4 }]],
+  // Ícono "select_all" (Material): 4 esquinas punteadas — botón "Marcar todos".
+  todos: [
+    ['path', { d: 'M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8' }],
+    ['path', { d: 'M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8' }],
+    ['path', { d: 'M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16' }],
+    ['path', { d: 'M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16' }],
+    ['rect', { x: 9, y: 9, width: 6, height: 6, rx: 1 }],
+  ],
+  // Ícono "info" (Material): tarjeta "Consejo de publicación".
+  info: [
+    ['circle', { cx: 12, cy: 12, r: 8.5 }],
+    ['line', { x1: 12, y1: 11, x2: 12, y2: 16 }],
+    ['line', { x1: 12, y1: 7.6, x2: 12, y2: 7.8 }],
   ],
   buscar: [
     ['circle', { cx: 10, cy: 10, r: 6 }],

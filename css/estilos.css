@@ -11,10 +11,29 @@
   font-style: normal;
   font-display: swap;
 }
+/* Peso 500 (headline-sm del diseño Stitch: título del header, nombre de fila, título de sección) —
+   bajado de @fontsource por jsdelivr, no existía en fonts/ (CLAUDE.md, "si el diseño usa un peso
+   que no está, bajalo"). */
+@font-face {
+  font-family: 'EstadosNewsreader';
+  src: url('../fonts/newsreader-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
 @font-face {
   font-family: 'EstadosManrope';
   src: url('../fonts/manrope-400.woff2') format('woff2');
   font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+/* Peso 500 (label-sm/body-md "font-medium" del diseño: subtítulo de fila, nombre en la grilla) —
+   mismo motivo que Newsreader 500. */
+@font-face {
+  font-family: 'EstadosManrope';
+  src: url('../fonts/manrope-500.woff2') format('woff2');
+  font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
@@ -30,23 +49,40 @@
   /* Identidad visual: verde ciprés (primario) + umber cálido (acento secundario) sobre
      superficies de alabastro/lino. Contraste AA verificado (ver CALIDAD.md, ronda
      "Organic Minimalist" 2026-09-28). */
-  --color-fondo: #fbf9f5;
-  --color-superficie: #f3efea;
-  --color-superficie-alta: #ebe5dd;
+  --color-fondo: #fdf8f5;
+  --color-superficie: #f1edea;
+  --color-superficie-alta: #ece7e4;
   --color-borde: rgba(90, 88, 86, 0.22);
-  --color-texto: #242220;
-  --color-texto-tenue: #5c584f;
+  --color-texto: #1c1b1a;
+  --color-texto-tenue: #434842;
   --color-primario: #3a4d39;
   --color-primario-fuerte: #2e3d2d;
-  --color-primario-texto: #fbf9f5;
+  --color-primario-texto: #ffffff;
   --color-primario-tinte: rgba(58, 77, 57, 0.1);
   --color-acento: #6e5b49;
   --color-peligro: #ba1a1a;
   --color-peligro-fuerte: #8f1414;
-  --color-peligro-texto: #fbf9f5;
+  --color-peligro-texto: #ffffff;
   --color-exito: #3f5c38;
   --color-superposicion: rgba(36, 34, 32, 0.45);
   --sombra: 0 4px 20px -2px rgba(58, 48, 40, 0.08), 0 1px 3px 0 rgba(58, 48, 40, 0.05);
+
+  /* Niveles de superficie y contorno que trae el diseño Stitch (Material 3 "surface-container-*")
+     y que la ronda anterior no había sumado — ver comparar-diseno.mjs, productos_lista_natural y
+     productos_vista_grilla_natural. */
+  --color-superficie-baja: #f7f3f0;
+  --color-superficie-blanca: #ffffff;
+  --color-superficie-maxima: #e6e2df;
+  --color-contorno: #747871;
+  --color-contorno-variante: #c3c8bf;
+  --borde-sutil: rgba(195, 200, 191, 0.35);
+  --borde-medio: rgba(195, 200, 191, 0.55);
+  /* "primary" (#243624) es más oscuro que "primary-container" (--color-primario, #3a4d39): el
+     diseño los usa para cosas distintas (texto/íconos vs. fondos de botón/chip activo). */
+  --color-primario-oscuro: #243624;
+  --color-primario-tinte-suave: #d2e9ce;
+  --color-primario-tinte-suave-texto: #394b38;
+  --sombra-cta: 0 4px 20px -2px rgba(58, 48, 40, 0.18);
 
   --font-titulo: 'EstadosNewsreader', Georgia, 'Times New Roman', serif;
   --font-cuerpo: 'EstadosManrope', system-ui, sans-serif;
@@ -93,6 +129,17 @@
     --color-exito: #9dbd98;
     --color-superposicion: rgba(0, 0, 0, 0.55);
     --sombra: 0 4px 20px -2px rgba(0, 0, 0, 0.35), 0 1px 3px 0 rgba(0, 0, 0, 0.25);
+    --color-superficie-baja: #26241d;
+    --color-superficie-blanca: #2e2b23;
+    --color-superficie-maxima: #3a3729;
+    --color-contorno: #8f897c;
+    --color-contorno-variante: #4a473b;
+    --borde-sutil: rgba(255, 255, 255, 0.12);
+    --borde-medio: rgba(255, 255, 255, 0.2);
+    --color-primario-oscuro: #a7bda4;
+    --color-primario-tinte-suave: #394b38;
+    --color-primario-tinte-suave-texto: #d2e9ce;
+    --sombra-cta: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
   }
 }
 [data-theme='dark'] {
@@ -113,6 +160,17 @@
   --color-exito: #9dbd98;
   --color-superposicion: rgba(0, 0, 0, 0.55);
   --sombra: 0 4px 20px -2px rgba(0, 0, 0, 0.35), 0 1px 3px 0 rgba(0, 0, 0, 0.25);
+  --color-superficie-baja: #26241d;
+  --color-superficie-blanca: #2e2b23;
+  --color-superficie-maxima: #3a3729;
+  --color-contorno: #8f897c;
+  --color-contorno-variante: #4a473b;
+  --borde-sutil: rgba(255, 255, 255, 0.12);
+  --borde-medio: rgba(255, 255, 255, 0.2);
+  --color-primario-oscuro: #a7bda4;
+  --color-primario-tinte-suave: #394b38;
+  --color-primario-tinte-suave-texto: #d2e9ce;
+  --sombra-cta: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
 }
 
 * {
@@ -175,19 +233,65 @@ h3 {
   background: var(--color-fondo);
   /* el padding-top absorbe la barra de estado (antes vivía en .app): al ser sticky, esta franja
      queda siempre pintada con el fondo de la app y el título nunca se ve detrás del reloj. */
-  padding: calc(var(--safe-top) + 16px) 20px 8px;
+  padding: calc(var(--safe-top) + 10px) 12px 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
+  border-bottom: 1px solid var(--borde-sutil);
 }
-.encabezado__logo {
-  width: 32px;
-  height: 32px;
+/* Botones de ícono del header (diseño Stitch, TopAppBar): "menú" a la izquierda y "+" a la
+   derecha. El diseño los dibuja de 40px (w-10 h-10); se mantienen en 48px de objetivo táctil
+   (patrones.md regla 6) sin agrandar el ícono, para no alterar el aspecto visual. */
+.encabezado__menu,
+.encabezado__accion {
   flex-shrink: 0;
+  width: var(--toque-min);
+  height: var(--toque-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-chico);
+  border: none;
+  background: transparent;
+  color: var(--color-primario-oscuro);
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), color var(--duracion) var(--ease);
+}
+.encabezado__menu:hover,
+.encabezado__accion:hover {
+  background: var(--color-superficie);
+}
+.encabezado__menu:active,
+.encabezado__accion:active {
+  transform: scale(0.94);
+}
+.encabezado__menu .icono,
+.encabezado__accion .icono {
+  width: 24px;
+  height: 24px;
+}
+.encabezado__textos {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .encabezado__titulo {
-  font-size: var(--tamano-28);
-  letter-spacing: -0.02em;
+  font-size: var(--tamano-20);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: normal;
+  color: var(--color-primario-oscuro);
+}
+.encabezado__subtitulo {
+  margin: 2px 0 0;
+  font-family: var(--font-cuerpo);
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  color: var(--color-texto-tenue);
+}
+.encabezado__subtitulo[hidden] {
+  display: none;
 }
 
 .vista {
@@ -205,8 +309,8 @@ h3 {
   right: 0;
   bottom: 0;
   display: flex;
-  background: var(--color-superficie);
-  border-top: 1px solid var(--color-borde);
+  background: var(--color-superficie-baja);
+  border-top: 1px solid var(--borde-medio);
   padding-bottom: var(--safe-bottom);
   z-index: 20;
 }
@@ -241,7 +345,9 @@ h3 {
   outline-offset: -2px;
 }
 .nav-inferior__item.activo {
-  color: var(--color-acento);
+  /* El diseño usa "primary" (verde ciprés oscuro) para el tab activo, no "secondary" (umber) */
+  color: var(--color-primario-oscuro);
+  font-weight: 600;
 }
 
 /* ---------- Botones ---------- */
@@ -310,31 +416,38 @@ h3 {
 }
 
 /* ---------- FAB ---------- */
+/* El diseño usa un cuadrado redondeado (rounded-xl, 48×48), no un círculo. */
 .fab {
   position: fixed;
-  right: 20px;
-  bottom: calc(var(--espacio-nav) + var(--safe-bottom) + 20px);
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--color-primario);
-  color: var(--color-primario-texto);
+  right: 16px;
+  bottom: calc(var(--espacio-nav) + var(--safe-bottom) + 16px);
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio);
+  background: var(--color-primario-oscuro);
+  color: #fff;
   border: none;
-  font-size: var(--tamano-28);
-  line-height: 1;
-  box-shadow: var(--sombra);
+  box-shadow: var(--sombra-cta);
   cursor: pointer;
   z-index: 19; /* por encima de .barra-publicar (BUGS.md #11): nunca queda tapado */
   transition: transform var(--duracion) var(--ease), background var(--duracion) var(--ease);
 }
+.fab .icono {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.75;
+}
 .fab:hover {
-  background: var(--color-primario-fuerte);
+  background: var(--color-primario);
 }
 .fab:active {
   transform: scale(0.94);
 }
 .fab:focus-visible {
-  outline: 2px solid var(--color-primario-texto);
+  outline: 2px solid var(--color-primario-oscuro);
   outline-offset: 3px;
 }
 
@@ -443,20 +556,40 @@ h3 {
 
 /* ---------- Selección múltiple: barra de acciones rápidas + barra fija de Publicar ---------- */
 .barra-seleccion {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   padding: 4px 0 8px;
 }
+/* El diseño flota el botón "Publicar N" como una pastilla propia (con su sombra y radio) sobre un
+   contenedor SIN fondo ni borde — no una barra de ancho completo pegada al borde inferior. */
 .barra-publicar {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(var(--espacio-nav) + var(--safe-bottom));
-  padding: 10px 16px;
-  /* hueco del ancho del FAB (56px + 20px de margen + 16px de aire) para que nunca lo tape,
-     ni siquiera visualmente: el botón "Publicar N" no se extiende debajo suyo (BUGS.md #11) */
-  padding-right: 92px;
-  background: var(--color-superficie);
-  border-top: 1px solid var(--color-borde);
+  bottom: calc(var(--espacio-nav) + var(--safe-bottom) + 12px);
+  padding: 0 16px;
+  /* hueco del ancho del FAB (48px + 16px de margen + 12px de aire) para que nunca lo tape */
+  padding-right: 80px;
   z-index: 18;
+  pointer-events: none;
+}
+.barra-publicar .boton--primario {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--color-primario);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra-cta);
+}
+.barra-publicar .boton--primario:hover {
+  background: var(--color-primario-fuerte);
+}
+.barra-publicar .boton--primario .icono {
+  width: 20px;
+  height: 20px;
 }
 @media (min-width: 720px) {
   .barra-publicar {
@@ -1378,14 +1511,16 @@ details.grupo > .campo {
   transform: scale(0.97);
 }
 .chip--activo {
-  background: var(--color-primario);
-  border-color: var(--color-primario);
-  color: var(--color-primario-texto);
+  /* productos_lista_natural: el chip activo usa "primary" (verde más oscuro), no
+     "primary-container" — distinto del resto de los rellenos de botón de la app. */
+  background: var(--color-primario-oscuro);
+  border-color: var(--color-primario-oscuro);
+  color: #fff;
 }
 .chip--fantasma {
-  background: transparent;
-  border-style: dashed;
-  color: var(--color-texto-tenue);
+  background: var(--color-superficie-baja);
+  border-style: solid;
+  color: var(--color-acento);
 }
 
 /* Fila de filtro por sección: SCROLL HORIZONTAL PROPIO (no de la página) — el `.vista` general no
@@ -1419,12 +1554,112 @@ details.grupo > .campo {
   text-align: center;
 }
 
+/* Conmutador Lista/Grilla (productos_lista_natural): pista con las 2 opciones, la activa con su
+   propio fondo + sombra chica, como un segmented control nativo. */
 .conmutador-vista {
-  padding-bottom: 4px;
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--color-superficie-baja);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio);
+}
+.conmutador-vista__opcion {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--color-texto-tenue);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-12);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), color var(--duracion) var(--ease), box-shadow var(--duracion) var(--ease);
+}
+.conmutador-vista__opcion .icono {
+  width: 16px;
+  height: 16px;
+}
+.conmutador-vista__opcion:hover {
+  color: var(--color-primario-oscuro);
+}
+.conmutador-vista__opcion:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.conmutador-vista__opcion--activa {
+  background: var(--color-superficie-blanca);
+  color: var(--color-primario-oscuro);
+  box-shadow: 0 1px 2px 0 rgba(58, 48, 40, 0.12);
+}
+
+/* Barra "Marcar todos" / "Desmarcar" (productos_lista_natural): pastillas con borde propio, no
+   los botones fantasma genéricos que usa el resto de la app. */
+.barra-seleccion__boton {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--borde-medio);
+  background: var(--color-superficie-baja);
+  color: var(--color-texto);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
+}
+.barra-seleccion__boton:hover {
+  background: var(--color-superficie-alta);
+}
+.barra-seleccion__boton:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.barra-seleccion__boton:active {
+  transform: scale(0.97);
+}
+.barra-seleccion__boton--fantasma {
+  background: transparent;
+  border-color: var(--borde-sutil);
+  color: var(--color-texto-tenue);
 }
 
 .boton-publicar-seccion {
   margin-top: 8px;
+}
+
+/* Tarjeta "Consejo de publicación" (productos_lista_natural, pie de la lista): texto estático. */
+.consejo {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 14px;
+  background: var(--color-superficie-baja);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio);
+}
+.consejo .icono {
+  flex-shrink: 0;
+  margin-top: 2px;
+  width: 20px;
+  height: 20px;
+  color: var(--color-primario-oscuro);
+}
+.consejo p {
+  margin: 0;
+  color: var(--color-texto-tenue);
+  font-size: var(--tamano-14);
+  line-height: 1.5;
+}
+.consejo strong {
+  color: var(--color-texto);
+  font-weight: 600;
 }
 
 /* Gestión de secciones (#/secciones) */
@@ -1491,6 +1726,67 @@ details.grupo > .campo {
 }
 
 /* Encabezados plegables de la vista "Todas" (details.grupo-seccion reusa details.grupo). */
+/* Botón de ícono "chico" reusable (productos_lista_natural/productos_vista_grilla_natural): visual
+   de ~36-40px (igual al diseño) pero con 48px reales de área táctil — el excedente se dibuja con un
+   `::before` centrado en vez de padding directo en el botón (patrones.md regla 6, "sin cambiar el
+   aspecto visual"). `--lleno` arranca con fondo (ej. "Publicar"/"Subir a Estado"); sin el
+   modificador, el fondo aparece recién en hover/focus (ej. "Editar"/"Borrar"). */
+.boton-icono-mini {
+  position: relative;
+  width: var(--toque-min);
+  height: var(--toque-min);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-texto-tenue);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.boton-icono-mini::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  transition: background var(--duracion) var(--ease);
+}
+.boton-icono-mini:hover::before {
+  background: var(--color-superficie-alta);
+}
+.boton-icono-mini:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.boton-icono-mini:active {
+  transform: scale(0.94);
+}
+.boton-icono-mini .icono {
+  position: relative;
+  width: 19px;
+  height: 19px;
+  z-index: 1;
+}
+.boton-icono-mini--lleno {
+  color: var(--color-primario-oscuro);
+}
+.boton-icono-mini--lleno::before {
+  background: var(--color-superficie-alta);
+}
+.boton-icono-mini--lleno:hover::before {
+  background: var(--color-superficie-maxima);
+}
+.boton-icono-mini--peligro:hover {
+  color: var(--color-peligro);
+}
+.boton-icono-mini--peligro:hover::before {
+  background: #ffdad6;
+}
+
+/* Encabezados plegables de la vista "Todas" (details.grupo-seccion reusa details.grupo): el
+   diseño los dibuja como un título editorial (Newsreader) + una pastilla con el conteo, no como el
+   rótulo genérico en mayúsculas de `.grupo__titulo`. */
 details.grupo-seccion > summary.grupo__titulo {
   font-weight: 600;
 }
@@ -1498,34 +1794,133 @@ details.grupo-seccion > .lista-compacta,
 details.grupo-seccion > .grilla-productos {
   padding: 0 4px 10px;
 }
+.grupo__titulo--seccion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  font-family: var(--font-cuerpo);
+  text-transform: none;
+  letter-spacing: normal;
+  margin-bottom: 6px;
+}
+.grupo__titulo--seccion::-webkit-details-marker {
+  display: none;
+}
+.grupo__titulo-grupo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Grilla (productos_vista_grilla_natural): título editorial grande. */
+.grupo__titulo--seccion-grilla .grupo__titulo-texto {
+  font-family: var(--font-titulo);
+  font-size: var(--tamano-20);
+  font-weight: 500;
+  color: var(--color-primario-oscuro);
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Lista (productos_lista_natural): etiqueta chica en mayúsculas. */
+.grupo__titulo--seccion-lista .grupo__titulo-texto {
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-texto-tenue);
+}
+.grupo__contador {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie-alta);
+  color: var(--color-texto-tenue);
+  font-family: var(--font-cuerpo);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.grupo__contador--seleccion {
+  background: var(--color-primario-tinte-suave);
+  color: var(--color-primario-tinte-suave-texto);
+}
+/* Chevron (expand_more/expand_less): dos trazos en V, no el triángulo nativo de <summary>. */
+.grupo__titulo--seccion::after {
+  content: '';
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-right: 2px;
+  border-right: 2px solid var(--color-texto-tenue);
+  border-bottom: 2px solid var(--color-texto-tenue);
+  transform: rotate(45deg);
+  transition: transform var(--duracion) var(--ease);
+}
+details[open] > .grupo__titulo--seccion::after {
+  transform: rotate(-135deg);
+  margin-top: 4px;
+}
 
 /* ---------- Vista LISTA COMPACTA (Productos): una fila por producto, ~8-10 por pantalla ---------- */
 .lista-compacta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-top: 4px;
+  gap: 8px;
+  padding-top: 8px;
 }
+/* Tarjeta de fila (productos_lista_natural): antes era una fila lisa con hover apenas visible;
+   el diseño la dibuja como una tarjeta propia (fondo, borde, radio, sombra chica). */
 .fila-compacta {
   display: flex;
   align-items: center;
   flex-wrap: wrap; /* letra grande del sistema (bug #42, skill crear-apk): envuelve en vez de
     desbordar el viewport, mismo criterio que `.fila` (BUGS.md #35) */
-  gap: 8px;
-  padding: 4px;
-  border-radius: var(--radio-chico);
-  min-height: 56px;
+  gap: 12px;
+  padding: 12px;
+  background: var(--color-superficie-baja);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio);
+  box-shadow: 0 1px 3px 0 rgba(58, 48, 40, 0.03);
+  transition: border-color var(--duracion) var(--ease);
 }
 .fila-compacta:hover {
-  background: var(--color-superficie);
+  border-color: var(--borde-medio);
+}
+/* Casilla: se ve del tamaño del diseño (24px); el envoltorio (no la casilla) absorbe el excedente
+   de área táctil con padding + margen negativo (patrones.md regla 6). */
+.fila-compacta__seleccion-caja {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 10px;
+  margin: -10px;
 }
 .fila-compacta__seleccion {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  margin: -6px;
-  accent-color: var(--color-primario);
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--color-contorno);
+  background-color: var(--color-superficie);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 14px 14px;
   cursor: pointer;
+  transition: background-color var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
+}
+.fila-compacta__seleccion:checked {
+  background-color: var(--color-primario);
+  border-color: var(--color-primario);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='5 13 10 18 19 7'/%3E%3C/svg%3E");
+}
+.fila-compacta__seleccion:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
 }
 .fila-compacta__foto {
   flex-shrink: 0;
@@ -1534,6 +1929,7 @@ details.grupo-seccion > .grilla-productos {
   border-radius: var(--radio-chico);
   object-fit: cover;
   background: var(--color-superficie-alta);
+  border: 1px solid var(--borde-sutil);
 }
 .fila-compacta__foto--vacia {
   display: flex;
@@ -1542,19 +1938,26 @@ details.grupo-seccion > .grilla-productos {
   color: var(--color-texto-tenue);
   font-size: var(--tamano-20);
 }
-.fila-compacta__nombre {
+.fila-compacta__meta {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fila-compacta__nombre {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
   background: none;
   border: none;
+  padding: 2px 0;
+  font-family: var(--font-titulo);
   color: var(--color-texto);
-  font-size: var(--tamano-14);
-  font-weight: 600;
-  min-height: 44px;
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1.2;
   cursor: pointer;
 }
 .fila-compacta__nombre:focus-visible {
@@ -1562,28 +1965,54 @@ details.grupo-seccion > .grilla-productos {
   outline-offset: 2px;
   border-radius: var(--radio-chico);
 }
+.fila-compacta__subtitulo {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-texto-tenue);
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+}
 .fila-compacta__precio {
+  align-self: flex-start;
+  margin-top: 2px;
   flex-shrink: 0;
-  width: 84px;
-  min-height: 40px;
-  font-family: var(--font-datos);
+  width: 96px;
+  min-height: 26px;
+  font-family: var(--font-cuerpo);
   font-variant-numeric: tabular-nums;
-  font-size: var(--tamano-14);
-  background: var(--color-superficie-alta);
-  border: 1px solid var(--color-borde);
+  font-size: var(--tamano-12);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--color-superficie);
+  border: 1px solid var(--borde-sutil);
   border-radius: var(--radio-chico);
   color: var(--color-texto);
-  padding: 0 6px;
+  padding: 4px 8px;
+}
+.fila-compacta__precio:placeholder-shown {
+  background: var(--color-superficie-alta);
+  color: var(--color-texto-tenue);
+  font-style: italic;
 }
 .fila-compacta__precio:focus-visible {
   outline: none;
   border-color: var(--color-acento);
 }
+.fila-compacta__acciones {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: auto;
+}
 
-/* ---------- Vista GRILLA (Productos): 3 columnas, foto cuadrada + nombre + casilla superpuesta ---------- */
+/* ---------- Vista GRILLA (Productos): productos_vista_grilla_natural — tarjeta con foto, casilla
+   superpuesta, pastilla "Listo", nombre, precio y un pie con "Editar precio"/"Subir a Estado". ---------- */
 .grilla-productos {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   padding-top: 8px;
 }
@@ -1591,15 +2020,27 @@ details.grupo-seccion > .grilla-productos {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px;
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio);
   cursor: pointer;
-  border-radius: var(--radio-chico);
+  transition: border-color var(--duracion) var(--ease);
+}
+.grilla-item:hover {
+  border-color: var(--borde-medio);
 }
 .grilla-item:focus-visible {
   outline: 2px solid var(--color-acento);
   outline-offset: 2px;
 }
+.grilla-item__foto-caja {
+  position: relative;
+}
 .grilla-item__foto {
+  display: block;
   width: 100%;
   aspect-ratio: 1 / 1;
   border-radius: var(--radio-chico);
@@ -1613,62 +2054,91 @@ details.grupo-seccion > .grilla-productos {
   color: var(--color-texto-tenue);
   font-size: var(--tamano-28);
 }
-.grilla-item__seleccion {
+/* Casilla superpuesta: 24px visuales (igual al diseño), envoltorio <label> con área táctil de
+   44px — tocar el aro de relleno también alterna la casilla (es un <label>, no un <span>). */
+.grilla-item__seleccion-caja {
   position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 26px;
-  height: 26px;
-  /* objetivo táctil real >= 44px aunque el control se vea chico: el padding invisible lo cubre */
-  padding: 9px;
-  margin: -9px;
-  accent-color: var(--color-primario);
+  top: 4px;
+  left: 4px;
+  display: inline-flex;
+  padding: 10px;
+  margin: -10px;
   cursor: pointer;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+  z-index: 2;
+}
+.grilla-item__seleccion {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border-radius: var(--radio-chico);
+  border: 1px solid #fff;
+  background-color: rgba(255, 255, 255, 0.55);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 14px 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.35);
+  transition: background-color var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
+}
+.grilla-item__seleccion:checked {
+  background-color: var(--color-primario);
+  border-color: var(--color-primario);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='5 13 10 18 19 7'/%3E%3C/svg%3E");
+}
+.grilla-item__seleccion:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+/* Pastilla "Listo": solo visible con la casilla marcada (sibling general desde el <label>). */
+.grilla-item__listo {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 2px 6px;
+  border-radius: var(--radio-chico);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--borde-sutil);
+  color: var(--color-primario-oscuro);
+  font-family: var(--font-cuerpo);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transition: opacity var(--duracion) var(--ease);
+}
+.grilla-item__seleccion-caja:has(:checked) ~ .grilla-item__listo {
+  opacity: 1;
 }
 .grilla-item__nombre {
-  font-size: var(--tamano-12);
-  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 500;
   color: var(--color-texto);
 }
-
-/* Fase 3 "M" #3 (Interfaz/ANALISIS-STITCH.md, productos_vista_grilla_natural): precio + acciones
-   visibles en cada tarjeta ("Subir a Estado", "Editar precio"), sin depender de abrir la edición
-   completa — mismo criterio de affordance que la fila compacta, adaptado al espacio de la grilla. */
 .grilla-item__precio {
-  font-family: var(--font-datos);
+  font-family: var(--font-titulo);
   font-variant-numeric: tabular-nums;
-  font-size: var(--tamano-12);
-  text-align: center;
-  color: var(--color-texto-tenue);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-primario-oscuro);
 }
-.grilla-item__acciones {
-  display: flex;
-  gap: 4px;
+.grilla-item__precio--vacio {
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 400;
+  font-style: italic;
+  color: var(--color-acento);
 }
-.grilla-item__accion {
-  flex: 1;
-  min-height: var(--toque-min);
+.grilla-item__pie {
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: var(--radio-chico);
-  border: 1px solid var(--color-borde);
-  background: var(--color-superficie);
-  color: var(--color-texto);
-  cursor: pointer;
-  transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
-}
-.grilla-item__accion:hover {
-  border-color: var(--color-acento);
-}
-.grilla-item__accion:focus-visible {
-  outline: 2px solid var(--color-acento);
-  outline-offset: 2px;
-}
-.grilla-item__accion:active {
-  transform: scale(0.94);
+  justify-content: flex-end;
+  gap: 0;
+  padding-top: 4px;
+  margin-top: 2px;
+  border-top: 1px solid var(--color-borde);
 }

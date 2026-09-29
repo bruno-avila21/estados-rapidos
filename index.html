@@ -17,12 +17,16 @@
 <body class="cargando">
   <div class="app">
     <header class="encabezado">
-      <svg class="encabezado__logo" viewBox="0 0 64 64" aria-hidden="true">
-        <circle cx="32" cy="32" r="26" fill="none" stroke="var(--color-primario)" stroke-width="6"
-          stroke-linecap="round" stroke-dasharray="27 14" transform="rotate(-90 32 32)" />
-        <path d="M34 12 L18 34 L28 34 L26 52 L46 28 L35 28 Z" fill="var(--color-primario)" />
-      </svg>
-      <h1 class="encabezado__titulo" id="titulo-pantalla">Productos</h1>
+      <button type="button" class="encabezado__menu" data-accion="ir-inicio" aria-label="Ir al inicio">
+        <span class="encabezado__menu-icono" data-icono="lista"></span>
+      </button>
+      <div class="encabezado__textos">
+        <h1 class="encabezado__titulo" id="titulo-pantalla">Productos</h1>
+        <p class="encabezado__subtitulo" id="subtitulo-pantalla" hidden></p>
+      </div>
+      <button type="button" class="encabezado__accion" data-accion="agregar-header" aria-label="Nuevo producto">
+        <span data-icono="agregar"></span>
+      </button>
     </header>
 
     <main id="vista" class="vista" aria-live="polite"></main>
@@ -40,7 +44,7 @@
 
     <nav class="nav-inferior" aria-label="Secciones">
       <button type="button" class="nav-inferior__item" data-ruta="#/" data-accion="ir-lista">
-        <span class="nav-inferior__icono" data-icono="lista"></span>
+        <span class="nav-inferior__icono" data-icono="inventario"></span>
         <span>Productos</span>
       </button>
       <button type="button" class="nav-inferior__item" data-ruta="#/ajustes" data-accion="ir-ajustes">
