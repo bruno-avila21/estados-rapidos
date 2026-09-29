@@ -40,16 +40,19 @@ const RUTAS = [
   // No está en la navegación principal: se llega desde el chip "⚙ Secciones" de Productos.
   // gesti_n_de_secciones_natural: el header muestra la MARCA (como Productos), no "Secciones" — el
   // H1 real + subtítulo los dibuja secciones.js en el contenido. `ruta: '#/'`: el mock resalta
-  // "Productos" en el nav inferior (Secciones es parte del mismo pilar de catálogo).
-  { patron: /^#\/secciones$/, modulo: secciones, titulo: 'Estados Rápidos', ruta: '#/' },
+  // "Productos" en el nav inferior (Secciones es parte del mismo pilar de catálogo). La marca va
+  // CENTRADA acá (gesti_n_de_secciones_natural, code.html línea 148: sin `justify-between` propio,
+  // el div de la marca queda en el medio del header) — distinto de Productos/Respaldo.
+  { patron: /^#\/secciones$/, modulo: secciones, titulo: 'Estados Rápidos', ruta: '#/', headerClase: 'encabezado--centrado' },
   { patron: /^#\/ajustes$/, modulo: ajustes, titulo: 'Ajustes', ruta: '#/ajustes' },
   // "Plantilla" ya no está en la navegación principal: se llega desde Ajustes (botón "Abrir
   // editor de plantilla" o "Editar" de una tarjeta de estilo). `?estilo=` (ronda "ajustes por
   // estilo", 2026-09-28) dice CUÁL de los 3 estilos con texto edita — se lee de `params.query`.
   { patron: /^#\/plantilla$/, modulo: plantilla, titulo: 'Plantilla', ruta: null },
   // respaldo_natural: mismo criterio que Secciones — header con la MARCA, H1 "Respaldo" en el
-  // contenido (respaldo.js).
-  { patron: /^#\/respaldo$/, modulo: respaldo, titulo: 'Estados Rápidos', ruta: '#/respaldo' },
+  // contenido (respaldo.js). La marca acá va en NEGRITA (code.html línea 135: "font-bold"),
+  // a la izquierda (sin centrar) — distinto de Secciones.
+  { patron: /^#\/respaldo$/, modulo: respaldo, titulo: 'Estados Rápidos', ruta: '#/respaldo', headerClase: 'encabezado--marca-negrita' },
 ];
 
 function navegar(hash) {
@@ -68,6 +71,7 @@ async function enrutar() {
   const params = { id: match?.[1], query: new URLSearchParams(queryString || '') };
 
   encabezado.hidden = !!encontrada.headerOculto;
+  encabezado.className = 'encabezado' + (encontrada.headerClase ? ' ' + encontrada.headerClase : '');
   const textoTitulo = typeof encontrada.titulo === 'function' ? encontrada.titulo(params) : encontrada.titulo;
   titulo.textContent = textoTitulo || '';
   const textoSubtitulo = typeof encontrada.subtitulo === 'function' ? encontrada.subtitulo(params) : encontrada.subtitulo;

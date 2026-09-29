@@ -292,11 +292,24 @@ h3 {
   flex-direction: column;
 }
 .encabezado__titulo {
+  /* Newsreader (serif), no el sans heredado del body: los 4 code.html (productos_lista_natural,
+     productos_vista_grilla_natural, gesti_n_de_secciones_natural, respaldo_natural) usan
+     `font-headline-sm` = Newsreader para "Estados Rápidos" en el header. */
+  font-family: var(--font-titulo);
   font-size: var(--tamano-20);
   font-weight: 500;
   line-height: 1.2;
   letter-spacing: normal;
   color: var(--color-primario-oscuro);
+}
+/* gesti_n_de_secciones_natural: la marca va centrada (el div del medio entre hamburguesa y "+"). */
+.encabezado--centrado .encabezado__textos {
+  align-items: center;
+  text-align: center;
+}
+/* respaldo_natural: la marca va en negrita ("font-bold" en el code.html). */
+.encabezado--marca-negrita .encabezado__titulo {
+  font-weight: 700;
 }
 .encabezado__subtitulo {
   margin: 2px 0 0;
@@ -363,6 +376,12 @@ h3 {
   /* El diseño usa "primary" (verde ciprés oscuro) para el tab activo, no "secondary" (umber) */
   color: var(--color-primario-oscuro);
   font-weight: 600;
+}
+/* El diseño usa el ícono RELLENO en la pestaña activa (Material Symbols "FILL 1"), no solo un
+   cambio de color — nuestros íconos de línea no tienen una variante "filled" propia, así que se
+   rellenan las mismas formas (el trazo se mantiene, `fill:none` pasa a `fill:currentColor`). */
+.nav-inferior__item.activo .icono {
+  fill: currentColor;
 }
 
 /* ---------- Botones ---------- */
@@ -1063,20 +1082,6 @@ details.grupo > .campo {
 .grilla-estilos--galeria .tarjeta-estilo {
   flex: 0 0 148px;
   scroll-snap-align: start;
-}
-
-.foto-picker {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-.foto-picker__vista {
-  width: 84px;
-  height: 84px;
-  border-radius: var(--radio);
-  object-fit: cover;
-  background: var(--color-superficie-alta);
-  border: 1px solid var(--color-borde);
 }
 
 /* ---------- Diálogo de confirmación (propio, no nativo) ---------- */
@@ -2897,6 +2902,7 @@ details[open] > .grupo__titulo--seccion::after {
   border-radius: var(--radio-chico);
 }
 .pastilla-volver span,
+.enlace-volver span,
 .barra-volver__descartar span {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2950,6 +2956,41 @@ details[open] > .grupo__titulo--seccion::after {
 .pastilla-volver .icono {
   width: 14px;
   height: 14px;
+  margin-right: 0;
+}
+
+/* "← Volver a Productos" de Editar Producto (editar_producto_natural): texto con flecha, SIN pill
+   ni borde — a diferencia de `.pastilla-volver` (Secciones), que el mock SÍ dibuja como pastilla. */
+.enlace-volver {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-shrink: 1;
+  padding: 8px 6px;
+  border: none;
+  background: none;
+  color: var(--color-texto-tenue);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radio-chico);
+}
+.enlace-volver:hover {
+  color: var(--color-primario-oscuro);
+  background: var(--color-superficie);
+}
+.enlace-volver:hover span {
+  text-decoration: underline;
+}
+.enlace-volver:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: -2px;
+}
+.enlace-volver .icono {
+  width: 16px;
+  height: 16px;
   margin-right: 0;
 }
 

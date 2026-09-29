@@ -46,7 +46,7 @@ export async function render(contenedor, { navegar, params }) {
   barraVolver.className = 'barra-volver';
   const btnVolverBarra = document.createElement('button');
   btnVolverBarra.type = 'button';
-  btnVolverBarra.className = 'pastilla-volver';
+  btnVolverBarra.className = 'enlace-volver';
   btnVolverBarra.setAttribute('data-accion', 'volver-header');
   const etiquetaVolverBarra = document.createElement('span');
   etiquetaVolverBarra.textContent = 'Volver a Productos';

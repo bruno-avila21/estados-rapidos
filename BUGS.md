@@ -698,3 +698,16 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `test/e2e/botones.spec.js` — chequea `#titulo-pantalla` = "Estados Rápidos" y agrega el chequeo del H1 real (`h1.pagina__titulo` = "Respaldo"). `css/estilos.css` — `.barra-volver > *` con `min-width: 0`, y el texto de ambos botones envuelto en `<span>` con `overflow: hidden; text-overflow: ellipsis; white-space: nowrap` (trunca en vez de desbordar).
 - **Resuelto:** sí.
 - ¿Se repetiría en otro proyecto? Sí — mismo punto que #44: cualquier fila flex con 2+ botones de texto variable necesita `min-width: 0` en los flex-items + ellipsis en el texto, nunca confiar en que "total de textos < ancho de pantalla" a fuente por defecto.
+
+### 47. Ronda 3 de Fase 5 (header serif, "Volver" sin pill): `.enlace-volver` se salía 2px por la izquierda del viewport
+- **Paso:** suite completa de e2e tras cambiar "← Volver a Productos" de Editar Producto de pastilla a enlace de texto plano (`.enlace-volver`), con un `margin-left: -6px` "óptico" (imitando el `-ml-2` del mock).
+- **Error exacto:**
+  ```
+  Alta de producto: scrollOverflow=false
+  BUTTON.enlace-volver right=228 left=-2 "Volver a Productos"
+  ```
+- **Reproducir:** `#/producto/nuevo`, cualquier viewport 320-412px, fuente 130% o más.
+- **Causa:** el `-ml-2` del mock compensa el padding horizontal DEL HEADER (`px-margin-sm`, ~16px) para que el ícono quede visualmente pegado al borde de la pantalla. `.barra-volver` (esta app) ya es full-bleed por su cuenta (`margin: 0 -16px`, cancela el padding de `.vista`) y encima solo tiene 4px de padding propio — restarle otros 6px de margin-left empujaba el botón 2px más allá del borde real del viewport.
+- **Arreglo:** `css/estilos.css` — se saca el `margin-left: -6px` de `.enlace-volver` (el padding de 6px del propio botón ya alcanza para el respiro visual, sin necesidad del ajuste óptico).
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — un `margin` negativo "óptico" copiado de un mock nunca es seguro sin verificar el padding real del contenedor donde termina viviendo: si el contenedor ya es full-bleed, ese mismo negativo lo manda fuera del viewport.

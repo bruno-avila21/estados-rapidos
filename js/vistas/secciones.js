@@ -81,7 +81,7 @@ export async function render(contenedor, { navegar }) {
   explicacionLista.className = 'panel__subtitulo';
   explicacionLista.textContent =
     secciones.length > 0
-      ? 'Subí o bajá el orden con las flechas, o tocá el nombre para renombrarla.'
+      ? 'Subí o bajá el orden con las flechas, tocá el nombre para renombrarla, o asignala a un producto desde su ficha.'
       : 'Usalas para agrupar productos por día para publicar ("Lunes", "Martes") o por rubro ("Lencería", "Electrodomésticos") — un producto puede estar en varias a la vez.';
 
   panelLista.append(cabeceraLista, explicacionLista);
@@ -255,7 +255,7 @@ function filaSeccion(seccion, indice, total, cantidad, recargar) {
   // en Ajustes ("1 producto"/"N productos") — reemplaza la "prioridad" inventada del mock.
   const conteo = document.createElement('span');
   conteo.className = 'panel-secciones__conteo fila-seccion__conteo';
-  conteo.append(crearIcono('etiqueta'), document.createTextNode(`${cantidad} producto${cantidad === 1 ? '' : 's'}`));
+  conteo.append(crearIcono('tag'), document.createTextNode(`${cantidad} producto${cantidad === 1 ? '' : 's'}`));
   info.append(nombre, conteo);
 
   // Lápiz: no es una acción nueva — enfoca el mismo input de nombre, que ya se renombra al

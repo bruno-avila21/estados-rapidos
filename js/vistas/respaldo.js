@@ -30,8 +30,18 @@ function guardarUltimoRespaldo(datos) {
   }
 }
 
+// Formato relativo, como el mock ("Hoy, 10:42 AM"): "Hoy"/"Ayer" + hora si es reciente, la fecha
+// completa si no (evita un "Hoy" engañoso para un respaldo de hace semanas).
 function formatearFecha(timestamp) {
-  return new Date(timestamp).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const fecha = new Date(timestamp);
+  const hora = fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  const mismoDia = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const ahora = new Date();
+  if (mismoDia(fecha, ahora)) return `Hoy, ${hora}`;
+  const ayer = new Date(ahora);
+  ayer.setDate(ahora.getDate() - 1);
+  if (mismoDia(fecha, ayer)) return `Ayer, ${hora}`;
+  return `${fecha.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}, ${hora}`;
 }
 
 function formatearTamano(bytes) {
@@ -59,7 +69,9 @@ export async function render(contenedor) {
   h1Pagina.textContent = 'Respaldo';
   const subtituloPagina = document.createElement('p');
   subtituloPagina.className = 'pagina__subtitulo';
-  subtituloPagina.textContent = 'Copia de seguridad de tu catálogo';
+  // El mock no tiene un párrafo aparte para esto (solo el subtítulo chico) — se integra acá en vez
+  // de repetirlo como texto suelto debajo.
+  subtituloPagina.textContent = 'Copia de seguridad de tu catálogo: vive solo en este celular.';
   const textosPagina = document.createElement('div');
   textosPagina.append(h1Pagina, subtituloPagina);
   const iconoEscudo = document.createElement('span');
@@ -68,12 +80,6 @@ export async function render(contenedor) {
   iconoEscudo.append(crearIcono('escudo'));
   cabeceraPagina.append(textosPagina, iconoEscudo);
   wrap.append(cabeceraPagina);
-
-  const info = document.createElement('p');
-  info.className = 'texto-tenue';
-  info.textContent =
-    'Los datos viven solo en este celular. Exportá un archivo antes de cambiar de equipo o borrar el navegador.';
-  wrap.append(info);
 
   // --- Panel 1: estado del respaldo (datos reales: nada de nube ni sincronización automática) ---
   const panelEstado = document.createElement('section');

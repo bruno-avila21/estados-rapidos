@@ -188,6 +188,13 @@ const TRAZOS = Object.freeze({
     ['line', { x1: 12, y1: 8.5, x2: 12, y2: 15.5 }],
     ['line', { x1: 8.5, y1: 12, x2: 15.5, y2: 12 }],
   ],
+  // "sell": etiqueta de precio (pentágono con un agujerito) — contador "N productos" de Secciones.
+  // Distinto de `etiqueta` (cuadrado con un punto), que ya se usa como ícono genérico de estado
+  // vacío en Productos y no se toca.
+  tag: [
+    ['path', { d: 'M11.5 4h5.5a2 2 0 0 1 2 2v5.5a2 2 0 0 1-.59 1.41l-7.5 7.5a2 2 0 0 1-2.82 0l-5.5-5.5a2 2 0 0 1 0-2.82l7.5-7.5A2 2 0 0 1 11.5 4z' }],
+    ['circle', { cx: 15.5, cy: 8.5, r: 1.4 }],
+  ],
   // "auto_awesome": destello de 4 puntas — cabecera de "Plantillas sugeridas".
   chispa: [
     ['line', { x1: 12, y1: 3, x2: 12, y2: 9 }],
