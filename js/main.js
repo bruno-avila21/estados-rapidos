@@ -51,7 +51,9 @@ const RUTAS = [
   // "Plantilla" ya no está en la navegación principal: se llega desde Ajustes (botón "Abrir
   // editor de plantilla" o "Editar" de una tarjeta de estilo). `?estilo=` (ronda "ajustes por
   // estilo", 2026-09-28) dice CUÁL de los 3 estilos con texto edita — se lee de `params.query`.
-  { patron: /^#\/plantilla$/, modulo: plantilla, titulo: 'Plantilla', ruta: null },
+  // editar_plantilla_natural: sin header de app (mismo criterio que Editar Producto) — plantilla.js
+  // dibuja su propia barra "Volver a Ajustes" / "Plantilla" (serif, centrado) / badge de estado.
+  { patron: /^#\/plantilla$/, modulo: plantilla, titulo: 'Plantilla', ruta: null, headerOculto: true },
   // respaldo_natural: mismo criterio que Secciones — header con la MARCA, H1 "Respaldo" en el
   // contenido (respaldo.js). La marca acá va en NEGRITA (code.html línea 135: "font-bold"),
   // a la izquierda (sin centrar) — distinto de Secciones.

@@ -14,6 +14,25 @@ function revisionDibujo(page) {
   return page.evaluate(() => window.__editorDebugPlantilla?.revision ?? 0);
 }
 
+// Ronda "reskin plantilla": la tarjeta de controles + "Presets de diseño rápidos" ahora van ARRIBA
+// del lienzo (editar_plantilla_natural), así que el lienzo casi nunca está ya visible al cargar la
+// pantalla. `scrollIntoViewIfNeeded()` no alcanza por sí solo: no sabe que la nav inferior es
+// `position: fixed` y puede "considerar visible" un lienzo cuyo borde de abajo queda tapado por
+// ella (BUGS.md #48/#50) — acá se calcula el scroll exacto que hace falta para dejarlo del todo
+// arriba de la nav antes de leer `boundingBox()`/arrastrar con `page.mouse`.
+async function asegurarLienzoVisible(page) {
+  await page.locator('.editor-plantilla__lienzo').scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const el = document.querySelector('.editor-plantilla__lienzo');
+    const nav = document.querySelector('.nav-inferior');
+    if (!el) return;
+    const limite = nav ? nav.getBoundingClientRect().top : window.innerHeight;
+    const rect = el.getBoundingClientRect();
+    const exceso = rect.bottom - limite + 16;
+    if (exceso > 0) window.scrollBy(0, exceso);
+  });
+}
+
 async function crearProducto(page) {
   await page.locator('[data-accion="agregar"]').click();
   await page.locator('#campo-nombre').fill('Producto editor');
@@ -27,6 +46,7 @@ test('clic en el nombre lo selecciona y muestra el panel de propiedades', async 
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
 
   await expect(page.locator('[data-elemento="nombre"]')).toBeVisible();
   await page.locator('[data-elemento="nombre"]').click();
@@ -39,6 +59,7 @@ test('arrastrar el nombre lo mueve y la vista previa se regenera', async ({ page
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
 
   await page.locator('[data-elemento="nombre"]').click();
   const antesBox = await page.locator('[data-elemento="nombre"]').boundingBox();
@@ -63,6 +84,7 @@ test('el canvas dibuja exactamente la posición del overlay tras arrastrar (sin 
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
 
   await page.locator('[data-elemento="nombre"]').click();
   const caja = await page.locator('[data-elemento="nombre"]').boundingBox();
@@ -87,6 +109,7 @@ test('arrastrar la manija de resize agranda la caja seleccionada', async ({ page
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
 
   await page.locator('[data-elemento="nombre"]').click();
   const manija = page.locator('.editor-plantilla__caja--activa .editor-plantilla__manija--se');
@@ -108,6 +131,7 @@ test('cambiar tamaño, color y tipografía en el panel se ve al instante', async
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
 
   await page.locator('[data-elemento="nombre"]').click();
   const panel = page.locator('.editor-plantilla__panel');
@@ -164,6 +188,7 @@ test('deshacer devuelve el elemento a donde estaba y rehacer lo vuelve a mover',
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
   await editorListo(page);
 
   const inicial = await posicion(page, 'nombre');
@@ -183,6 +208,7 @@ test('deshacer revierte la tipografía y el tamaño de letra', async ({ page }) 
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
 
   await page.locator('[data-elemento="nombre"]').click();
   const selectFuente = page.locator('.editor-plantilla__panel select[data-accion="editor-fuente"]');
@@ -197,6 +223,7 @@ test('restablecer vuelve a la posición de fábrica', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
   await editorListo(page);
 
   const inicial = await posicion(page, 'nombre');
@@ -213,6 +240,7 @@ test('arrastrar el deslizador de tamaño recorre todo el rango', async ({ page }
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
   await page.locator('[data-elemento="nombre"]').click();
   const deslizador = page.locator('.editor-plantilla__panel input[type="range"]').first();
   await deslizador.scrollIntoViewIfNeeded();
@@ -224,43 +252,67 @@ test('arrastrar el deslizador de tamaño recorre todo el rango', async ({ page }
   expect(Number(await deslizador.inputValue())).toBeGreaterThan(140);
 });
 
-// La barra de Deshacer queda a la vista al bajar hasta el panel de propiedades (BUGS.md #21: un
-// overflow en .vista anulaba el sticky y la barra se iba con el scroll).
-test('la barra de deshacer sigue a la vista al bajar por el panel', async ({ page }) => {
+// La barra de Deshacer ya NO es `position: sticky` (ronda "reskin plantilla"): vive dentro de la
+// tarjeta de controles de arriba, como en editar_plantilla_natural, que no trae una barra
+// flotante — antes sí lo era (BUGS.md #21), pero anidarla en esa tarjeta le acota el "contenedor
+// de bloque" del sticky al tamaño de la tarjeta (BUGS.md #50), así que se sacó. Sigue en el DOM
+// y funcionando (Playwright hace scroll solo al hacer clic), solo dejó de perseguir el scroll.
+test('Deshacer sigue existiendo y funcionando aunque ya no sea sticky al bajar por el panel', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
   await page.locator('[data-elemento="nombre"]').click();
+  const inicial = await posicion(page, 'nombre');
+  const caja = await page.locator('[data-elemento="nombre"]').boundingBox();
+  await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2 - 80, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(() => posicion(page, 'nombre')).not.toEqual(inicial);
+
   await page.locator('.editor-plantilla__panel input[type="range"]').last().scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => scrollY)).toBeGreaterThan(200);
-  const arriba = await page.locator('.editor-plantilla__barra').evaluate((el) => el.getBoundingClientRect().top);
-  expect(arriba).toBeGreaterThanOrEqual(0);
-  expect(arriba).toBeLessThan(120);
+  // Ya no está pegada arriba del viewport (no sticky) — pero sigue en el DOM, visible más arriba
+  // en su tarjeta, y el clic (que auto-scrollea) la sigue alcanzando y funcionando sin problema.
+  await expect(page.locator('[data-accion="deshacer"]')).toBeEnabled();
+  await page.locator('[data-accion="deshacer"]').click();
+  await expect.poll(() => posicion(page, 'nombre')).toEqual(inicial);
 });
 
 // --- Ocultar/mostrar capas (ronda "ocultar/mostrar a un toque") ---
 
-test('el ojo de una capa la oculta: se ve punteado tenue con "(oculto)", no se dibuja y se puede volver a mostrar', async ({ page }) => {
+// Ronda "reskin plantilla": editar_plantilla_natural NO dibuja un placeholder punteado para los
+// elementos ocultos — directamente no aparecen en el lienzo (solo en la lista de Capas, con
+// "(oculto)" al lado del nombre, para reactivarlos desde ahí).
+test('el ojo de una capa la oculta: desaparece del lienzo, queda "(oculto)" en Capas y se puede volver a mostrar', async ({
+  page,
+}) => {
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
 
   const ojoNombre = page.locator('[data-accion="capa-ojo-nombre"]');
   await expect(ojoNombre).toHaveAttribute('aria-pressed', 'true'); // visible por defecto
+  await expect(page.locator('[data-elemento="nombre"]')).toBeVisible();
 
   await ojoNombre.click();
   await expect(ojoNombre).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.locator('[data-elemento="nombre"]')).toHaveClass(/editor-plantilla__caja--oculta/);
-  await expect(page.locator('[data-elemento="nombre"] .editor-plantilla__etiqueta-oculta')).toHaveText('(oculto)');
+  // ya no hay caja para "nombre" en el lienzo: ni punteada ni de ningún tipo.
+  await expect(page.locator('[data-elemento="nombre"]')).toHaveCount(0);
+  const filaNombre = page.locator('.editor-plantilla__fila-capa', { has: page.locator('[data-accion="capa-nombre"]') });
+  await expect(filaNombre).toContainText('(oculto)');
   await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla?.ajustes?.nombre?.visible)).toBe(false);
 
-  // se puede seguir seleccionando (y el panel ofrece "Mostrar" arriba, no un checkbox al final).
-  await page.locator('[data-elemento="nombre"]').click();
+  // se puede seguir seleccionando DESDE CAPAS (ya no hay caja en el lienzo para tocar) y el panel
+  // ofrece "Mostrar" arriba, no un checkbox al final.
+  await page.locator('[data-accion="capa-nombre"]').click();
   const btnOcultar = page.locator('[data-accion="editor-toggle-visible"]');
   await expect(btnOcultar).toHaveText('Mostrar');
   await btnOcultar.click();
   await expect(ojoNombre).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('[data-elemento="nombre"]')).not.toHaveClass(/editor-plantilla__caja--oculta/);
+  await expect(page.locator('[data-elemento="nombre"]')).toBeVisible();
 });
 
 // Ronda "ajustes por estilo" (2026-09-28): el selector ya no es una "vista previa" que no
@@ -270,6 +322,7 @@ test('cambiar el selector navega a editar ese estilo, cada uno con sus propios d
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla?estilo=foto-precio');
+  await asegurarLienzoVisible(page);
   // foto-precio: nombre y precio visibles, descripción oculta.
   await expect(page.locator('[data-accion="capa-ojo-nombre"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-accion="capa-ojo-descripcion"]')).toHaveAttribute('aria-pressed', 'false');
@@ -287,6 +340,7 @@ test('"Foto con descripción": mostrar el nombre (oculto de fábrica) lo dibuja'
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla?estilo=foto-descripcion');
+  await asegurarLienzoVisible(page);
   await expect(page.locator('[data-accion="capa-ojo-nombre"]')).toHaveAttribute('aria-pressed', 'false');
   await page.locator('[data-accion="capa-ojo-nombre"]').click();
   await expect
@@ -295,38 +349,45 @@ test('"Foto con descripción": mostrar el nombre (oculto de fábrica) lo dibuja'
   await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla?.estilo)).toBe('foto-descripcion');
 });
 
-// --- Badge "Personalizado" + "Volver al original de este estilo" (ronda "ajustes por estilo") ---
+// --- Badge de estado (Personalizado/Por defecto) + "Volver al original de este estilo" ---
+// Ronda "reskin plantilla": el badge ahora vive en la barra superior y está SIEMPRE visible (antes
+// aparecía/desaparecía con `hidden`) — el texto es la señal, no la visibilidad.
 
-test('badge "Personalizado" aparece al mover un elemento y desaparece al restablecer', async ({ page }) => {
+test('badge de la barra superior pasa de "Por defecto" a "Personalizado" al mover un elemento, y vuelve al restablecer', async ({
+  page,
+}) => {
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla?estilo=foto-precio');
+  await asegurarLienzoVisible(page);
   await editorListo(page);
 
   const badge = page.locator('.editor-plantilla__badge');
-  await expect(badge).toBeHidden();
+  await expect(badge).toHaveText('Por defecto');
 
   await arrastrar(page, 'nombre', 0, 120);
-  await expect(badge).toBeVisible();
+  await expect(badge).toHaveText('Personalizado');
 
   await page.locator('[data-accion="restablecer-plantilla"]').click();
   await page.locator('[data-accion="confirmar-borrar"]').click();
   await expect(page.locator('#toast')).toHaveText(/restablecida/i);
-  await expect(badge).toBeHidden();
+  await expect(badge).toHaveText('Por defecto');
 });
 
 test('"Volver al original de este estilo" no toca los otros 2 estilos', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla?estilo=foto-precio');
+  await asegurarLienzoVisible(page);
   await editorListo(page);
   await arrastrar(page, 'nombre', 0, 120);
   await page.locator('[data-accion="restablecer-plantilla"]').click();
   await page.locator('[data-accion="confirmar-borrar"]').click();
 
-  // el otro estilo (mi-plantilla) nunca se tocó: sigue sin el badge de personalizado.
+  // el otro estilo (mi-plantilla) nunca se tocó: el badge sigue en "Por defecto".
   await page.goto('/#/plantilla?estilo=mi-plantilla');
-  await expect(page.locator('.editor-plantilla__badge')).toBeHidden();
+  await asegurarLienzoVisible(page);
+  await expect(page.locator('.editor-plantilla__badge')).toHaveText('Por defecto');
 });
 
 // --- Distribución: "Acomodar automáticamente" y "Centrar horizontal" ---
@@ -335,6 +396,7 @@ test('Acomodar automáticamente apila los elementos visibles centrados, de abajo
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla?estilo=foto-precio');
+  await asegurarLienzoVisible(page);
 
   // foto-precio arranca con la descripción oculta (ronda "ajustes por estilo"): se muestra para
   // probar el acomodo con los 3 elementos, igual que antes de esa ronda.
@@ -367,6 +429,7 @@ test('Centrar horizontal (panel) centra el elemento seleccionado sin tocar los d
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
 
   await arrastrar(page, 'nombre', -150, 0); // lo descentra
   await page.locator('[data-elemento="nombre"]').click();
@@ -385,6 +448,7 @@ test('las capas se apilan verticalmente, cada fila ocupa el ancho y mide al meno
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla?estilo=mi-plantilla'); // el estilo con más capas (foto+nombre+precio+descripción)
+  await asegurarLienzoVisible(page);
 
   const filas = page.locator('.editor-plantilla__fila-capa');
   // `count()` no espera a que la pantalla termine de armarse (a diferencia de `expect(...).toHave*`,
@@ -415,6 +479,7 @@ test('la capa seleccionada queda resaltada', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla?estilo=foto-precio');
+  await asegurarLienzoVisible(page);
 
   const filaNombre = page.locator('.editor-plantilla__fila-capa', { has: page.locator('[data-accion="capa-nombre"]') });
   await expect(filaNombre).not.toHaveClass(/editor-plantilla__fila-capa--activa/);
@@ -428,6 +493,7 @@ test('un preset de fondo aplica color+opacidad+radio juntos y se ve al instante'
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
   await editorListo(page);
 
   await page.locator('[data-elemento="nombre"]').click();
@@ -450,6 +516,7 @@ test('un preset de fondo es UN solo paso de deshacer (los 3 campos juntos)', asy
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
   await editorListo(page);
 
   await page.locator('[data-elemento="nombre"]').click();

@@ -16,6 +16,22 @@ async function crearProducto(page) {
   await expect(page.locator('[data-accion="editar"]')).toBeVisible();
 }
 
+// Ronda "reskin plantilla": la tarjeta de controles + "Presets de diseño rápidos" van ARRIBA del
+// lienzo, así que ya no está visible al cargar sin más — mismo helper que editor.spec.js (BUGS.md
+// #48/#50: scrollIntoViewIfNeeded solo no alcanza porque no sabe que la nav inferior es fixed).
+async function asegurarLienzoVisible(page) {
+  await page.locator('.editor-plantilla__lienzo').scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const el = document.querySelector('.editor-plantilla__lienzo');
+    const nav = document.querySelector('.nav-inferior');
+    if (!el) return;
+    const limite = nav ? nav.getBoundingClientRect().top : window.innerHeight;
+    const rect = el.getBoundingClientRect();
+    const exceso = rect.bottom - limite + 16;
+    if (exceso > 0) window.scrollBy(0, exceso);
+  });
+}
+
 test('Plantilla no está en la navegación principal, pero el editor se abre desde Ajustes', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('[data-accion="ir-plantilla"]')).toHaveCount(0); // no está en la lista de productos
@@ -115,12 +131,18 @@ test('badge "Personalizado" en la tarjeta de Plantilla aparece después de edita
   // handle guardado) y reintenta con `expect.poll` en vez de una sola lectura de `boundingBox()`.
   await expect(page.locator('[data-elemento="nombre"]')).toBeVisible();
   await expect.poll(() => page.locator('[data-elemento="nombre"]').boundingBox().catch(() => null)).toBeTruthy();
+  // Ronda "reskin plantilla": la tarjeta de controles + "Presets de diseño rápidos" van ARRIBA del
+  // lienzo, así que ya no está visible sin más — hay que llevarlo por delante de la nav inferior
+  // fija antes de arrastrar con coordenadas de pantalla (BUGS.md #48/#50).
+  await asegurarLienzoVisible(page);
   const caja = await page.locator('[data-elemento="nombre"]').boundingBox();
   await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
   await page.mouse.down();
   await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2 + 100, { steps: 5 });
   await page.mouse.up();
-  await expect(page.locator('.editor-plantilla__badge')).toBeVisible();
+  // El badge de estado ahora vive en la barra superior y está SIEMPRE visible (2 estados,
+  // "Por defecto"/"Personalizado" — ya no aparece/desaparece con `hidden`).
+  await expect(page.locator('.editor-plantilla__badge')).toHaveText('Personalizado');
   await page.waitForTimeout(100); // deja que la escritura a IndexedDB (persistir) termine antes de navegar
 
   await page.reload();

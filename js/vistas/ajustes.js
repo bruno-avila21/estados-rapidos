@@ -337,8 +337,17 @@ function panel(icono, titulo, { badge, subtitulo } = {}) {
  * `data-accion` (default `'estilo'`, igual que siempre) — plantilla.js pasa `'estilo-general'`
  * para su galería "Estilo de las imágenes" (los 8, mueve-y-queda) y así no choca con los
  * `estilo-<preset>` de su galería "Presets de composición" (los 4, selecciona-y-navega-y-deshace),
- * que puede convivir en la misma pantalla (ronda "orden del diseño", CREAR-BRIEF.md 2026-09-29). */
-export function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar, prefijo = 'estilo' }) {
+ * que puede convivir en la misma pantalla (ronda "orden del diseño", CREAR-BRIEF.md 2026-09-29).
+ *
+ * `subtitulo`/`mostrarActivoPill` (ronda "reskin plantilla"): opcionales, solo los usa la galería
+ * "Presets de diseño rápidos" de plantilla.js para acercarse a editar_plantilla_natural (nombre +
+ * subtítulo corto + pill "Activo" en la tarjeta elegida) — la galería "Estilo de las imágenes" de
+ * Ajustes/Plantilla (`editable: true`) no los pasa y queda IGUAL que antes. */
+export function tarjetaEstilo(
+  valor,
+  activa,
+  { editable, onSeleccionar, onEditar, prefijo = 'estilo', subtitulo = null, mostrarActivoPill = false }
+) {
   const raiz = document.createElement('div');
   raiz.className = 'tarjeta-estilo' + (activa ? ' tarjeta-estilo--activa' : '');
 
@@ -364,11 +373,34 @@ export function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar
   etiqueta.textContent = ETIQUETA_ESTILO[valor];
 
   btnSeleccionar.append(marco, etiqueta);
+
+  let subtituloEl = null;
+  if (subtitulo) {
+    subtituloEl = document.createElement('span');
+    subtituloEl.className = 'tarjeta-estilo__subtitulo';
+    subtituloEl.textContent = subtitulo;
+    btnSeleccionar.append(subtituloEl);
+  }
+
+  let pillActivo = null;
+  if (mostrarActivoPill) {
+    pillActivo = document.createElement('span');
+    pillActivo.className = 'tarjeta-estilo__pill-activo';
+    pillActivo.textContent = 'Activo';
+    pillActivo.hidden = !activa;
+    btnSeleccionar.append(pillActivo);
+  }
+
   btnSeleccionar.addEventListener('click', async () => {
-    document.querySelectorAll('.tarjeta-estilo').forEach((t) => t.classList.remove('tarjeta-estilo--activa'));
+    document.querySelectorAll('.tarjeta-estilo').forEach((t) => {
+      t.classList.remove('tarjeta-estilo--activa');
+      const p = t.querySelector('.tarjeta-estilo__pill-activo');
+      if (p) p.hidden = true;
+    });
     document.querySelectorAll('.tarjeta-estilo__seleccionar').forEach((b) => b.setAttribute('aria-pressed', 'false'));
     raiz.classList.add('tarjeta-estilo--activa');
     btnSeleccionar.setAttribute('aria-pressed', 'true');
+    if (pillActivo) pillActivo.hidden = false;
     await onSeleccionar();
   });
   raiz.append(btnSeleccionar);

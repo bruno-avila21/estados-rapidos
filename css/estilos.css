@@ -1610,6 +1610,25 @@ details.grupo > .campo {
   font-weight: 600;
   color: var(--color-texto);
 }
+/* Subtítulo corto + pill "Activo" (editar_plantilla_natural, galería "Presets de diseño rápidos"
+   de plantilla.js): opcionales — la galería "Estilo de las imágenes" no los usa. */
+.tarjeta-estilo__subtitulo {
+  font-size: 0.75rem;
+  color: var(--color-texto-tenue);
+  margin-top: -4px;
+}
+.tarjeta-estilo__pill-activo {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-primario-texto);
+  background: var(--color-primario);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.tarjeta-estilo__pill-activo[hidden] {
+  display: none;
+}
 .tarjeta-estilo__pie {
   display: flex;
   align-items: center;
@@ -1643,7 +1662,7 @@ details.grupo > .campo {
   scroll-snap-type: x proximity;
 }
 .grilla-estilos--galeria .tarjeta-estilo {
-  flex: 0 0 148px;
+  flex: 0 0 164px; /* un poco más ancha que las 148px de siempre: le hace lugar al subtítulo + pill */
   scroll-snap-align: start;
 }
 
@@ -1779,14 +1798,15 @@ details.grupo > .campo {
 }
 
 /* ---------- Plantilla: vista previa + controles ---------- */
+/* Ancho completo del contenido (editar_plantilla_natural) — antes tenía `max-width: 320px` y
+   quedaba angosta con margen a los lados de sobra; el mock la lleva de punta a punta. */
 .previa-plantilla {
   position: relative;
   width: 100%;
-  max-width: 320px;
   aspect-ratio: 1080 / 1920;
   margin: 0 auto 16px;
   background: var(--color-superficie-alta);
-  border-radius: var(--radio);
+  border-radius: var(--radio-grande);
   overflow: hidden;
   border: 1px solid var(--color-borde);
 }
@@ -1808,12 +1828,42 @@ details.grupo > .campo {
   overflow: hidden;
 }
 
-/* Cabecera de la vista previa ("Previsualización de estado (9:16)" / "Guías interactivas"):
-   MISMA fila `.panel__cabecera` que usan las demás pantallas, con menos margen inferior — es la
-   única cosa nueva que este reskin agrega ANTES del lienzo, así que se mantiene lo más chica
-   posible a propósito (ver la nota grande en plantilla.js sobre el presupuesto de alto). */
+/* Cabecera de la vista previa: "Previsualización de estado (9:16)" / "● Guías interactivas" EN LA
+   MISMA LÍNEA (editar_plantilla_natural) — `flex-wrap: nowrap` a propósito, con el título en su
+   propio tamaño reducido para que las dos puntas siempre entren juntas a 360-412px. */
 .editor-plantilla__cabecera-previa {
   margin-bottom: 6px;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.editor-plantilla__cabecera-previa .grupo__titulo {
+  margin-bottom: 0;
+  font-size: 0.7rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-plantilla__pista {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.editor-plantilla__punto {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primario);
+  flex-shrink: 0;
+}
+
+/* Sección "Presets de diseño rápidos": sin tarjeta `.panel` propia (el mock no le pone fondo a
+   toda la sección, solo a cada tarjeta individual) — mismo margen inferior que un `.panel` para
+   no perder el espaciado entre secciones. */
+.editor-plantilla__seccion {
+  margin-bottom: 16px;
 }
 
 /* ---------- Editor de plantilla: inspector visual (seleccionar/arrastrar/redimensionar) ---------- */
@@ -1845,19 +1895,6 @@ details.grupo > .campo {
 .editor-plantilla__caja--activa {
   border: 2px solid var(--color-primario);
   background: var(--color-primario-tinte);
-}
-.editor-plantilla__caja--oculta {
-  opacity: 0.35;
-}
-.editor-plantilla__etiqueta-oculta {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--tamano-14);
-  color: #fff;
-  pointer-events: none;
 }
 .editor-plantilla__manija {
   position: absolute;
@@ -1951,16 +1988,21 @@ details.grupo > .campo {
 .editor-plantilla__panel {
   margin-top: 0;
 }
+/* Badge de estado en la barra superior: SIEMPRE visible, 2 estados — "Personalizado" (tinte
+   primario, ronda anterior) y "Por defecto" (neutro, editar_plantilla_natural). */
 .editor-plantilla__badge {
+  flex-shrink: 0;
   font-size: var(--tamano-14);
   font-weight: 600;
   color: var(--color-primario);
   background: var(--color-primario-tinte);
   border-radius: var(--radio-chico);
   padding: 2px 10px;
+  white-space: nowrap;
 }
-.editor-plantilla__badge[hidden] {
-  display: none;
+.editor-plantilla__badge--por-defecto {
+  color: var(--color-texto-tenue);
+  background: var(--color-superficie-alta);
 }
 .editor-plantilla__panel-encabezado {
   align-items: center;
@@ -2087,9 +2129,9 @@ details.grupo > .campo {
   gap: 10px;
 }
 /* El atributo `hidden` de por sí ya no alcanza acá: `display:flex` de arriba pisa el `display:none`
-   por defecto del navegador (misma trampa que ya resolvían `.tarjeta-estilo__badge[hidden]`/
-   `.editor-plantilla__badge[hidden]` más abajo) — el "Deshacer preset" de plantilla.js (Fase 4) es
-   un `.fila` que se oculta con `hidden` y quedaba visible vacío sin este override. */
+   por defecto del navegador (misma trampa que ya resolvía `.tarjeta-estilo__badge[hidden]` más
+   arriba) — el "Deshacer preset" de plantilla.js (Fase 4) es un `.fila` que se oculta con `hidden`
+   y quedaba visible vacío sin este override. */
 .fila[hidden] {
   display: none;
 }
@@ -2139,10 +2181,12 @@ details.grupo > .campo {
    el celular"; acá el texto es chico y centrado, entra sin desbordar en 360-412px). Menos alto acá
    es justo lo que este editor necesita (BUGS.md #48/#50: cualquier alto de más ANTES del lienzo
    empuja los elementos por default pegados al borde inferior detrás de la nav fija). */
+/* Ya NO es `position: sticky` (ronda "reskin plantilla"): ahora vive dentro de la tarjeta de
+   controles de arriba (`panelControles`, plantilla.js) — ver la nota grande ahí sobre por qué
+   seguir un "contenedor de bloque" del tamaño de una tarjeta chica no alcanzaba para que la barra
+   siguiera a la vista al bajar por el resto de la pantalla (BUGS.md #50). El mock tampoco trae una
+   barra flotante: es parte fija de esa tarjeta. */
 .editor-plantilla__barra {
-  position: sticky;
-  top: 0;
-  z-index: 5;
   padding-block: 6px;
   background: var(--color-superficie-baja);
   display: grid;
@@ -3549,6 +3593,34 @@ details[open] > .grupo__titulo--seccion::after {
   width: 17px;
   height: 17px;
   margin-right: 0;
+}
+
+/* Barra superior de Plantilla (editar_plantilla_natural): "← Volver a Ajustes" | "Plantilla"
+   (serif, centrado) | badge de estado. 3 columnas IGUALES (no `justify-content`, heredado de
+   `.barra-volver`) para que el título quede centrado de verdad sin importar cuánto midan el
+   enlace de la izquierda o el badge de la derecha — con `minmax(0, 1fr)` los tres se pueden
+   achicar (fuente grande del sistema) sin desbordar. */
+.barra-volver--plantilla {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+.barra-volver--plantilla .enlace-volver {
+  justify-self: start;
+}
+.barra-volver__titulo {
+  justify-self: center;
+  min-width: 0;
+  max-width: 100%;
+  font-family: var(--font-titulo);
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--color-primario-oscuro);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.barra-volver--plantilla .editor-plantilla__badge {
+  justify-self: end;
 }
 
 /* Pastilla chica "← Volver a Productos" (Secciones/Editar Producto): visual compacto (~32px de

@@ -17,6 +17,22 @@ async function crearProducto(page) {
   await expect(page.locator('[data-accion="editar"]')).toBeVisible();
 }
 
+// Ronda "reskin plantilla": la tarjeta de controles + "Presets de diseño rápidos" van ARRIBA del
+// lienzo, así que ya no está visible al cargar sin más — mismo helper que editor.spec.js (BUGS.md
+// #48/#50: scrollIntoViewIfNeeded solo no alcanza porque no sabe que la nav inferior es fixed).
+async function asegurarLienzoVisible(page) {
+  await page.locator('.editor-plantilla__lienzo').scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const el = document.querySelector('.editor-plantilla__lienzo');
+    const nav = document.querySelector('.nav-inferior');
+    if (!el) return;
+    const limite = nav ? nav.getBoundingClientRect().top : window.innerHeight;
+    const rect = el.getBoundingClientRect();
+    const exceso = rect.bottom - limite + 16;
+    if (exceso > 0) window.scrollBy(0, exceso);
+  });
+}
+
 async function arrastrarConDedo(page, selector, dx, dy) {
   const caja = await page.locator(selector).boundingBox();
   const x = caja.x + caja.width / 2;
@@ -37,6 +53,7 @@ test('con el dedo: arrastrar mueve y deshacer lo devuelve', async ({ page }) => 
   await page.goto('/');
   await crearProducto(page);
   await page.goto('/#/plantilla');
+  await asegurarLienzoVisible(page);
   // Esperar la primera vista previa: arrastrar antes compite con el render inicial del editor.
   // La vista previa es un <canvas> dibujado en vivo (sin src): "listo" es que ya se dibujó.
   await expect

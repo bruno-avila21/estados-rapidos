@@ -164,14 +164,22 @@ const ESCENAS = {
   },
   // editar_plantilla_natural: el mock muestra "Foto con descripción" seleccionado (descripción
   // visible, nombre/precio ocultos) con la foto de taza+vela del propio code.html (bajada a
-  // fotos/plantilla-1-taza-vela.jpg) y el mismo texto de descripción.
+  // fotos/plantilla-1-taza-vela.jpg) y el mismo texto de descripción. Encuadre "Llenar la
+  // pantalla" (cover, no el "Entera"/contain por defecto): el mock recorta la foto a pantalla
+  // completa, sin el fondo difuminado de "Entera". `segundaCaptura` pide una 2ª comparación
+  // (`<pantalla>-2.png`) con las 2 páginas scrolleadas hasta la MISMA sección real ("Capas y
+  // Visibilidad"), no un mismo número de píxeles — el lienzo de la app es mucho más alto que el
+  // del mock (ancho completo, aspect-ratio 9:16 real) así que un scroll por píxeles fijos las deja
+  // en puntos distintos.
   editar_plantilla_natural: {
     titulo: 'Editor de plantilla',
+    segundaCaptura: { textoDiseno: 'Capas y Visibilidad', selectorApp: '.editor-plantilla__capas' },
     async preparar(page) {
       const fotoBase64 = fs.readFileSync(path.join(FOTOS_DIR, 'plantilla-1-taza-vela.jpg')).toString('base64');
       await page.goto('/');
       await page.evaluate(async (fotoBase64) => {
         const repo = await import('/js/repositorio.js');
+        await repo.guardarEncuadreFoto('cover');
         const aBytes = (b64) => {
           const binario = atob(b64);
           const bytes = new Uint8Array(binario.length);
@@ -191,6 +199,13 @@ const ESCENAS = {
       await page.goto('/#/plantilla?estilo=foto-descripcion');
       await page.waitForSelector('[data-elemento="descripcion"]', { state: 'visible', timeout: 10_000 });
       await page.waitForTimeout(250); // canvas (raf) + miniaturas en vivo de las 2 galerías
+      // El mock muestra la descripción con el anillo de "seleccionada" (asa de arrastre incluida)
+      // — un clic real deja el panel de propiedades ("Alineación y Contraste") abierto para la 2ª
+      // comparación, en vez de mostrarlo oculto como quedaría sin selección. El clic auto-scrollea
+      // (Playwright lleva el elemento a la vista): se vuelve a `scrollTo(0, 0)` para que la 1ª
+      // captura (sin scroll) siga arrancando en el tope de la página, con la barra superior.
+      await page.locator('[data-elemento="descripcion"]').click();
+      await page.evaluate(() => window.scrollTo(0, 0));
     },
   },
   respaldo_natural: {
@@ -349,7 +364,6 @@ async function main() {
     await paginaDiseno.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
     await paginaDiseno.waitForTimeout(300);
     const disenoPng = await paginaDiseno.screenshot();
-    await paginaDiseno.close();
 
     // 2) App real, servida local, sembrada con datos parecidos.
     const paginaApp = await browser.newPage({ viewport: { width: ANCHO, height: ALTO }, baseURL: `http://localhost:${puerto}` });
@@ -361,10 +375,30 @@ async function main() {
       await paginaApp.waitForTimeout(150);
     }
     const appPng = await paginaApp.screenshot();
-    await paginaApp.close();
 
     await componerLadoALado(browser, { disenoPng, appPng, titulo: escena.titulo, destino });
     console.log(`Comparación guardada: ${path.relative(RAIZ, destino)}`);
+
+    // Segunda comparación (pantallas largas, ej. editar_plantilla_natural): cada página scrolleada
+    // hasta la MISMA sección real (por texto en el mock, por selector en la app) — no un mismo
+    // número de píxeles, que las dejaría en puntos distintos si una página es más alta que la otra.
+    if (escena.segundaCaptura) {
+      const { textoDiseno, selectorApp } = escena.segundaCaptura;
+      await paginaDiseno.getByText(textoDiseno, { exact: false }).first().scrollIntoViewIfNeeded();
+      await paginaDiseno.waitForTimeout(150);
+      const disenoPng2 = await paginaDiseno.screenshot();
+
+      await paginaApp.locator(selectorApp).first().scrollIntoViewIfNeeded();
+      await paginaApp.waitForTimeout(150);
+      const appPng2 = await paginaApp.screenshot();
+
+      const destino2 = path.join(destinoDir, `${pantalla}-2.png`);
+      await componerLadoALado(browser, { disenoPng: disenoPng2, appPng: appPng2, titulo: `${escena.titulo} (scroll)`, destino: destino2 });
+      console.log(`Comparación (scroll) guardada: ${path.relative(RAIZ, destino2)}`);
+    }
+
+    await paginaDiseno.close();
+    await paginaApp.close();
   } finally {
     await browser.close();
     servidor.kill();

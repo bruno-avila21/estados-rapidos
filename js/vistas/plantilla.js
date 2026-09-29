@@ -109,8 +109,13 @@ export async function render(contenedor, { navegar, params } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'pila editor-plantilla';
 
-  // "← Volver a Ajustes" (editar_plantilla_natural): texto con flecha, sin pill ni borde — mismo
-  // componente `.enlace-volver` que editar_producto_natural, no un `.boton` de caja completa.
+  // --- Barra superior propia (editar_plantilla_natural: sin header de app — mismo criterio que
+  // Editar Producto, `headerOculto` en main.js): "← Volver a Ajustes" | "Plantilla" (serif,
+  // centrado) | badge de estado ("Personalizado"/"Por defecto"). 3 columnas iguales por grilla
+  // (no `justify-content`) para que el título quede EXACTAMENTE centrado sin importar cuánto
+  // midan los otros 2 elementos. ---
+  const barraSuperior = document.createElement('div');
+  barraSuperior.className = 'barra-volver barra-volver--plantilla';
   const btnVolver = document.createElement('button');
   btnVolver.type = 'button';
   btnVolver.className = 'enlace-volver';
@@ -119,6 +124,14 @@ export async function render(contenedor, { navegar, params } = {}) {
   etiquetaVolver.textContent = 'Volver a Ajustes';
   btnVolver.append(crearIcono('volver'), etiquetaVolver);
   btnVolver.addEventListener('click', () => navegar?.('#/ajustes'));
+  const tituloBarra = document.createElement('h1');
+  tituloBarra.className = 'barra-volver__titulo';
+  tituloBarra.textContent = 'Plantilla';
+  // Badge de estado: SIEMPRE visible (antes solo aparecía tras personalizar) — "Por defecto" o
+  // "Personalizado", el texto lo fija `actualizarBadgePersonalizado()`.
+  const badgeEstado = document.createElement('span');
+  badgeEstado.className = 'editor-plantilla__badge';
+  barraSuperior.append(btnVolver, tituloBarra, badgeEstado);
 
   // --- Galería "Estilo de las imágenes" (los 8 estilos, elegís cuál se aplica por defecto a cada
   // producto) — vivía en Ajustes hasta la ronda "orden del diseño" (CREAR-BRIEF.md 2026-09-29): el
@@ -173,23 +186,12 @@ export async function render(contenedor, { navegar, params } = {}) {
   labelEstilo.className = 'campo__etiqueta';
   labelEstilo.htmlFor = 'editor-vista-previa-estilo';
   labelEstilo.textContent = 'Estilo que estás editando';
-  // "Modo activo" (editar_plantilla_natural): rótulo tenue siempre presente junto al selector —
-  // separado de `badgePersonalizado` ("Personalizado"), que solo aparece si ESTE estilo ya se
-  // tocó (esAjustePersonalizado). Los dos van agrupados a la derecha (no repartidos por
-  // `justify-content: space-between`, que los separaría cuando el badge se muestra).
-  const grupoEstadoEstilo = document.createElement('span');
-  grupoEstadoEstilo.className = 'fila';
-  grupoEstadoEstilo.style.gap = '8px';
-  grupoEstadoEstilo.style.alignItems = 'center';
+  // "Modo activo" (editar_plantilla_natural): rótulo tenue junto al selector — el estado
+  // "Personalizado"/"Por defecto" ahora vive en la barra superior (`badgeEstado`), no acá.
   const etiquetaModoActivo = document.createElement('span');
   etiquetaModoActivo.className = 'texto-tenue';
   etiquetaModoActivo.textContent = 'Modo activo';
-  const badgePersonalizado = document.createElement('span');
-  badgePersonalizado.className = 'editor-plantilla__badge';
-  badgePersonalizado.textContent = 'Personalizado';
-  badgePersonalizado.hidden = true;
-  grupoEstadoEstilo.append(etiquetaModoActivo, badgePersonalizado);
-  filaLabelEstilo.append(labelEstilo, grupoEstadoEstilo);
+  filaLabelEstilo.append(labelEstilo, etiquetaModoActivo);
   const selectEstilo = document.createElement('select');
   selectEstilo.id = 'editor-vista-previa-estilo';
   selectEstilo.setAttribute('data-accion', 'editor-estilo-preview');
@@ -212,13 +214,21 @@ export async function render(contenedor, { navegar, params } = {}) {
   // como estilo general — igual que elegirlo en Ajustes — y (2) pasa a editarlo acá mismo (como ya
   // hace el selector de arriba). Queda un "Deshacer" corto para volver al estilo general anterior
   // sin tener que ir a buscarlo a Ajustes.
+  //
+  // Va ARRIBA del lienzo, como "Presets de diseño rápidos" en editar_plantilla_natural — SIN
+  // tarjeta `.panel` propia (el mock no le pone fondo/borde a la sección, solo a cada tarjeta
+  // individual). BUGS.md #48/#50 documentaban que esto rompía el arrastre del lienzo (quedaba
+  // detrás de la nav inferior fija): la causa real era que el lienzo podía terminar en cualquier
+  // punto de la pantalla sin que nada lo garantizara visible — la solución correcta es que los
+  // tests de arrastre hagan scroll hasta el lienzo antes de leer `boundingBox()`/arrastrar (lo que
+  // hacen ahora), no esconder el diseño.
   const galeriaPresets = document.createElement('div');
-  galeriaPresets.className = 'panel';
+  galeriaPresets.className = 'editor-plantilla__seccion';
   const cabeceraGaleria = document.createElement('div');
   cabeceraGaleria.className = 'panel__cabecera';
   const tituloGaleria = document.createElement('span');
   tituloGaleria.className = 'grupo__titulo';
-  tituloGaleria.textContent = 'Presets de composición';
+  tituloGaleria.textContent = 'Presets de diseño rápidos';
   const contadorGaleria = document.createElement('span');
   contadorGaleria.className = 'panel__badge';
   contadorGaleria.textContent = `${PRESETS_COMPOSICION.length} disponibles`;
@@ -245,9 +255,20 @@ export async function render(contenedor, { navegar, params } = {}) {
     if (ESTILOS_CON_AJUSTES.includes(anterior) && anterior !== estiloEditando) navegar(`#/plantilla?estilo=${anterior}`);
   });
   filaDeshacerPreset.append(btnDeshacerPreset);
+  // Subtítulo corto por preset (editar_plantilla_natural: "nombre" + "subtítulo" + pill "Activo"
+  // en la tarjeta elegida) — mismas palabras que el mock para estos MISMOS 4 presets reales, no
+  // nombres inventados.
+  const SUBTITULO_PRESET = {
+    'banner-inferior': 'Contraste alto',
+    editorial: 'Asimétrico',
+    polaroid: 'Instantánea',
+    'story-inmersiva': 'A sangre',
+  };
   for (const valor of PRESETS_COMPOSICION) {
     const tarjeta = tarjetaEstilo(valor, general.estiloGeneral === valor, {
       editable: false,
+      subtitulo: SUBTITULO_PRESET[valor],
+      mostrarActivoPill: true,
       onSeleccionar: async () => {
         const anterior = general.estiloGeneral;
         await repo.guardarEstiloGeneral(valor);
@@ -265,7 +286,11 @@ export async function render(contenedor, { navegar, params } = {}) {
   }
   galeriaPresets.append(cabeceraGaleria, filaPresets, filaDeshacerPreset);
 
-  // --- Subida de fondo propio (solo relevante para "Mi plantilla") ---
+  // --- Subida de fondo propio ---
+  // Se ve SIEMPRE (editar_plantilla_natural: la caja punteada está ahí sin importar qué estilo se
+  // esté editando) — antes se ocultaba fuera de "Mi plantilla", lo que la escondía justo cuando
+  // más sentido tenía descubrirla. Subir un fondo estando en OTRO estilo cambia el estilo general
+  // a "Mi plantilla" (es lo único que usa ese fondo) y avisa por toast antes de pasar a editarlo.
   const grupoSubida = document.createElement('div');
   grupoSubida.className = 'fila';
   const inputPlantilla = document.createElement('input');
@@ -286,23 +311,31 @@ export async function render(contenedor, { navegar, params } = {}) {
     if (!archivo) return;
     await repo.guardarImagenPlantilla(archivo);
     plantillaImagenActual = await createImageBitmap(archivo);
+    if (estiloEditando !== 'mi-plantilla') {
+      await repo.guardarEstiloGeneral('mi-plantilla');
+      general.estiloGeneral = 'mi-plantilla';
+      mostrarToast('Fondo actualizado — ahora se usa "Mi plantilla"');
+      navegar('#/plantilla?estilo=mi-plantilla');
+      return;
+    }
     mostrarToast('Fondo actualizado');
     solicitarRedibujo();
   });
   grupoSubida.append(btnSubir, inputPlantilla);
-  if (estiloEditando !== 'mi-plantilla') grupoSubida.hidden = true;
 
-  // --- Cabecera de la vista previa (editar_plantilla_natural: "Previsualización de Estado
-  // (9:16)" + "Guías interactivas") — una sola fila chica, sin padding propio, para no sumar alto
-  // de más antes del lienzo (ver nota grande más abajo sobre `galeriaPresets`/BUGS.md #48/#50). ---
+  // --- Cabecera de la vista previa: "Previsualización de estado (9:16)" + "● Guías interactivas"
+  // EN LA MISMA LÍNEA (editar_plantilla_natural) — `flex-wrap: nowrap` a propósito, con el punto
+  // de color que trae el mock delante del texto. ---
   const cabeceraPrevia = document.createElement('div');
   cabeceraPrevia.className = 'panel__cabecera editor-plantilla__cabecera-previa';
   const tituloPrevia = document.createElement('span');
   tituloPrevia.className = 'grupo__titulo';
   tituloPrevia.textContent = 'Previsualización de estado (9:16)';
   const pistaPrevia = document.createElement('span');
-  pistaPrevia.className = 'texto-tenue';
-  pistaPrevia.textContent = 'Guías interactivas';
+  pistaPrevia.className = 'texto-tenue editor-plantilla__pista';
+  const puntoPrevia = document.createElement('span');
+  puntoPrevia.className = 'editor-plantilla__punto';
+  pistaPrevia.append(puntoPrevia, document.createTextNode('Guías interactivas'));
   cabeceraPrevia.append(tituloPrevia, pistaPrevia);
 
   // --- Vista previa (canvas en vivo) + overlay interactivo ---
@@ -325,11 +358,12 @@ export async function render(contenedor, { navegar, params } = {}) {
   panel.hidden = true;
 
   // --- Deshacer / rehacer / Acomodar / Volver al original de este estilo ---
-  // Barra fija arriba del lienzo, en grilla 2×2 (entra en 360-412px sin scroll horizontal: con
-  // 4 botones en fila el último quedaba cortado a la derecha, BUGS.md ronda "editor en el celular").
-  // Además siempre a mano: abajo del panel quedaba a casi dos pantallas, y en el celu un toque que
-  // cae mientras la página todavía se desliza se usa para frenar el scroll y no llega como click
-  // (QA v4, BUGS.md #18).
+  // Fila de 4 (ícono arriba, etiqueta chica abajo — editar_plantilla_natural), dentro de la
+  // tarjeta de controles de arriba. Ya NO es `position: sticky`: al vivir dentro de una tarjeta
+  // acotada (`.panel`, ver `panelControles` más abajo) solo podía seguir a la vista mientras esa
+  // tarjeta siguiera en pantalla (su "contenedor de bloque" para el sticky) — más allá se
+  // despegaba igual (mismo mecanismo que BUGS.md #50 diagnosticó), así que quedaba a medias. El
+  // mock tampoco tiene una barra flotante: es parte fija de la tarjeta superior.
   const filaHistorial = document.createElement('div');
   filaHistorial.className = 'editor-plantilla__barra';
   const btnDeshacer = document.createElement('button');
@@ -354,27 +388,32 @@ export async function render(contenedor, { navegar, params } = {}) {
   btnRestablecer.append(crearIcono('restablecer'), document.createTextNode('Restablecer'));
   filaHistorial.append(btnDeshacer, btnRehacer, btnAcomodar, btnRestablecer);
 
-  // OJO (ronda "reskin plantilla", CREAR-BRIEF.md 2026-09-29; BUGS.md #48/#50): esta pantalla es
-  // MUY sensible a cuánto ocupa todo lo que va ANTES de `previaContenedor` — "foto con precio" (y
-  // otros estilos) arrancan con el nombre/precio pegados abajo del lienzo por default, y cualquier
-  // alto de más acá arriba los empuja detrás de la nav inferior fija, rompiendo el arrastre con
-  // mouse/dedo. Ya se probó (BUGS #50) envolver `selectorEstilo`/`grupoSubida`/`filaHistorial` en
-  // una tarjeta `.panel` como el mock — el padding/margen de esa tarjeta reproduce el bug tal
-  // cual — así que siguen SUELTOS, sin envoltorio extra. `filaHistorial` pasó de grilla 2×2 a una
-  // sola fila de 4 (icono arriba, etiqueta abajo, como editar_plantilla_natural): ocupa MENOS alto
-  // que antes, no más, así que abre margen en vez de gastarlo. `cabeceraPrevia` (el único agregado
-  // antes del lienzo) es una fila de texto suelta sin padding propio — mínimo alto posible.
-  // `galeriaPresets` y `panelEstiloGeneral` van AL FINAL por el mismo motivo que siempre.
+  // Tarjeta "CONTROLES SUPERIORES" (editar_plantilla_natural): selector de estilo + "Subir mi
+  // fondo" + la barra de deshacer/rehacer/acomodar/restablecer, las 3 juntas dentro de UNA tarjeta
+  // `.panel`, como el mock. BUGS.md #48/#50 documentaban que este mismo envoltorio rompía el
+  // arrastre del lienzo en 412×915: la causa real no era la tarjeta en sí, sino que nada
+  // garantizaba que el lienzo (más abajo, después de sumar esta tarjeta + la galería de presets)
+  // quedara visible sin scroll — un test que lee `boundingBox()`/arrastra con coordenadas de
+  // pantalla se rompe si el elemento cae detrás de la nav inferior fija. La solución correcta es
+  // que ESOS tests hagan scroll hasta el lienzo antes de leer coordenadas (ver
+  // `asegurarLienzoVisible` en editor.spec.js/tactil.spec.js/ajustes.spec.js), no esconder la
+  // tarjeta del diseño.
+  const panelControles = document.createElement('div');
+  panelControles.className = 'panel pila editor-plantilla__panel-controles';
+  panelControles.append(selectorEstilo, grupoSubida, filaHistorial);
+
+  // Orden final, de arriba a abajo, calcado de editar_plantilla_natural: barra superior propia →
+  // tarjeta de controles → "Presets de diseño rápidos" (tira horizontal) → cabecera de la vista
+  // previa → lienzo → Capas y visibilidad → panel de propiedades (con "Alineación y Contraste") →
+  // "Estilo de las imágenes" (galería de 8, ex-Ajustes, sin equivalente en ESTE mock puntual).
   wrap.append(
-    btnVolver,
-    selectorEstilo,
-    grupoSubida,
-    filaHistorial,
+    barraSuperior,
+    panelControles,
+    galeriaPresets,
     cabeceraPrevia,
     previaContenedor,
     capas,
     panel,
-    galeriaPresets,
     panelEstiloGeneral
   );
   contenedor.append(wrap);
@@ -398,8 +437,13 @@ export async function render(contenedor, { navegar, params } = {}) {
     return estiloEditando === 'mi-plantilla' ? ['foto', ...CLAVES_TEXTO] : CLAVES_TEXTO;
   }
 
+  // Solo los elementos VISIBLES son "clickeables" directo sobre el lienzo (ver dibujarOverlay: un
+  // elemento oculto no dibuja caja en el overlay, igual que el mock no lo dibuja en la
+  // previsualización) — para reactivarlo hay que ir a "Capas y visibilidad".
   function cajasHitTest() {
-    return clavesVisiblesParaEstilo().map((clave) => ({ clave, ...ajustes[clave] }));
+    return clavesVisiblesParaEstilo()
+      .map((clave) => ({ clave, ...ajustes[clave] }))
+      .filter((caja) => caja.visible !== false);
   }
 
   function ajustarResolucionCanvas() {
@@ -530,27 +574,26 @@ export async function render(contenedor, { navegar, params } = {}) {
     for (const clave of claves) {
       const caja = ajustes[clave];
       const oculto = caja.visible === false;
-      const div = document.createElement('div');
-      div.className = 'editor-plantilla__caja' + (seleccion === clave ? ' editor-plantilla__caja--activa' : '');
-      if (oculto) div.classList.add('editor-plantilla__caja--oculta');
-      div.setAttribute('data-elemento', clave); // para tests: clic directo sobre el elemento en el lienzo
-      posicionarEnPx(div, caja);
-      div.addEventListener('pointerdown', (ev) => alPointerDownCaja(ev, clave));
-      if (oculto) {
-        const etiquetaOculta = document.createElement('span');
-        etiquetaOculta.className = 'editor-plantilla__etiqueta-oculta';
-        etiquetaOculta.textContent = '(oculto)';
-        div.append(etiquetaOculta);
-      }
-      if (seleccion === clave) {
-        for (const manija of HANDLES) {
-          const h = document.createElement('div');
-          h.className = `editor-plantilla__manija editor-plantilla__manija--${manija}`;
-          h.addEventListener('pointerdown', (ev) => alPointerDownManija(ev, clave, manija));
-          div.append(h);
+      // Un elemento OCULTO no se dibuja en el lienzo (ni la caja punteada ni nada — igual que el
+      // mock, que directamente no lo muestra): la única forma de volver a tocarlo es reactivarlo
+      // desde "Capas y visibilidad" más abajo, cuyo `<button data-accion="capa-<clave>">` ya
+      // selecciona y muestra el panel de propiedades sin depender de una caja en el overlay.
+      if (!oculto) {
+        const div = document.createElement('div');
+        div.className = 'editor-plantilla__caja' + (seleccion === clave ? ' editor-plantilla__caja--activa' : '');
+        div.setAttribute('data-elemento', clave); // para tests: clic directo sobre el elemento en el lienzo
+        posicionarEnPx(div, caja);
+        div.addEventListener('pointerdown', (ev) => alPointerDownCaja(ev, clave));
+        if (seleccion === clave) {
+          for (const manija of HANDLES) {
+            const h = document.createElement('div');
+            h.className = `editor-plantilla__manija editor-plantilla__manija--${manija}`;
+            h.addEventListener('pointerdown', (ev) => alPointerDownManija(ev, clave, manija));
+            div.append(h);
+          }
         }
+        overlay.append(div);
       }
-      overlay.append(div);
 
       // Capas: lista VERTICAL, una fila por capa (nombre a lo ancho + ojo a la derecha), ≥48px de
       // alto, la seleccionada resaltada (ronda "capas verticales", CREAR-BRIEF.md 2026-09-28).
@@ -584,8 +627,12 @@ export async function render(contenedor, { navegar, params } = {}) {
     actualizarBadgePersonalizado();
   }
 
+  // Badge de la barra superior: SIEMPRE visible, con 2 estados ("Por defecto"/"Personalizado") —
+  // antes aparecía/desaparecía con `hidden` (editar_plantilla_natural lo muestra siempre).
   function actualizarBadgePersonalizado() {
-    badgePersonalizado.hidden = !esAjustePersonalizado(estiloEditando, ajustes);
+    const personalizado = esAjustePersonalizado(estiloEditando, ajustes);
+    badgeEstado.textContent = personalizado ? 'Personalizado' : 'Por defecto';
+    badgeEstado.classList.toggle('editor-plantilla__badge--por-defecto', !personalizado);
   }
 
   function etiquetaCaja(clave) {
