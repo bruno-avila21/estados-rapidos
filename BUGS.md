@@ -630,3 +630,22 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `css/estilos.css` -- `.chips-secciones .chip { white-space: normal; text-align: center; }` (más específico que `.chip`, sin tocar el comportamiento de `.filtro-secciones`, que sigue con scroll horizontal y `nowrap`).
 - **Resuelto:** sí -- confirmado corriendo las 6 combinaciones de `overflow-fuente-grande.spec.js` despues del cambio: 6/6 verdes.
 - ¿Se repetiría en otro proyecto? Sí -- un chip/pill con `white-space: nowrap` es seguro solo dentro de un contenedor con scroll horizontal propio; en cualquier `flex-wrap` normal (chips seleccionables, tags), un solo chip con texto largo + letra grande del sistema puede desbordar igual que una fila sin `flex-wrap` (mismo espíritu que bug #35/#42 de la skill `crear-apk`).
+
+### 43. `overflow-fuente-grande.spec.js`: el ícono del CTA "Publicar N" se salía de la pantalla (izquierda) a fuente grande, en la vista grilla
+- **Paso:** reskin de productos_lista_natural/productos_vista_grilla_natural (comparación contra Interfaz/comparacion/), corrida completa de `overflow-fuente-grande.spec.js` tras sumar el badge decorativo "WhatsApp →" al CTA "Publicar N productos" de la grilla.
+- **Error exacto:**
+  ```
+  Productos (Todas, agrupado por sección, grilla): scrollOverflow=false
+  svg right=2 left=-18 ""
+  circle right=-1 left=-5 ""
+  circle right=-11 left=-15 ""
+  circle right=-1 left=-5 ""
+  line right=-5 left=-11 ""
+  line right=-5 left=-11 ""
+  ```
+  (el `svg`/`circle`/`line` son el ícono "compartir" del botón `[data-accion="publicar-seleccionados"]`; a 320-412px con fuente 130-160% aparecía con `left` negativo, es decir, dibujado a la izquierda del borde de la pantalla).
+- **Reproducir:** vista grilla, algún producto seleccionado (aparece la barra `.barra-publicar`), fuente del sistema al 130% o más, viewport 320-412px.
+- **Causa:** `.barra-publicar .boton--primario` tenía `justify-content: center` y el texto `white-space: nowrap` (agregado para evitar que "Publicar N productos" se partiera en 2 líneas). Con el badge "WhatsApp →" sumado al ancho, el contenido total del botón (ícono + texto sin poder achicarse + badge) pasaba a medir más que el botón; `justify-content: center` en un flex que desborda no recorta: empuja los hijos por igual hacia afuera de la caja, y a fuente grande ese sobrante alcanzaba para mandar el ícono a la izquierda del viewport (`left` negativo).
+- **Arreglo:** `js/vistas/lista.js` (`barraPublicarFija`) — ícono + texto ahora van en un `<span class="barra-publicar__contenido">` que SÍ se puede achicar (`min-width:0`, `flex-shrink:1`); el texto vive en su propio `<span class="barra-publicar__texto">` con `overflow:hidden; text-overflow:ellipsis; white-space:nowrap` (trunca en vez de desbordar — `el.textContent` del botón sigue siendo exacto "Publicar N producto(s)" para los tests, la ellipsis es puramente visual). `css/estilos.css` — el botón usa `justify-content: space-between` solo cuando lleva badge (`.boton--publicar-grilla`) y `center` si no; ícono y badge llevan `flex-shrink: 0`.
+- **Resuelto:** sí — confirmado con `overflow-fuente-grande.spec.js` (6/6 verdes) y la suite completa (100/100 e2e).
+- ¿Se repetiría en otro proyecto? Sí — mismo espíritu que #35/#42: un botón con contenido variable (ícono + texto + badge opcional) necesita que el elemento que puede crecer sea el que se achica (`min-width:0` + ellipsis en el texto), nunca `justify-content: center`/`nowrap` a ciegas en el contenedor entero, porque eso empuja los elementos de ancho fijo (íconos, badges) fuera de la pantalla en vez de recortar el texto.

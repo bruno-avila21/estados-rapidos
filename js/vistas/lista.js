@@ -103,10 +103,11 @@ export async function render(contenedor, { navegar }) {
 
     const conteos = contarProductosPorSeccion(productos, secciones);
     piezas.push(filaFiltro(secciones, conteos, prefs, { navegar, recargar }));
-    piezas.push(conmutadorVista(prefs, recargar));
 
     const visibles = filtrarProductosPorSeccion(productos, prefs.filtroSeccion);
-    piezas.push(barraSeleccion(visibles, recargar));
+    // Conmutador Lista/Grilla + "Marcar todos"/"Desmarcar": UNA sola fila en los 2 diseños (no 2
+    // piezas apiladas) — productos_lista_natural/productos_vista_grilla_natural.
+    piezas.push(filaControles(prefs, visibles, recargar));
 
     const ctx = {
       navegar,
@@ -119,7 +120,7 @@ export async function render(contenedor, { navegar }) {
         // Sin recomponer todo: solo se sincronizan las casillas del mismo producto (puede
         // aparecer en 2 grupos a la vez) y la barra fija "Publicar N" (CREAR-BRIEF.md, rendimiento).
         sincronizarSeleccion(contenedor, producto.id, checked);
-        actualizarBarraPublicarFija(contenedor, productos);
+        actualizarBarraPublicarFija(contenedor, productos, prefs.vista);
       },
     };
 
@@ -138,12 +139,19 @@ export async function render(contenedor, { navegar }) {
     if (prefs.vista !== 'grilla' && visibles.length > 0) piezas.push(consejoPublicacion());
 
     const seleccionados = productos.filter((p) => p.seleccionado);
-    if (seleccionados.length > 0) piezas.push(barraPublicarFija(seleccionados));
+    if (seleccionados.length > 0) piezas.push(barraPublicarFija(seleccionados, prefs.vista));
   }
+
+  // El header (index.html, fuera de `contenedor`) y el FAB cambian de piel según la vista: los 2
+  // diseños dibujan el "+" de la cabecera y el FAB distinto en productos_lista_natural
+  // (FAB oscuro relleno, "+" del header sin fondo) que en productos_vista_grilla_natural (FAB
+  // blanco con borde, "+" del header dentro de un cuadrado con fondo).
+  const enGrilla = productos.length > 0 && prefs.vista === 'grilla';
+  document.querySelector('.encabezado__accion')?.classList.toggle('encabezado__accion--grilla', enGrilla);
 
   const fab = document.createElement('button');
   fab.type = 'button';
-  fab.className = 'fab';
+  fab.className = 'fab' + (enGrilla ? ' fab--grilla' : '');
   fab.setAttribute('data-accion', 'agregar');
   fab.setAttribute('aria-label', 'Agregar producto');
   fab.append(crearIcono('agregar'));
@@ -173,14 +181,14 @@ function sincronizarSeleccion(contenedor, id, checked) {
 
 /** Recalcula la barra fija "Publicar N" (marcados) a partir de `productos` ya actualizado en
  * memoria, y la reemplaza/crea/saca sin tocar el resto del DOM. */
-function actualizarBarraPublicarFija(contenedor, productos) {
+function actualizarBarraPublicarFija(contenedor, productos, vista) {
   const seleccionados = productos.filter((p) => p.seleccionado);
   const actual = contenedor.querySelector('.barra-publicar');
   if (seleccionados.length === 0) {
     actual?.remove();
     return;
   }
-  const nueva = barraPublicarFija(seleccionados);
+  const nueva = barraPublicarFija(seleccionados, vista);
   if (actual) actual.replaceWith(nueva);
   else contenedor.append(nueva);
 }
@@ -256,6 +264,17 @@ function filaFiltro(secciones, conteos, prefs, { navegar, recargar }) {
   return cont;
 }
 
+// --- Fila de controles: conmutador Lista/Grilla + "Marcar todos"/"Desmarcar" en UNA sola fila
+// (justify-between), como en los 2 diseños — antes eran 2 piezas apiladas en 2 líneas. La grilla
+// además lleva un separador abajo (productos_vista_grilla_natural, "border-b"); la lista no. ---
+function filaControles(prefs, visibles, recargar) {
+  const cont = document.createElement('div');
+  const enGrilla = prefs.vista === 'grilla';
+  cont.className = 'fila-controles' + (enGrilla ? ' fila-controles--grilla' : '');
+  cont.append(conmutadorVista(prefs, recargar), barraSeleccion(visibles, recargar, prefs.vista));
+  return cont;
+}
+
 // --- Conmutador de vista: lista compacta / grilla, se recuerda (CREAR-BRIEF.md). Segmented
 // control (productos_lista_natural): pista con las 2 opciones, la activa con fondo propio. ---
 function conmutadorVista(prefs, recargar) {
@@ -283,23 +302,32 @@ function conmutadorVista(prefs, recargar) {
   return cont;
 }
 
-// --- Barra de selección rápida: "Marcar todos" / "Desmarcar" (productos_lista_natural: pastillas
-// con borde, no botones fantasma genéricos). ---
-function barraSeleccion(visibles, recargar) {
+// --- Barra de selección rápida: "Marcar todos" / "Desmarcar". Los 2 diseños la dibujan distinto
+// (productos_lista_natural: pastillas con borde; productos_vista_grilla_natural: links de texto
+// con ícono y un "|" de separador) — mismo criterio que el encabezado de sección: un componente,
+// 2 pieles según `vista`. ---
+function barraSeleccion(visibles, recargar, vista) {
   const div = document.createElement('div');
-  div.className = 'barra-seleccion';
+  const enGrilla = vista === 'grilla';
+  div.className = 'barra-seleccion' + (enGrilla ? ' barra-seleccion--grilla' : '');
 
   const btnMarcarTodos = document.createElement('button');
   btnMarcarTodos.type = 'button';
   btnMarcarTodos.className = 'barra-seleccion__boton';
   btnMarcarTodos.setAttribute('data-accion', 'marcar-todos');
-  btnMarcarTodos.textContent = 'Marcar todos';
+  if (enGrilla) btnMarcarTodos.append(crearIcono('todos'));
+  btnMarcarTodos.append(document.createTextNode('Marcar todos'));
   btnMarcarTodos.addEventListener('click', async () => {
     // Solo los VISIBLES (el filtro de sección activo): "Marcar todos" dentro de una sección marca
     // nada más que esa sección (CREAR-BRIEF.md).
     await repo.marcarTodos(true, visibles.map((p) => p.id));
     recargar();
   });
+
+  const separador = document.createElement('span');
+  separador.className = 'barra-seleccion__separador';
+  separador.textContent = '|';
+  separador.setAttribute('aria-hidden', 'true');
 
   const btnDesmarcar = document.createElement('button');
   btnDesmarcar.type = 'button';
@@ -311,7 +339,8 @@ function barraSeleccion(visibles, recargar) {
     recargar();
   });
 
-  div.append(btnMarcarTodos, btnDesmarcar);
+  if (enGrilla) div.append(btnMarcarTodos, separador, btnDesmarcar);
+  else div.append(btnMarcarTodos, btnDesmarcar);
   return div;
 }
 
@@ -324,23 +353,45 @@ function consejoPublicacion() {
   const texto = document.createElement('p');
   const fuerte = document.createElement('strong');
   fuerte.textContent = 'Consejo de publicación: ';
-  texto.append(fuerte, document.createTextNode('las fotos seleccionadas se envían a tu WhatsApp en calidad original, como estado de 24 horas.'));
+  // Texto ajustado a lo que la app hace de verdad (no la promesa genérica del mock): antes de
+  // compartir se abre una hoja de revisión donde se puede reordenar y editar el texto; la app NO
+  // garantiza "calidad original" (comprime la foto, ver js/utils/imagen.js `achicarFoto`).
+  texto.append(fuerte, document.createTextNode('antes de compartir vas a poder revisar el orden y el texto de cada estado (dura 24 horas en WhatsApp).'));
   div.append(texto);
   return div;
 }
 
-function barraPublicarFija(seleccionados) {
+function barraPublicarFija(seleccionados, vista) {
+  const enGrilla = vista === 'grilla';
   const div = document.createElement('div');
   div.className = 'barra-publicar';
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'boton boton--primario boton--ancho';
   btn.setAttribute('data-accion', 'publicar-seleccionados');
-  // "Publicar N producto(s)" (productos_lista_natural/productos_vista_grilla_natural). El ícono no
-  // suma texto (SVG sin nodos de texto), así que `toHaveText(...)` en los tests sigue matcheando
-  // exacto aunque el botón ya no sea solo un nodo de texto.
+  // "Publicar N producto(s)" (productos_lista_natural/productos_vista_grilla_natural). Ni el
+  // ícono ni el badge "WhatsApp →" (grilla) suman texto real: el ícono es SVG sin nodos de texto,
+  // y el badge se dibuja con CSS `content` (decorativo, `aria-hidden`) — así `toHaveText(...)` en
+  // los tests sigue matcheando exacto "Publicar N producto(s)" aunque se vea el badge.
   const palabra = seleccionados.length === 1 ? 'producto' : 'productos';
-  btn.append(crearIcono('enviar'), document.createTextNode(`Publicar ${seleccionados.length} ${palabra}`));
+  // Ícono + texto van agrupados en un <span> que se puede achicar (el texto trunca con ellipsis
+  // adentro): a fuente grande/pantallas angostas eso evita que el badge o el ícono se empujen
+  // fuera de la pantalla (BUGS.md, overflow-fuente-grande.spec.js). `textContent` del botón sigue
+  // siendo exacto "Publicar N producto(s)" para los tests — la ellipsis es solo visual (CSS).
+  const contenido = document.createElement('span');
+  contenido.className = 'barra-publicar__contenido';
+  const texto = document.createElement('span');
+  texto.className = 'barra-publicar__texto';
+  texto.textContent = `Publicar ${seleccionados.length} ${palabra}`;
+  contenido.append(crearIcono(enGrilla ? 'compartir' : 'enviar'), texto);
+  btn.append(contenido);
+  if (enGrilla) {
+    btn.classList.add('boton--publicar-grilla');
+    const badge = document.createElement('span');
+    badge.className = 'barra-publicar__whatsapp';
+    badge.setAttribute('aria-hidden', 'true');
+    btn.append(badge);
+  }
   btn.addEventListener('click', () => abrirHojaRevision({ ids: seleccionados.map((p) => p.id) }));
   div.append(btn);
   return div;
@@ -643,7 +694,9 @@ function tarjetaGrilla(producto, ctx) {
 
   const btnPublicar = document.createElement('button');
   btnPublicar.type = 'button';
-  btnPublicar.className = 'grilla-item__accion boton-icono-mini boton-icono-mini--lleno';
+  // Sin fondo por defecto (productos_vista_grilla_natural: "text-primary hover:bg-..."), a
+  // diferencia del botón "Subir a Estado" de la fila compacta que SÍ arranca relleno.
+  btnPublicar.className = 'grilla-item__accion boton-icono-mini boton-icono-mini--primario';
   btnPublicar.setAttribute('data-accion', 'grilla-publicar');
   btnPublicar.setAttribute('aria-label', `Publicar ${producto.nombre}`);
   btnPublicar.append(crearIcono('enviar'));

@@ -18,23 +18,39 @@ const RAIZ = path.join(__dirname, '..');
 const ANCHO = 412;
 const ALTO = 915;
 
-// --- Qué pantalla del diseño corresponde a qué ruta/estado de la app ---
-const ESCENAS = {
-  productos_lista_natural: { hash: '#/', vista: 'compacta', titulo: 'Productos — lista' },
-  productos_vista_grilla_natural: { hash: '#/', vista: 'grilla', titulo: 'Productos — grilla' },
-};
+const FOTOS_DIR = path.join(RAIZ, 'Interfaz', 'comparacion', 'fotos');
 
-// --- Dataset de ejemplo (nombres/precios/secciones tomados de los 2 code.html; ver comentario en
-// el propio dataset). Mismo dataset para lista y grilla: son la misma pantalla en 2 vistas. ---
-const SECCIONES_EJEMPLO = ['Lencería', 'Novedades'];
-const PRODUCTOS_EJEMPLO = [
-  { nombre: 'Taza Cerámica Salvia', descripcion: 'Taza de cerámica artesanal', precio: 14500, seccion: null, seleccionado: true },
-  { nombre: 'Vela de Soja Higo & Cedro', descripcion: 'Vela de soja aromática', precio: 8900, seccion: null, seleccionado: true },
-  { nombre: 'Conejo de Lana Fieltro', descripcion: 'Peluche de lana fieltro', precio: 6200, seccion: null, seleccionado: true },
-  { nombre: 'Remera Oversize Oliva', descripcion: 'Remera oversize algodón', precio: 21000, seccion: 'Lencería', seleccionado: false },
-  { nombre: 'Sneakers Cuero Arena', descripcion: 'Sneakers urbanas de cuero', precio: 38000, seccion: 'Novedades', seleccionado: false },
-  { nombre: 'Torta Botánica Lavanda', descripcion: 'Torta artesanal botánica', precio: null, seccion: 'Lencería', seleccionado: false },
+// --- Datasets de ejemplo: EXACTAMENTE los productos/precios/secciones/selección visibles en cada
+// code.html (no un dataset inventado ni compartido entre las 2 pantallas — así cada diferencia
+// entre las capturas es de maqueta, no de datos). Fotos: las mismas del code.html, bajadas una vez
+// a Interfaz/comparacion/fotos/ (fuera de git) con las URLs originales del mock. ---
+
+// Las secciones "Lencería"/"Novedades" se crean vacías (0 productos) SOLO para que los chips del
+// filtro existan como en el mock (el número exacto del chip no es lo que se está comparando acá);
+// como quedan sin productos, `vistaAgrupada` (lista.js) las filtra y no dibuja su bloque — así
+// "Sin sección" es el ÚNICO grupo visible y aparece primero (evita el choque con la regla real y
+// testeada de la app "Sin sección va al final del agrupado", que el mock no respeta).
+
+// productos_lista_natural: grupo "Sin sección" (único que el mock realmente dibuja), en orden.
+const LISTA_PRODUCTOS = [
+  { nombre: 'Torta Temática Clash', descripcion: 'Pastel artesanal 2 pisos', precio: 14500, seccion: null, seleccionado: true, foto: 'lista-1-torta.jpg' },
+  { nombre: 'Michi Peluche Miau', descripcion: 'Accesorios y regalos deco', precio: 8900, seccion: null, seleccionado: true, foto: 'lista-2-michi.jpg' },
+  { nombre: 'Remera Minimalist Algodón', descripcion: 'Ropa oversize premium', precio: null, seccion: null, seleccionado: true, foto: 'lista-3-remera.jpg' },
+  { nombre: 'Sneakers Urban Flame', descripcion: 'Calzado deportivo urbano', precio: 38000, seccion: null, seleccionado: false, foto: 'lista-4-sneakers.jpg' },
 ];
+
+// productos_vista_grilla_natural: "Sin sección" (3, marcados) — el único grupo que importa acá.
+const GRILLA_PRODUCTOS = [
+  { nombre: 'Taza Cerámica Salvia', descripcion: 'Taza de cerámica artesanal', precio: 14500, seccion: null, seleccionado: true, foto: 'grilla-1-taza.jpg' },
+  { nombre: 'Vela de Soja Higo & Cedro', descripcion: 'Vela de soja aromática', precio: 8900, seccion: null, seleccionado: true, foto: 'grilla-2-vela.jpg' },
+  { nombre: 'Conejo de Lana Fieltro', descripcion: 'Peluche de lana fieltro', precio: 6200, seccion: null, seleccionado: true, foto: 'grilla-3-conejo.jpg' },
+];
+
+// --- Qué pantalla del diseño corresponde a qué ruta/estado de la app + qué dataset le toca ---
+const ESCENAS = {
+  productos_lista_natural: { hash: '#/', vista: 'compacta', titulo: 'Productos — lista', secciones: ['Lencería', 'Novedades'], productos: LISTA_PRODUCTOS },
+  productos_vista_grilla_natural: { hash: '#/', vista: 'grilla', titulo: 'Productos — grilla', secciones: ['Lencería', 'Novedades'], productos: GRILLA_PRODUCTOS },
+};
 
 function esperarLinea(child, contiene) {
   return new Promise((resolve, reject) => {
@@ -63,13 +79,17 @@ async function arrancarServidor(puerto) {
   return child;
 }
 
-async function sembrarApp(page, { vista }) {
-  const fixture = path.join(RAIZ, 'test', 'e2e', 'fixtures', 'producto.png');
-  const fotoBase64 = fs.readFileSync(fixture).toString('base64');
+async function sembrarApp(page, { vista, secciones, productos }) {
+  // Una foto real por producto (las del propio code.html, bajadas a Interfaz/comparacion/fotos/ —
+  // ver ESCENAS más arriba): cada producto lleva su base64 + su nombre de archivo (para el `type`).
+  const nombresFoto = [...new Set(productos.map((p) => p.foto))];
+  const fotosBase64 = Object.fromEntries(
+    nombresFoto.map((nombre) => [nombre, fs.readFileSync(path.join(FOTOS_DIR, nombre)).toString('base64')])
+  );
 
   await page.goto('/');
   await page.evaluate(
-    async ({ fotoBase64, secciones, productos, vista }) => {
+    async ({ fotosBase64, secciones, productos }) => {
       const repo = await import('/js/repositorio.js');
 
       const idPorSeccion = new Map();
@@ -78,12 +98,15 @@ async function sembrarApp(page, { vista }) {
         idPorSeccion.set(nombre, s.id);
       }
 
-      const binario = atob(fotoBase64);
-      const bytes = new Uint8Array(binario.length);
-      for (let i = 0; i < binario.length; i += 1) bytes[i] = binario.charCodeAt(i);
+      const aBytes = (base64) => {
+        const binario = atob(base64);
+        const bytes = new Uint8Array(binario.length);
+        for (let i = 0; i < binario.length; i += 1) bytes[i] = binario.charCodeAt(i);
+        return bytes;
+      };
 
       for (const p of productos) {
-        const archivo = new File([bytes], 'producto.png', { type: 'image/png' });
+        const archivo = new File([aBytes(fotosBase64[p.foto])], p.foto, { type: 'image/jpeg' });
         const guardado = await repo.guardarProducto(
           {
             nombre: p.nombre,
@@ -95,11 +118,13 @@ async function sembrarApp(page, { vista }) {
         );
         if (!p.seleccionado) await repo.actualizarSeleccion(guardado.id, false);
       }
-
-      await repo.guardarPreferenciasLista({ vista, filtroSeccion: 'todas' });
     },
-    { fotoBase64, secciones: SECCIONES_EJEMPLO, productos: PRODUCTOS_EJEMPLO, vista }
+    { fotosBase64, secciones, productos }
   );
+  await page.evaluate(async (vista) => {
+    const repo = await import('/js/repositorio.js');
+    await repo.guardarPreferenciasLista({ vista, filtroSeccion: 'todas' });
+  }, vista);
   await page.reload();
   // Las fotos se leen de IndexedDB de forma async (Promise.all en lista.js): esperar a que la
   // primera miniatura real ya tenga `src` antes de la captura, no un timeout fijo a ciegas.
@@ -162,7 +187,7 @@ async function main() {
 
     // 2) App real, servida local, sembrada con datos parecidos.
     const paginaApp = await browser.newPage({ viewport: { width: ANCHO, height: ALTO }, baseURL: `http://localhost:${puerto}` });
-    await sembrarApp(paginaApp, escena);
+    await sembrarApp(paginaApp, { vista: escena.vista, secciones: escena.secciones, productos: escena.productos });
     if (escena.hash !== '#/') await paginaApp.evaluate((h) => { location.hash = h; }, escena.hash);
     await paginaApp.waitForTimeout(150);
     const appPng = await paginaApp.screenshot();

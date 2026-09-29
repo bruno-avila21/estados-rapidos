@@ -53,9 +53,18 @@ const TRAZOS = Object.freeze({
     ['line', { x1: 12, y1: 5, x2: 12, y2: 19 }],
     ['line', { x1: 5, y1: 12, x2: 19, y2: 12 }],
   ],
-  // Ícono "send" (Material "send"): avión de papel — barra de publicar fija y acción "Compartir en
-  // WhatsApp" de la grilla.
+  // Ícono "send" (Material "send"): avión de papel — barra de publicar fija (lista) y acción
+  // "Compartir en WhatsApp" de la grilla.
   enviar: [['path', { d: 'M4 12 20 4 13 20 11 13 4 12z' }], ['line', { x1: 11, y1: 13, x2: 20, y2: 4 }]],
+  // Ícono "share" (Material "share"): 3 puntos conectados — barra de publicar fija de la grilla
+  // (productos_vista_grilla_natural usa "share", no "send").
+  compartir: [
+    ['circle', { cx: 18, cy: 6, r: 2.3 }],
+    ['circle', { cx: 6, cy: 12, r: 2.3 }],
+    ['circle', { cx: 18, cy: 18, r: 2.3 }],
+    ['line', { x1: 8.1, y1: 10.8, x2: 15.9, y2: 7.2 }],
+    ['line', { x1: 8.1, y1: 13.2, x2: 15.9, y2: 16.8 }],
+  ],
   // Ícono "select_all" (Material): 4 esquinas punteadas — botón "Marcar todos".
   todos: [
     ['path', { d: 'M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8' }],
