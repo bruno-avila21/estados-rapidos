@@ -91,6 +91,37 @@ const TRAZOS = Object.freeze({
     ['rect', { x: 4, y: 4, width: 16, height: 16, rx: 3 }],
     ['circle', { cx: 9, cy: 9, r: 1.6 }],
   ],
+  // Capa "Nombre" (editar_plantilla_natural, ícono "title"): una letra T de trazo simple.
+  texto: [
+    ['line', { x1: 5, y1: 6, x2: 19, y2: 6 }],
+    ['line', { x1: 12, y1: 6, x2: 12, y2: 18 }],
+  ],
+  // Capa "Descripción" (ícono "notes"): 3 líneas de párrafo, la última más corta.
+  parrafo: [
+    ['line', { x1: 5, y1: 7, x2: 19, y2: 7 }],
+    ['line', { x1: 5, y1: 12, x2: 19, y2: 12 }],
+    ['line', { x1: 5, y1: 17, x2: 14, y2: 17 }],
+  ],
+  // Alineación de texto (panel de propiedades del editor): 4 líneas por ícono, ancladas a
+  // izquierda/centradas/ancladas a derecha — mismo lenguaje que Material "format_align_*".
+  'alinear-izquierda': [
+    ['line', { x1: 4, y1: 6, x2: 20, y2: 6 }],
+    ['line', { x1: 4, y1: 11, x2: 14, y2: 11 }],
+    ['line', { x1: 4, y1: 16, x2: 20, y2: 16 }],
+    ['line', { x1: 4, y1: 21, x2: 14, y2: 21 }],
+  ],
+  'alinear-centro': [
+    ['line', { x1: 4, y1: 6, x2: 20, y2: 6 }],
+    ['line', { x1: 7, y1: 11, x2: 17, y2: 11 }],
+    ['line', { x1: 4, y1: 16, x2: 20, y2: 16 }],
+    ['line', { x1: 7, y1: 21, x2: 17, y2: 21 }],
+  ],
+  'alinear-derecha': [
+    ['line', { x1: 4, y1: 6, x2: 20, y2: 6 }],
+    ['line', { x1: 10, y1: 11, x2: 20, y2: 11 }],
+    ['line', { x1: 4, y1: 16, x2: 20, y2: 16 }],
+    ['line', { x1: 10, y1: 21, x2: 20, y2: 21 }],
+  ],
   camara: [
     ['rect', { x: 3, y: 7, width: 18, height: 13, rx: 2 }],
     ['path', { d: 'M8 7l2-3h4l2 3' }],

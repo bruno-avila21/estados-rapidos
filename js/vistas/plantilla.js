@@ -229,8 +229,10 @@ export async function render(contenedor, { navegar, params } = {}) {
   const tituloGaleria = document.createElement('span');
   tituloGaleria.className = 'grupo__titulo';
   tituloGaleria.textContent = 'Presets de diseño rápidos';
+  // Texto gris simple, SIN pill (editar_plantilla_natural) — antes era `.panel__badge` (pastilla
+  // con borde), que el mock no usa para este contador.
   const contadorGaleria = document.createElement('span');
-  contadorGaleria.className = 'panel__badge';
+  contadorGaleria.className = 'texto-tenue';
   contadorGaleria.textContent = `${PRESETS_COMPOSICION.length} disponibles`;
   cabeceraGaleria.append(tituloGaleria, contadorGaleria);
   const filaPresets = document.createElement('div');
@@ -569,7 +571,11 @@ export async function render(contenedor, { navegar, params } = {}) {
     pistaCapas.className = 'texto-tenue';
     pistaCapas.textContent = 'Tocar para alternar';
     cabeceraCapas.append(tituloCapas, pistaCapas);
-    capas.append(cabeceraCapas);
+    // Una sola tarjeta blanca con las filas separadas por líneas finas (editar_plantilla_natural) —
+    // antes cada fila era su propia cajita con borde propio.
+    const listaCapas = document.createElement('div');
+    listaCapas.className = 'editor-plantilla__lista-capas';
+    capas.append(cabeceraCapas, listaCapas);
 
     for (const clave of claves) {
       const caja = ajustes[clave];
@@ -595,8 +601,11 @@ export async function render(contenedor, { navegar, params } = {}) {
         overlay.append(div);
       }
 
-      // Capas: lista VERTICAL, una fila por capa (nombre a lo ancho + ojo a la derecha), ≥48px de
-      // alto, la seleccionada resaltada (ronda "capas verticales", CREAR-BRIEF.md 2026-09-28).
+      // Capas: lista VERTICAL, una fila por capa, la seleccionada resaltada (ronda "capas
+      // verticales"). Ronda "reskin plantilla": cada fila ahora es icono-en-cuadrito + nombre en
+      // negrita + subtexto de estado real ("Oculto en este estilo" / dónde se ve) + ojo sin caja a
+      // la derecha (editar_plantilla_natural) — antes era un botón de texto plano con "(oculto)"
+      // pegado al nombre.
       const filaCapa = document.createElement('div');
       filaCapa.className = 'editor-plantilla__fila-capa' + (seleccion === clave ? ' editor-plantilla__fila-capa--activa' : '');
 
@@ -604,7 +613,22 @@ export async function render(contenedor, { navegar, params } = {}) {
       btnCapa.type = 'button';
       btnCapa.className = 'editor-plantilla__fila-capa__nombre';
       btnCapa.setAttribute('data-accion', `capa-${clave}`);
-      btnCapa.textContent = etiquetaCaja(clave) + (oculto ? ' (oculto)' : '');
+
+      const iconoCapaTile = document.createElement('span');
+      iconoCapaTile.className = 'editor-plantilla__capa-icono' + (!oculto ? ' editor-plantilla__capa-icono--visible' : '');
+      iconoCapaTile.append(crearIcono(iconoCapa(clave)));
+
+      const textosCapa = document.createElement('span');
+      textosCapa.className = 'editor-plantilla__capa-textos';
+      const nombreCapaEl = document.createElement('span');
+      nombreCapaEl.className = 'editor-plantilla__capa-nombre' + (!oculto ? ' editor-plantilla__capa-nombre--visible' : '');
+      nombreCapaEl.textContent = etiquetaCaja(clave);
+      const estadoCapaEl = document.createElement('span');
+      estadoCapaEl.className = 'editor-plantilla__capa-estado' + (!oculto ? ' editor-plantilla__capa-estado--visible' : '');
+      estadoCapaEl.textContent = estadoCapa(clave, oculto);
+      textosCapa.append(nombreCapaEl, estadoCapaEl);
+
+      btnCapa.append(iconoCapaTile, textosCapa);
       btnCapa.addEventListener('click', () => seleccionar(clave));
 
       const btnOjo = document.createElement('button');
@@ -620,7 +644,7 @@ export async function render(contenedor, { navegar, params } = {}) {
       });
 
       filaCapa.append(btnCapa, btnOjo);
-      capas.append(filaCapa);
+      listaCapas.append(filaCapa);
     }
 
     if (conPanel) dibujarPanel();
@@ -637,6 +661,21 @@ export async function render(contenedor, { navegar, params } = {}) {
 
   function etiquetaCaja(clave) {
     return { foto: 'Foto', nombre: 'Nombre', precio: 'Precio', descripcion: 'Descripción' }[clave];
+  }
+
+  // Ícono del cuadradito de cada fila de Capas (editar_plantilla_natural: "T" para nombre, billete
+  // para precio, párrafo para descripción, cámara para la foto de fondo de "Mi plantilla").
+  function iconoCapa(clave) {
+    return { foto: 'camara', nombre: 'texto', precio: 'moneda', descripcion: 'parrafo' }[clave] ?? 'etiqueta';
+  }
+
+  // Subtexto de estado REAL de cada fila (no un genérico "Activo/Inactivo"): oculto dice que está
+  // oculto EN ESTE ESTILO (cada estilo tiene su propia visibilidad); visible dice dónde se ve.
+  function estadoCapa(clave, oculto) {
+    if (oculto) return 'Oculto en este estilo';
+    return { foto: 'Fondo de la plantilla', nombre: 'Visible sobre la foto', precio: 'Visible sobre la foto', descripcion: 'Visible en el pie' }[
+      clave
+    ];
   }
 
   function posicionarEnPx(div, caja) {
@@ -756,39 +795,78 @@ export async function render(contenedor, { navegar, params } = {}) {
     campoFuente.append(labelFuente, selectFuente);
     panel.append(campoFuente);
 
-    const filaPeso = document.createElement('div');
-    filaPeso.className = 'fila';
+    // Peso: segmentado (mismo componente que "Entera/Llenar la pantalla" de Ajustes), no botones
+    // sueltos — ronda "reskin plantilla".
+    const segPeso = document.createElement('div');
+    segPeso.className = 'segmentado';
+    segPeso.setAttribute('role', 'radiogroup');
+    segPeso.setAttribute('aria-label', 'Peso de la tipografía');
     for (const [etiqueta, valor] of [['Normal', 400], ['Negrita', 800]]) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'boton boton--chico' + (caja.peso === valor ? ' tarjeta-estilo--activa' : '');
+      btn.setAttribute('role', 'radio');
+      btn.className = 'segmentado__opcion' + (caja.peso === valor ? ' segmentado__opcion--activa' : '');
       btn.textContent = etiqueta;
       btn.setAttribute('data-accion', `editor-peso-${valor}`);
+      btn.setAttribute('aria-checked', String(caja.peso === valor));
       btn.addEventListener('click', () => actualizarCampo(seleccion, 'peso', valor, true));
-      filaPeso.append(btn);
+      segPeso.append(btn);
     }
-    panel.append(filaPeso);
+    panel.append(segPeso);
 
-    // "Alineación y Contraste" (editar_plantilla_natural): agrupa visualmente la alineación y los
-    // fondos rápidos de texto — mismos controles de siempre (alineación, centrar, color, fondos
-    // predefinidos con sus 5 presets reales, no los 2 del mock), solo con el rótulo del diseño.
+    panel.append(campoColor('Color del texto', caja.color, (v, conPanel) => actualizarCampo(seleccion, 'color', v, true, conPanel)));
+
+    // "Alineación y Contraste" (editar_plantilla_natural): tarjeta propia con 2 columnas —
+    // "Alineación texto" (segmentado de 3 íconos) + "Fondo del texto" (los 5 presets reales, como
+    // muestras de color — el mock solo tiene 2, pero acá no se recorta funcionalidad). "Centrar
+    // horizontal" (extra de esta app, no está en el mock) queda debajo, dentro de la misma tarjeta.
+    const tarjetaAlineacion = document.createElement('div');
+    tarjetaAlineacion.className = 'panel editor-plantilla__panel-alineacion';
     const tituloAlineacion = document.createElement('div');
     tituloAlineacion.className = 'grupo__titulo';
     tituloAlineacion.textContent = 'Alineación y contraste';
-    panel.append(tituloAlineacion);
+    tarjetaAlineacion.append(tituloAlineacion);
 
-    const filaAlineacion = document.createElement('div');
-    filaAlineacion.className = 'fila';
-    for (const [etiqueta, valor] of [['Izquierda', 'left'], ['Centro', 'center'], ['Derecha', 'right']]) {
+    const gridAlineacion = document.createElement('div');
+    gridAlineacion.className = 'editor-plantilla__grid-2';
+
+    const colAlineacion = document.createElement('div');
+    colAlineacion.className = 'campo';
+    const labelAlineacion = document.createElement('label');
+    labelAlineacion.className = 'campo__etiqueta';
+    labelAlineacion.textContent = 'Alineación texto';
+    const segAlineacion = document.createElement('div');
+    segAlineacion.className = 'segmentado segmentado--3';
+    segAlineacion.setAttribute('role', 'radiogroup');
+    segAlineacion.setAttribute('aria-label', 'Alineación del texto');
+    for (const [icono, valor] of [
+      ['alinear-izquierda', 'left'],
+      ['alinear-centro', 'center'],
+      ['alinear-derecha', 'right'],
+    ]) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'boton boton--chico' + (caja.alineacion === valor ? ' tarjeta-estilo--activa' : '');
-      btn.textContent = etiqueta;
+      btn.setAttribute('role', 'radio');
+      btn.className = 'segmentado__opcion' + (caja.alineacion === valor ? ' segmentado__opcion--activa' : '');
       btn.setAttribute('data-accion', `editor-alineacion-${valor}`);
+      btn.setAttribute('aria-checked', String(caja.alineacion === valor));
+      btn.setAttribute('aria-label', { left: 'Izquierda', center: 'Centro', right: 'Derecha' }[valor]);
+      btn.append(crearIcono(icono));
       btn.addEventListener('click', () => actualizarCampo(seleccion, 'alineacion', valor, true));
-      filaAlineacion.append(btn);
+      segAlineacion.append(btn);
     }
-    panel.append(filaAlineacion);
+    colAlineacion.append(labelAlineacion, segAlineacion);
+
+    const colFondo = campoPresetsFondo(caja, (presetId) => {
+      ajustes[seleccion] = aplicarPresetFondo(ajustes[seleccion], presetId);
+      dibujarOverlay();
+      solicitarRedibujo();
+      guardarEnHistorial(); // un preset = UN paso de deshacer (los 3 campos juntos)
+      mostrarToast(`Fondo: ${PRESETS_FONDO_TEXTO.find((p) => p.id === presetId)?.nombre ?? ''}`);
+    });
+
+    gridAlineacion.append(colAlineacion, colFondo);
+    tarjetaAlineacion.append(gridAlineacion);
 
     const btnCentrar = document.createElement('button');
     btnCentrar.type = 'button';
@@ -802,21 +880,11 @@ export async function render(contenedor, { navegar, params } = {}) {
       solicitarRedibujo();
       guardarEnHistorial();
     });
-    panel.append(btnCentrar);
+    tarjetaAlineacion.append(btnCentrar);
+    panel.append(tarjetaAlineacion);
 
-    panel.append(campoColor('Color del texto', caja.color, (v, conPanel) => actualizarCampo(seleccion, 'color', v, true, conPanel)));
-
-    const tituloFondo = document.createElement('div');
-    tituloFondo.className = 'grupo__titulo';
-    tituloFondo.textContent = 'Fondo / etiqueta';
-    panel.append(tituloFondo);
-    panel.append(campoPresetsFondo(caja, (presetId) => {
-      ajustes[seleccion] = aplicarPresetFondo(ajustes[seleccion], presetId);
-      dibujarOverlay();
-      solicitarRedibujo();
-      guardarEnHistorial(); // un preset = UN paso de deshacer (los 3 campos juntos)
-      mostrarToast(`Fondo: ${PRESETS_FONDO_TEXTO.find((p) => p.id === presetId)?.nombre ?? ''}`);
-    }));
+    // Ajuste fino del fondo (color libre/opacidad/redondeo) — no está en el mock, que solo ofrece
+    // los presets; queda debajo de la tarjeta como control avanzado, sin cortar funcionalidad.
     panel.append(campoColor('Color de fondo', caja.fondoColor, (v, conPanel) => actualizarCampo(seleccion, 'fondoColor', v, true, conPanel)));
     panel.append(
       campoRangoNumero('Opacidad del fondo', Math.round((caja.fondoOpacidad ?? 0) * 100), 0, 100, (v) =>
@@ -974,12 +1042,15 @@ export async function render(contenedor, { navegar, params } = {}) {
  * abajo. El preset que coincide con la caja actual queda resaltado (mismo criterio visual que
  * `tarjeta-estilo--activa`), incluida "Sin fondo" recién abierto el editor.
  */
+// Ronda "reskin plantilla": los 5 presets se muestran como MUESTRAS de color circulares, sin
+// texto adentro (editar_plantilla_natural, "Fondo del texto") — el nombre queda en `aria-label`/
+// `title` para accesibilidad, no visible en la tarjeta (que ahí es angosta, media columna).
 function campoPresetsFondo(caja, onAplicar) {
   const div = document.createElement('div');
   div.className = 'campo';
   const label = document.createElement('label');
   label.className = 'campo__etiqueta';
-  label.textContent = 'Fondos predefinidos';
+  label.textContent = 'Fondo del texto';
   const fila = document.createElement('div');
   fila.className = 'editor-plantilla__presets';
   for (const preset of PRESETS_FONDO_TEXTO) {
@@ -992,12 +1063,13 @@ function campoPresetsFondo(caja, onAplicar) {
     btn.className = 'editor-plantilla__preset' + (activo ? ' editor-plantilla__preset--activo' : '');
     btn.setAttribute('data-accion', `preset-fondo-${preset.id}`);
     btn.setAttribute('aria-pressed', String(activo));
+    btn.setAttribute('aria-label', preset.nombre);
+    btn.title = preset.nombre;
     const muestra = document.createElement('span');
     muestra.className = 'editor-plantilla__preset-muestra';
     muestra.style.background = preset.fondoColor;
     muestra.style.opacity = String(Math.max(0.12, preset.fondoOpacidad)); // visible aun en "Sin fondo"
-    muestra.style.borderRadius = `${Math.min(preset.fondoRadio, 12)}px`;
-    btn.append(muestra, document.createTextNode(preset.nombre));
+    btn.append(muestra);
     btn.addEventListener('click', () => onAplicar(preset.id));
     fila.append(btn);
   }

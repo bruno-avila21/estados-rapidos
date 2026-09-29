@@ -1657,13 +1657,25 @@ details.grupo > .campo {
 .grilla-estilos--galeria {
   display: flex;
   overflow-x: auto;
-  gap: 12px;
+  gap: 10px;
   padding-bottom: 4px;
   scroll-snap-type: x proximity;
 }
+/* editar_plantilla_natural: tarjetas de ~110px (3 enteras + la 4ª asomando a 412px), bastante más
+   chicas que las de la galería "Estilo de las imágenes" (grilla 2 columnas, otro contexto) — el
+   tamaño/tipografía solo se achica ACÁ, con selectores propios, para no tocar esa otra galería. */
 .grilla-estilos--galeria .tarjeta-estilo {
-  flex: 0 0 164px; /* un poco más ancha que las 148px de siempre: le hace lugar al subtítulo + pill */
+  flex: 0 0 112px;
+  padding: 8px;
+  gap: 6px;
   scroll-snap-align: start;
+}
+.grilla-estilos--galeria .tarjeta-estilo__etiqueta {
+  font-size: 0.75rem;
+  line-height: 1.15;
+}
+.grilla-estilos--galeria .tarjeta-estilo__subtitulo {
+  font-size: 0.6875rem;
 }
 
 /* ---------- Diálogo de confirmación (propio, no nativo) ---------- */
@@ -1925,65 +1937,116 @@ details.grupo > .campo {
   bottom: -10px;
   cursor: nwse-resize;
 }
-/* Capas: lista VERTICAL, una fila por capa (nombre a lo ancho + ojo a la derecha), ≥48px de alto,
-   la seleccionada resaltada (ronda "capas verticales", CREAR-BRIEF.md 2026-09-28: antes era una
-   grilla de chips que en pantallas angostas quedaba difícil de escanear). Tarjeta `.panel`-like
-   (editar_plantilla_natural, "Capas y Visibilidad"): antes esta lista quedaba suelta sobre el
-   fondo de la página, sin el marco/padding que muestra el diseño. */
+/* Capas: lista VERTICAL dentro de UNA sola tarjeta blanca con las filas separadas por líneas finas
+   (editar_plantilla_natural, "Capas y Visibilidad") — antes cada fila era su propia cajita con
+   borde y radio propios; ahora `.editor-plantilla__lista-capas` es la tarjeta (borde+radio+
+   overflow hidden) y cada `.editor-plantilla__fila-capa` es una fila lisa separada por
+   `border-bottom`, como el mock (`divide-y`). */
 .editor-plantilla__capas {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+}
+.editor-plantilla__lista-capas {
   background: var(--color-superficie-baja);
   border: 1px solid var(--borde-sutil);
   border-radius: var(--radio-grande);
-  padding: 14px;
+  overflow: hidden;
 }
 .editor-plantilla__fila-capa {
   display: flex;
   align-items: stretch;
-  min-height: 48px;
-  border: 1px solid var(--color-borde);
-  border-radius: var(--radio-chico);
-  background: var(--color-superficie);
-  overflow: hidden;
-  transition: border-color var(--duracion) var(--ease), background var(--duracion) var(--ease);
+  min-height: 64px;
+  border-bottom: 1px solid var(--borde-sutil);
+  background: transparent;
+  transition: background var(--duracion) var(--ease);
+}
+.editor-plantilla__lista-capas .editor-plantilla__fila-capa:last-child {
+  border-bottom: none;
 }
 .editor-plantilla__fila-capa--activa {
-  border-color: var(--color-primario);
   background: var(--color-primario-tinte);
 }
+/* Ícono-en-cuadrito + nombre en negrita + subtexto de estado (editar_plantilla_natural) — antes
+   era texto plano con "(oculto)" pegado al nombre. */
 .editor-plantilla__fila-capa__nombre {
   flex: 1;
-  min-height: 48px;
+  min-height: 64px;
   min-width: 0;
   display: flex;
   align-items: center;
-  padding: 0 14px;
+  gap: 12px;
+  padding: 10px 14px;
   background: transparent;
   border: none;
-  color: var(--color-texto);
-  font-family: var(--font-cuerpo);
-  font-size: var(--tamano-16);
-  font-weight: 600;
   text-align: left;
   cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .editor-plantilla__fila-capa__nombre:focus-visible {
   outline: 2px solid var(--color-acento);
   outline-offset: -2px;
 }
+.editor-plantilla__capa-icono {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie-alta);
+  color: var(--color-texto-tenue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.editor-plantilla__capa-icono .icono {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
+}
+.editor-plantilla__capa-icono--visible {
+  background: var(--color-primario-tinte-suave);
+  color: var(--color-primario);
+}
+.editor-plantilla__capa-textos {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+.editor-plantilla__capa-nombre {
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-16);
+  font-weight: 700;
+  color: var(--color-texto);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-plantilla__capa-nombre--visible {
+  color: var(--color-primario-oscuro);
+}
+.editor-plantilla__capa-estado {
+  font-size: 0.75rem;
+  color: var(--color-texto-tenue);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-plantilla__capa-estado--visible {
+  color: var(--color-primario);
+}
 .editor-plantilla__ojo {
   flex-shrink: 0;
-  min-width: 48px;
-  min-height: 48px;
-  border-radius: 0;
+  align-self: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin-right: 10px;
+  border-radius: var(--radio-chico);
   border: none;
-  border-left: 1px solid var(--color-borde);
   background: transparent;
+  color: var(--color-texto-tenue);
+}
+.editor-plantilla__ojo[aria-pressed='true'] {
+  color: var(--color-primario);
 }
 .editor-plantilla__panel {
   margin-top: 0;
@@ -2036,29 +2099,28 @@ details.grupo > .campo {
   border-color: var(--color-texto);
 }
 
-/* Presets de fondo/etiqueta (Fase 2, "S" #3): fila de botones con muestra de color + nombre,
-   ≥48px de alto (regla de UI 6), que envuelve en 412px en vez de desbordar (mismo `.fila` que el
-   resto del panel). */
+/* Presets de fondo/etiqueta (Fase 2, "S" #3): ronda "reskin plantilla" los pasa de pildoras con
+   nombre a MUESTRAS circulares de color, sin texto adentro (editar_plantilla_natural, "Fondo del
+   texto" — el nombre queda en `title`/`aria-label`) — la columna donde viven ahora (mitad de
+   "Alineación y Contraste") es angosta y 5 pildoras con texto no entraban. */
 .editor-plantilla__presets {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 .editor-plantilla__preset {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: var(--toque-min);
-  padding: 0 12px;
-  border-radius: var(--radio-chico);
-  border: 1px solid var(--color-borde);
+  position: relative;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--color-borde);
   background: var(--color-superficie);
-  color: var(--color-texto);
-  font-family: var(--font-cuerpo);
-  font-size: var(--tamano-14);
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: border-color var(--duracion) var(--ease), background var(--duracion) var(--ease);
+  transition: border-color var(--duracion) var(--ease), box-shadow var(--duracion) var(--ease);
 }
 .editor-plantilla__preset:hover {
   border-color: var(--color-acento);
@@ -2069,13 +2131,14 @@ details.grupo > .campo {
 }
 .editor-plantilla__preset--activo {
   border-color: var(--color-primario);
-  background: var(--color-primario-tinte);
+  box-shadow: 0 0 0 2px var(--color-primario-tinte);
 }
 .editor-plantilla__preset-muestra {
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   flex-shrink: 0;
-  border: 1px solid var(--color-borde);
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 /* ---------- Ajustes: "La app" (instalar/compartir/QR) ---------- */
@@ -2105,6 +2168,11 @@ details.grupo > .campo {
 .deslizador input[type='range'] {
   flex: 1;
   min-height: var(--toque-min);
+  /* `accent-color` alcanza en Chromium/WebView (destino real de esta app) para pintar track+thumb
+     con la identidad propia en vez del azul de sistema — sin esto "Tamaño de letra"/"Opacidad del
+     fondo"/"Redondeo del fondo" quedaban con el control de formulario por defecto del navegador,
+     el único rincón de la pantalla que no usaba los tokens (editar_plantilla_natural, ronda 2). */
+  accent-color: var(--color-primario);
 }
 .deslizador__valor {
   font-family: var(--font-datos);
@@ -3809,6 +3877,27 @@ details[open] > .grupo__titulo--seccion::after {
   border-color: var(--borde-medio);
   color: var(--color-primario-oscuro);
   box-shadow: 0 1px 2px rgba(58, 48, 40, 0.06);
+}
+/* Variante de 3 opciones (Alineación de texto del editor de plantilla, íconos sin texto) — mismo
+   componente que el segmentado de 2 de Ajustes/Encuadre, solo cambia la cantidad de columnas.
+   Tiene que ir DESPUÉS de `.segmentado` en el archivo: misma especificidad, y `grid-template-
+   columns` necesita ganarle al `repeat(2, ...)` de la regla base. */
+.segmentado--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.segmentado--3 .segmentado__opcion {
+  padding: 8px;
+}
+
+/* Grilla de 2 columnas iguales para agrupar 2 controles cortos lado a lado (editar_plantilla_natural,
+   tarjeta "Alineación y Contraste": "Alineación texto" + "Fondo del texto"). */
+.editor-plantilla__grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.editor-plantilla__panel-alineacion .grupo__titulo {
+  margin-bottom: 12px;
 }
 
 /* ---------- Texto que acompaña: chips de variable dinámica ({nombre}/{precio}/{descripcion}),

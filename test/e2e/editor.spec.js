@@ -283,9 +283,9 @@ test('Deshacer sigue existiendo y funcionando aunque ya no sea sticky al bajar p
 // --- Ocultar/mostrar capas (ronda "ocultar/mostrar a un toque") ---
 
 // Ronda "reskin plantilla": editar_plantilla_natural NO dibuja un placeholder punteado para los
-// elementos ocultos — directamente no aparecen en el lienzo (solo en la lista de Capas, con
-// "(oculto)" al lado del nombre, para reactivarlos desde ahí).
-test('el ojo de una capa la oculta: desaparece del lienzo, queda "(oculto)" en Capas y se puede volver a mostrar', async ({
+// elementos ocultos — directamente no aparecen en el lienzo (solo en la lista de Capas, con el
+// subtexto "Oculto en este estilo" en vez del nombre, para reactivarlos desde ahí).
+test('el ojo de una capa la oculta: desaparece del lienzo, queda "Oculto en este estilo" en Capas y se puede volver a mostrar', async ({
   page,
 }) => {
   await page.goto('/');
@@ -302,7 +302,7 @@ test('el ojo de una capa la oculta: desaparece del lienzo, queda "(oculto)" en C
   // ya no hay caja para "nombre" en el lienzo: ni punteada ni de ningún tipo.
   await expect(page.locator('[data-elemento="nombre"]')).toHaveCount(0);
   const filaNombre = page.locator('.editor-plantilla__fila-capa', { has: page.locator('[data-accion="capa-nombre"]') });
-  await expect(filaNombre).toContainText('(oculto)');
+  await expect(filaNombre).toContainText('Oculto en este estilo');
   await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla?.ajustes?.nombre?.visible)).toBe(false);
 
   // se puede seguir seleccionando DESDE CAPAS (ya no hay caja en el lienzo para tocar) y el panel

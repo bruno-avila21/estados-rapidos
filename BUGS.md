@@ -3,6 +3,22 @@
 Registro de fallos encontrados durante la construcción, con causa y arreglo (regla de cierre.md /
 seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos resueltos.
 
+### 52. Reskin Plantilla, ronda 3 (Capas con formato del mock): `editor.spec.js` "el ojo de una capa la oculta" esperaba el texto viejo "(oculto)"
+- **Paso:** `npx playwright test test/e2e/editor.spec.js test/e2e/tactil.spec.js test/e2e/responsive.spec.js test/e2e/ajustes.spec.js test/e2e/presets.spec.js` tras rediseñar las filas de "Capas y visibilidad" (ícono en cuadrito + nombre en negrita + subtexto de estado real, editar_plantilla_natural).
+- **Error exacto:**
+  ```
+  Error: expect(locator).toContainText(expected) failed
+  Expected substring: "(oculto)"
+  Received string:    "NombreOculto en este estilo"
+  ```
+- **Reproducir:** `npx playwright test test/e2e/editor.spec.js -g "el ojo de una capa"`.
+- **Causa:** del TEST, no de la app — la fila de Capas cambió su subtexto de `"Nombre (oculto)"` a
+  `"Oculto en este estilo"` (mismo cambio de copy pedido por Bruno para acercar la fila al mock), y
+  el test seguía buscando la cadena vieja `(oculto)`.
+- **Arreglo:** `test/e2e/editor.spec.js` — el `toContainText` pasa a buscar `'Oculto en este estilo'`.
+- **Resuelto:** sí — confirmado, `npx playwright test test/e2e/editor.spec.js` → 21/21.
+- ¿Se repetiría en otro proyecto? Sí — cualquier test que ancle un `toContainText` a un copy literal se rompe apenas ese copy cambia a propósito; conviene anclarlo a un estado (clase/atributo) cuando el texto es probable que cambie por diseño.
+
 ### 50. `sw.spec.js` fallaba de forma consistente (recurrencia de #10/#39/#45/#46/#47), diagnosticado y arreglado — no era ajeno al código
 - **Paso:** Fase final del reskin. `npx playwright test -c test/e2e/playwright.config.js test/e2e/sw.spec.js` — fallaba 3/3 (intento + 2 retries) de forma determinística en esta máquina, aislado y dentro de la suite completa.
 - **Error exacto:**
