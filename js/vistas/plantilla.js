@@ -173,11 +173,23 @@ export async function render(contenedor, { navegar, params } = {}) {
   labelEstilo.className = 'campo__etiqueta';
   labelEstilo.htmlFor = 'editor-vista-previa-estilo';
   labelEstilo.textContent = 'Estilo que estás editando';
+  // "Modo activo" (editar_plantilla_natural): rótulo tenue siempre presente junto al selector —
+  // separado de `badgePersonalizado` ("Personalizado"), que solo aparece si ESTE estilo ya se
+  // tocó (esAjustePersonalizado). Los dos van agrupados a la derecha (no repartidos por
+  // `justify-content: space-between`, que los separaría cuando el badge se muestra).
+  const grupoEstadoEstilo = document.createElement('span');
+  grupoEstadoEstilo.className = 'fila';
+  grupoEstadoEstilo.style.gap = '8px';
+  grupoEstadoEstilo.style.alignItems = 'center';
+  const etiquetaModoActivo = document.createElement('span');
+  etiquetaModoActivo.className = 'texto-tenue';
+  etiquetaModoActivo.textContent = 'Modo activo';
   const badgePersonalizado = document.createElement('span');
   badgePersonalizado.className = 'editor-plantilla__badge';
   badgePersonalizado.textContent = 'Personalizado';
   badgePersonalizado.hidden = true;
-  filaLabelEstilo.append(labelEstilo, badgePersonalizado);
+  grupoEstadoEstilo.append(etiquetaModoActivo, badgePersonalizado);
+  filaLabelEstilo.append(labelEstilo, grupoEstadoEstilo);
   const selectEstilo = document.createElement('select');
   selectEstilo.id = 'editor-vista-previa-estilo';
   selectEstilo.setAttribute('data-accion', 'editor-estilo-preview');
@@ -202,9 +214,15 @@ export async function render(contenedor, { navegar, params } = {}) {
   // sin tener que ir a buscarlo a Ajustes.
   const galeriaPresets = document.createElement('div');
   galeriaPresets.className = 'panel';
-  const tituloGaleria = document.createElement('div');
+  const cabeceraGaleria = document.createElement('div');
+  cabeceraGaleria.className = 'panel__cabecera';
+  const tituloGaleria = document.createElement('span');
   tituloGaleria.className = 'grupo__titulo';
   tituloGaleria.textContent = 'Presets de composición';
+  const contadorGaleria = document.createElement('span');
+  contadorGaleria.className = 'panel__badge';
+  contadorGaleria.textContent = `${PRESETS_COMPOSICION.length} disponibles`;
+  cabeceraGaleria.append(tituloGaleria, contadorGaleria);
   const filaPresets = document.createElement('div');
   filaPresets.className = 'grilla-estilos grilla-estilos--galeria';
   const tarjetasPresets = {};
@@ -245,7 +263,7 @@ export async function render(contenedor, { navegar, params } = {}) {
     tarjetasPresets[valor] = tarjeta;
     filaPresets.append(tarjeta.raiz);
   }
-  galeriaPresets.append(tituloGaleria, filaPresets, filaDeshacerPreset);
+  galeriaPresets.append(cabeceraGaleria, filaPresets, filaDeshacerPreset);
 
   // --- Subida de fondo propio (solo relevante para "Mi plantilla") ---
   const grupoSubida = document.createElement('div');
@@ -273,6 +291,19 @@ export async function render(contenedor, { navegar, params } = {}) {
   });
   grupoSubida.append(btnSubir, inputPlantilla);
   if (estiloEditando !== 'mi-plantilla') grupoSubida.hidden = true;
+
+  // --- Cabecera de la vista previa (editar_plantilla_natural: "Previsualización de Estado
+  // (9:16)" + "Guías interactivas") — una sola fila chica, sin padding propio, para no sumar alto
+  // de más antes del lienzo (ver nota grande más abajo sobre `galeriaPresets`/BUGS.md #48/#50). ---
+  const cabeceraPrevia = document.createElement('div');
+  cabeceraPrevia.className = 'panel__cabecera editor-plantilla__cabecera-previa';
+  const tituloPrevia = document.createElement('span');
+  tituloPrevia.className = 'grupo__titulo';
+  tituloPrevia.textContent = 'Previsualización de estado (9:16)';
+  const pistaPrevia = document.createElement('span');
+  pistaPrevia.className = 'texto-tenue';
+  pistaPrevia.textContent = 'Guías interactivas';
+  cabeceraPrevia.append(tituloPrevia, pistaPrevia);
 
   // --- Vista previa (canvas en vivo) + overlay interactivo ---
   const previaContenedor = document.createElement('div');
@@ -315,24 +346,37 @@ export async function render(contenedor, { navegar, params } = {}) {
   btnAcomodar.type = 'button';
   btnAcomodar.className = 'boton boton--chico';
   btnAcomodar.setAttribute('data-accion', 'acomodar-automatico');
-  btnAcomodar.textContent = 'Acomodar';
+  btnAcomodar.append(crearIcono('acomodar'), document.createTextNode('Acomodar'));
   const btnRestablecer = document.createElement('button');
   btnRestablecer.type = 'button';
   btnRestablecer.className = 'boton boton--chico boton--fantasma';
   btnRestablecer.setAttribute('data-accion', 'restablecer-plantilla');
-  btnRestablecer.textContent = 'Restablecer';
+  btnRestablecer.append(crearIcono('restablecer'), document.createTextNode('Restablecer'));
   filaHistorial.append(btnDeshacer, btnRehacer, btnAcomodar, btnRestablecer);
 
-  // OJO (ronda "reskin plantilla", CREAR-BRIEF.md 2026-09-29): esta pantalla es MUY sensible a
-  // cuánto ocupa todo lo que va ANTES de `previaContenedor` — "foto con precio" (y otros estilos)
-  // arrancan con el nombre/precio pegados abajo del lienzo por default, y cualquier alto de más acá
-  // arriba los empuja detrás de la nav inferior fija, rompiendo el arrastre con mouse/dedo (BUGS.md,
-  // ya documentado para `galeriaPresets`/`panelEstiloGeneral`, que por eso van al final). Probado:
-  // envolver `selectorEstilo`/`grupoSubida`/`filaHistorial` en una tarjeta `.panel` (como el
-  // diseño) agrega el padding/margen suficiente para reproducir exactamente ese bug — se mantienen
-  // sueltos, sin envoltorio extra, hasta poder resolverlo con margen para el reskin visual completo.
-  // `galeriaPresets` y `panelEstiloGeneral` van AL FINAL por el mismo motivo.
-  wrap.append(btnVolver, selectorEstilo, grupoSubida, filaHistorial, previaContenedor, capas, panel, galeriaPresets, panelEstiloGeneral);
+  // OJO (ronda "reskin plantilla", CREAR-BRIEF.md 2026-09-29; BUGS.md #48/#50): esta pantalla es
+  // MUY sensible a cuánto ocupa todo lo que va ANTES de `previaContenedor` — "foto con precio" (y
+  // otros estilos) arrancan con el nombre/precio pegados abajo del lienzo por default, y cualquier
+  // alto de más acá arriba los empuja detrás de la nav inferior fija, rompiendo el arrastre con
+  // mouse/dedo. Ya se probó (BUGS #50) envolver `selectorEstilo`/`grupoSubida`/`filaHistorial` en
+  // una tarjeta `.panel` como el mock — el padding/margen de esa tarjeta reproduce el bug tal
+  // cual — así que siguen SUELTOS, sin envoltorio extra. `filaHistorial` pasó de grilla 2×2 a una
+  // sola fila de 4 (icono arriba, etiqueta abajo, como editar_plantilla_natural): ocupa MENOS alto
+  // que antes, no más, así que abre margen en vez de gastarlo. `cabeceraPrevia` (el único agregado
+  // antes del lienzo) es una fila de texto suelta sin padding propio — mínimo alto posible.
+  // `galeriaPresets` y `panelEstiloGeneral` van AL FINAL por el mismo motivo que siempre.
+  wrap.append(
+    btnVolver,
+    selectorEstilo,
+    grupoSubida,
+    filaHistorial,
+    cabeceraPrevia,
+    previaContenedor,
+    capas,
+    panel,
+    galeriaPresets,
+    panelEstiloGeneral
+  );
   contenedor.append(wrap);
 
   actualizarBotonesHistorial();
@@ -472,10 +516,16 @@ export async function render(contenedor, { navegar, params } = {}) {
     const claves = clavesVisiblesParaEstilo();
 
     capas.textContent = '';
-    const tituloCapas = document.createElement('div');
+    const cabeceraCapas = document.createElement('div');
+    cabeceraCapas.className = 'panel__cabecera';
+    const tituloCapas = document.createElement('span');
     tituloCapas.className = 'grupo__titulo';
-    tituloCapas.textContent = 'Capas';
-    capas.append(tituloCapas);
+    tituloCapas.textContent = 'Capas y visibilidad';
+    const pistaCapas = document.createElement('span');
+    pistaCapas.className = 'texto-tenue';
+    pistaCapas.textContent = 'Tocar para alternar';
+    cabeceraCapas.append(tituloCapas, pistaCapas);
+    capas.append(cabeceraCapas);
 
     for (const clave of claves) {
       const caja = ajustes[clave];
@@ -671,6 +721,14 @@ export async function render(contenedor, { navegar, params } = {}) {
       filaPeso.append(btn);
     }
     panel.append(filaPeso);
+
+    // "Alineación y Contraste" (editar_plantilla_natural): agrupa visualmente la alineación y los
+    // fondos rápidos de texto — mismos controles de siempre (alineación, centrar, color, fondos
+    // predefinidos con sus 5 presets reales, no los 2 del mock), solo con el rótulo del diseño.
+    const tituloAlineacion = document.createElement('div');
+    tituloAlineacion.className = 'grupo__titulo';
+    tituloAlineacion.textContent = 'Alineación y contraste';
+    panel.append(tituloAlineacion);
 
     const filaAlineacion = document.createElement('div');
     filaAlineacion.className = 'fila';

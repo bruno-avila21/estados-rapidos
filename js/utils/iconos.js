@@ -117,6 +117,20 @@ const TRAZOS = Object.freeze({
     ['polyline', { points: '15,7 20,12 15,17' }],
     ['path', { d: 'M20 12H9a5 5 0 0 0 0 10h1' }],
   ],
+  // "Acomodar" (editar_plantilla_natural, ícono "center_focus_strong"): 4 escuadras de esquina +
+  // punto central — mismo lenguaje visual que un foco de cámara centrando el encuadre.
+  acomodar: [
+    ['path', { d: 'M4 9V6a2 2 0 0 1 2-2h3' }],
+    ['path', { d: 'M20 9V6a2 2 0 0 0-2-2h-3' }],
+    ['path', { d: 'M4 15v3a2 2 0 0 0 2 2h3' }],
+    ['path', { d: 'M20 15v3a2 2 0 0 1-2 2h-3' }],
+    ['circle', { cx: 12, cy: 12, r: 2.5 }],
+  ],
+  // "Restablecer" (ícono "restart_alt"): flecha circular con un corte, como un botón de reinicio.
+  restablecer: [
+    ['path', { d: 'M4 12a8 8 0 1 1 3 6.24' }],
+    ['polyline', { points: '4,17 4,12 9,12' }],
+  ],
   ojo: [
     ['path', { d: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z' }],
     ['circle', { cx: 12, cy: 12, r: 3 }],

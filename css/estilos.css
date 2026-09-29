@@ -1808,6 +1808,14 @@ details.grupo > .campo {
   overflow: hidden;
 }
 
+/* Cabecera de la vista previa ("Previsualización de estado (9:16)" / "Guías interactivas"):
+   MISMA fila `.panel__cabecera` que usan las demás pantallas, con menos margen inferior — es la
+   única cosa nueva que este reskin agrega ANTES del lienzo, así que se mantiene lo más chica
+   posible a propósito (ver la nota grande en plantilla.js sobre el presupuesto de alto). */
+.editor-plantilla__cabecera-previa {
+  margin-bottom: 6px;
+}
+
 /* ---------- Editor de plantilla: inspector visual (seleccionar/arrastrar/redimensionar) ---------- */
 .editor-plantilla__lienzo {
   overflow: visible; /* las manijas de resize no se recortan en los bordes */
@@ -2125,30 +2133,41 @@ details.grupo > .campo {
 }
 
 /* Deshacer / Rehacer / Acomodar / Restablecer: pegados arriba del lienzo mientras se scrollea el
-   editor. Grilla 2×2 (no una fila de 4) para que entre siempre en 360-412px de ancho (celular real)
-   sin scroll horizontal — con `display:flex` los 4 botones de texto largo se salían a la derecha
-   ("Restablecer" quedaba cortado, BUGS.md ronda "editor en el celular"). */
+   editor. `editar_plantilla_natural` los pone en UNA fila de 4 (ícono arriba, etiqueta chica
+   abajo) — ronda "reskin plantilla": ese layout mide MENOS alto que la grilla 2×2 anterior (la
+   2×2 nació de un problema distinto, texto largo desbordando en `display:flex`, BUGS.md "editor en
+   el celular"; acá el texto es chico y centrado, entra sin desbordar en 360-412px). Menos alto acá
+   es justo lo que este editor necesita (BUGS.md #48/#50: cualquier alto de más ANTES del lienzo
+   empuja los elementos por default pegados al borde inferior detrás de la nav fija). */
 .editor-plantilla__barra {
   position: sticky;
   top: 0;
   z-index: 5;
-  padding-block: 8px;
+  padding-block: 6px;
   background: var(--color-superficie-baja);
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
 }
-/* Mismo tamaño de siempre (fila, no columna: ver nota arriba de dónde se arman estos botones en
-   plantilla.js sobre por qué no se puede agrandar esta barra) — solo el color de fondo pasa a
-   blanco puro (editar_plantilla_natural: tarjetas `bg-surface`), antes tomaba el gris de `.boton`. */
 .editor-plantilla__barra .boton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: var(--toque-min);
   width: 100%;
-  padding-inline: 6px;
+  padding: 6px 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.6875rem;
+  line-height: 1.1;
   background: var(--color-superficie-blanca);
   border: 1px solid var(--borde-sutil);
+}
+.editor-plantilla__barra .boton .icono {
+  margin-right: 0;
 }
 
 /* "Subir mi fondo" (editar_plantilla_natural): botón ancho de borde punteado con ícono — antes era

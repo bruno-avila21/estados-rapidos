@@ -162,6 +162,37 @@ const ESCENAS = {
       await page.waitForTimeout(150);
     },
   },
+  // editar_plantilla_natural: el mock muestra "Foto con descripción" seleccionado (descripción
+  // visible, nombre/precio ocultos) con la foto de taza+vela del propio code.html (bajada a
+  // fotos/plantilla-1-taza-vela.jpg) y el mismo texto de descripción.
+  editar_plantilla_natural: {
+    titulo: 'Editor de plantilla',
+    async preparar(page) {
+      const fotoBase64 = fs.readFileSync(path.join(FOTOS_DIR, 'plantilla-1-taza-vela.jpg')).toString('base64');
+      await page.goto('/');
+      await page.evaluate(async (fotoBase64) => {
+        const repo = await import('/js/repositorio.js');
+        const aBytes = (b64) => {
+          const binario = atob(b64);
+          const bytes = new Uint8Array(binario.length);
+          for (let i = 0; i < binario.length; i += 1) bytes[i] = binario.charCodeAt(i);
+          return bytes;
+        };
+        const archivo = new File([aBytes(fotoBase64)], 'taza-vela.jpg', { type: 'image/jpeg' });
+        await repo.guardarProducto(
+          {
+            nombre: 'Taza de Gres Calma',
+            precio: null,
+            descripcion: 'Taza de gres artesanal con esmalte salvia mate y asa ergonómica.',
+          },
+          archivo
+        );
+      }, fotoBase64);
+      await page.goto('/#/plantilla?estilo=foto-descripcion');
+      await page.waitForSelector('[data-elemento="descripcion"]', { state: 'visible', timeout: 10_000 });
+      await page.waitForTimeout(250); // canvas (raf) + miniaturas en vivo de las 2 galerías
+    },
+  },
   respaldo_natural: {
     titulo: 'Respaldo',
     async preparar(page) {
