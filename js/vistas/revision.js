@@ -37,6 +37,7 @@ import { componerSegunEstilo, componerMiniatura } from '../componer.js';
 import {
   resolverEstilo,
   resolverDescripcion,
+  resolverSeccionNombre,
   formatearPrecio,
   ESTILOS_IMAGEN,
   ETIQUETA_ESTILO,
@@ -106,6 +107,7 @@ export async function abrirHojaRevision({ ids }) {
 
   const general = await repo.obtenerAjustesGenerales();
   const plantillaConfig = await repo.obtenerPlantillaConfig();
+  const secciones = await repo.listarSecciones();
   let estiloSesion = null; // si se elige acá, se usa para TODAS las imágenes de esta hoja
   // Calidad de exportación (Fase 2, "S" #5): arranca en la última elegida (ajustes generales) y se
   // recuerda apenas se cambia acá, igual que "Incluir texto".
@@ -139,7 +141,7 @@ export async function abrirHojaRevision({ ids }) {
     return bitmapPlantillaPromesa;
   }
 
-  async function datosParaProducto(producto) {
+  async function datosParaProducto(producto, indice = 0) {
     const estilo = estiloSesion || resolverEstilo(producto, general);
     const [fotoImagen, plantillaImagen] = await Promise.all([
       bitmapDeFoto(producto),
@@ -155,6 +157,11 @@ export async function abrirHojaRevision({ ids }) {
       formatoPrecio: plantillaConfig.formatoPrecio,
       descripcion,
       encuadreFoto: general.encuadreFoto,
+      general,
+      // Los 4 presets de composición: sección REAL del producto (primera, si tiene) y su posición
+      // en ESTA tanda ("N° 0X" del preset Editorial) — nunca inventadas.
+      seccionNombre: resolverSeccionNombre(producto, secciones),
+      posicion: { n: indice + 1, m: productos.length },
     };
   }
 
@@ -731,7 +738,7 @@ export async function abrirHojaRevision({ ids }) {
     sincronizarDomConProductos();
     progreso.textContent = `Armando ${productos.length === 1 ? 'la vista previa' : `${productos.length} vistas previas`}…`;
     await enParaleloAcotado(productos, CONCURRENCIA_EXPORTACION, async (producto, i) => {
-      const datos = await datosParaProducto(producto);
+      const datos = await datosParaProducto(producto, i);
       const blob = await componerMiniatura(datos);
       if (miGeneracion !== generacion) return; // el usuario cambió el estilo antes de terminar
       const url = URL.createObjectURL(blob);
@@ -747,8 +754,8 @@ export async function abrirHojaRevision({ ids }) {
    * Map se indexa por id de producto, no por posición. */
   async function generarFinales(miGeneracion) {
     const opcionesExportacion = resolverOpcionesExportacion(calidadImagen);
-    const resultado = await enParaleloAcotado(productos, CONCURRENCIA_EXPORTACION, async (producto) => {
-      const datos = await datosParaProducto(producto);
+    const resultado = await enParaleloAcotado(productos, CONCURRENCIA_EXPORTACION, async (producto, i) => {
+      const datos = await datosParaProducto(producto, i);
       const blob = await componerSegunEstilo(datos, opcionesExportacion);
       return { producto, blob };
     });

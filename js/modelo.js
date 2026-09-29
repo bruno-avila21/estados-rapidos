@@ -142,23 +142,31 @@ const GEO_EDITORIAL = geometriaEditorial({ conPrecio: true, conDescripcion: true
 const GEO_POLAROID = geometriaPolaroid({ conPrecio: true, conDescripcion: true });
 const GEO_STORY_INMERSIVA = geometriaStoryInmersiva({ conPrecio: true, conDescripcion: true });
 
+// Tipografía de fábrica de los 4 presets (ronda 2026-09-29, "presets calzan con los mocks"): serif
+// Newsreader para nombre/precio (títulos, igual que los 4 mocks Stitch) + sans Manrope para
+// descripción/etiquetas — NO son elegibles en el editor de plantilla (no están en
+// `FUENTES_DISPONIBLES`: son fijas por diseño, cada preset con la suya, igual que la franja/marco/
+// tarjeta/scrim que tampoco es editable). Antes de esta ronda usaban Montserrat/Playfair a un
+// tamaño mucho más chico (~la mitad) que el de los mocks — el bug que esta ronda corrige.
 function ajustesBannerInferior() {
   return {
     foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
-    nombre: cajaPreset(GEO_BANNER_INFERIOR.nombre, { tamano: 54, alineacion: 'left', familia: 'montserrat', color: '#fbf9f5' }),
+    nombre: cajaPreset(GEO_BANNER_INFERIOR.nombre, { tamano: 68, alineacion: 'left', familia: 'newsreader', peso: 500, color: '#fdf8f5' }),
     precio: cajaPreset(GEO_BANNER_INFERIOR.precio, {
-      tamano: 46,
-      peso: 800,
+      tamano: 58,
+      peso: 700,
       alineacion: 'right',
-      familia: 'montserrat',
-      color: '#f3efea',
+      familia: 'manrope',
+      color: '#f9dec7',
       maxLineas: 1,
     }),
     descripcion: cajaPreset(GEO_BANNER_INFERIOR.descripcion, {
       tamano: 32,
       peso: 400,
       alineacion: 'left',
-      color: '#f3efeacc',
+      familia: 'manrope',
+      color: 'rgba(253,248,245,0.85)',
+      maxLineas: 2,
     }),
   };
 }
@@ -166,23 +174,31 @@ function ajustesBannerInferior() {
 function ajustesEditorial() {
   return {
     foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
-    nombre: cajaPreset(GEO_EDITORIAL.nombre, { tamano: 56, alineacion: 'left', familia: 'playfair', color: '#242220' }),
-    precio: cajaPreset(GEO_EDITORIAL.precio, { tamano: 32, alineacion: 'left', color: '#3a4d39', maxLineas: 1 }),
-    descripcion: cajaPreset(GEO_EDITORIAL.descripcion, { tamano: 28, peso: 400, alineacion: 'left', color: '#5c584f' }),
+    nombre: cajaPreset(GEO_EDITORIAL.nombre, { tamano: 76, alineacion: 'left', familia: 'newsreader', peso: 500, color: '#1c1b1a', maxLineas: 2 }),
+    precio: cajaPreset(GEO_EDITORIAL.precio, { tamano: 30, alineacion: 'left', familia: 'manrope', peso: 600, color: '#3a4d39', maxLineas: 1 }),
+    descripcion: cajaPreset(GEO_EDITORIAL.descripcion, {
+      tamano: 28,
+      peso: 400,
+      alineacion: 'left',
+      familia: 'manrope',
+      color: '#5c584f',
+      maxLineas: 3,
+    }),
   };
 }
 
 function ajustesPolaroid() {
   return {
     foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
-    nombre: cajaPreset(GEO_POLAROID.nombre, { tamano: 46, alineacion: 'center', familia: 'playfair', color: '#242220' }),
-    precio: cajaPreset(GEO_POLAROID.precio, { tamano: 36, alineacion: 'center', color: '#3a4d39', maxLineas: 1 }),
+    nombre: cajaPreset(GEO_POLAROID.nombre, { tamano: 84, alineacion: 'center', familia: 'newsreader', peso: 500, color: '#242220', maxLineas: 2 }),
+    precio: cajaPreset(GEO_POLAROID.precio, { tamano: 78, alineacion: 'center', familia: 'newsreader', peso: 700, color: '#3a4d39', maxLineas: 1 }),
     descripcion: cajaPreset(GEO_POLAROID.descripcion, {
-      tamano: 28,
+      tamano: 30,
       peso: 400,
       alineacion: 'center',
+      familia: 'newsreader-italica',
       color: '#6e5b49',
-      maxLineas: 1,
+      maxLineas: 2,
     }),
   };
 }
@@ -190,17 +206,26 @@ function ajustesPolaroid() {
 function ajustesStoryInmersiva() {
   return {
     foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
-    nombre: cajaPreset(GEO_STORY_INMERSIVA.nombre, { tamano: 62, alineacion: 'left', familia: 'playfair', color: '#ffffff' }),
+    nombre: cajaPreset(GEO_STORY_INMERSIVA.nombre, { tamano: 88, alineacion: 'left', familia: 'newsreader', peso: 400, color: '#ffffff', maxLineas: 2 }),
     precio: cajaPreset(GEO_STORY_INMERSIVA.precio, {
-      tamano: 38,
+      tamano: 30,
       alineacion: 'center',
+      familia: 'manrope',
+      peso: 700,
       color: '#ffffff',
       fondoColor: '#ffffff',
-      fondoOpacidad: 0.22,
+      fondoOpacidad: 0.2,
       fondoRadio: 40,
       maxLineas: 1,
     }),
-    descripcion: cajaPreset(GEO_STORY_INMERSIVA.descripcion, { tamano: 30, peso: 400, alineacion: 'left', color: '#ffffffe6' }),
+    descripcion: cajaPreset(GEO_STORY_INMERSIVA.descripcion, {
+      tamano: 26,
+      peso: 400,
+      alineacion: 'left',
+      familia: 'manrope',
+      color: 'rgba(255,255,255,0.88)',
+      maxLineas: 1,
+    }),
   };
 }
 
@@ -362,6 +387,23 @@ export const ETIQUETA_ESTILO = Object.freeze({
 // sentido mostrar ahí como "composiciones prediseñadas" en vez de mezclarlos con foto-precio/
 // foto-descripcion/mi-plantilla, que son configuraciones más libres, no una composición fija.
 export const PRESETS_COMPOSICION = Object.freeze(['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva']);
+
+// --- Datos de marca de los 4 presets (ronda 2026-09-29): "Nombre del negocio" (vacío = no se
+// dibuja) y "Texto del botón/llamado" de "Banner inferior", editables en Ajustes generales (pantalla
+// Plantilla). Son ajustes GENERALES (uno solo para toda la app), no por estilo: los 4 mocks los usan
+// fijos para todos los presets, no tiene sentido pedirlos 4 veces. ---
+export const NOMBRE_NEGOCIO_POR_DEFECTO = '';
+export const TEXTO_BOTON_POR_DEFECTO = 'Pedir por privado';
+
+/** Nombre de la PRIMERA sección del producto (la que sirve de "etiqueta/colección" en los 4
+ * presets), o `''` si no tiene ninguna o la/s que tiene ya no existen. Pura: recibe la colección de
+ * secciones ya cargada (id→nombre), no toca IndexedDB. */
+export function resolverSeccionNombre(producto, secciones) {
+  const ids = seccionesDelProducto(producto);
+  if (!ids.length) return '';
+  const porId = new Map((secciones ?? []).map((s) => [s.id, s.nombre]));
+  return porId.get(ids[0]) ?? '';
+}
 
 export const DESCRIPCION_MODELO_POR_DEFECTO = '{nombre} a {precio} 🔥 Pedilo por privado';
 
@@ -547,6 +589,14 @@ export function validarRespaldo(objeto) {
     // trae y queda en el valor por defecto ('estandar') al importar.
     if (objeto.general.calidadImagen != null && !CALIDADES_IMAGEN.includes(objeto.general.calidadImagen))
       return { ok: false, error: 'Calidad de imagen inválida en el respaldo.' };
+    if (objeto.general.nombreNegocio != null && typeof objeto.general.nombreNegocio !== 'string')
+      return { ok: false, error: 'Nombre del negocio inválido en el respaldo.' };
+    if (typeof objeto.general.nombreNegocio === 'string' && objeto.general.nombreNegocio.length > 60)
+      return { ok: false, error: 'Nombre del negocio demasiado largo (máx. 60).' };
+    if (objeto.general.textoBoton != null && typeof objeto.general.textoBoton !== 'string')
+      return { ok: false, error: 'Texto del botón inválido en el respaldo.' };
+    if (typeof objeto.general.textoBoton === 'string' && objeto.general.textoBoton.length > 40)
+      return { ok: false, error: 'Texto del botón demasiado largo (máx. 40).' };
   }
 
   if (objeto.plantilla != null) {
@@ -597,6 +647,8 @@ export function construirRespaldo({ productos, plantilla, general, secciones }) 
           encuadreFoto: general.encuadreFoto ?? ENCUADRE_FOTO_POR_DEFECTO,
           incluirTextoAlCompartir: general.incluirTextoAlCompartir ?? true,
           calidadImagen: general.calidadImagen ?? CALIDAD_IMAGEN_POR_DEFECTO,
+          nombreNegocio: general.nombreNegocio ?? NOMBRE_NEGOCIO_POR_DEFECTO,
+          textoBoton: general.textoBoton ?? TEXTO_BOTON_POR_DEFECTO,
         }
       : null,
   };

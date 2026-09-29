@@ -769,3 +769,44 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `test/e2e/ajustes.spec.js` — en vez de una sola lectura de `boundingBox()`, se usa `expect.poll(() => page.locator(...).boundingBox().catch(() => null)).toBeTruthy()` (reintenta y vuelve a resolver el locator en cada intento, nunca un handle guardado) antes de leer las coordenadas de verdad.
 - **Resuelto:** sí — confirmado con 6/6 corridas repetidas (`--repeat-each=6`) sin fallos.
 - ¿Se repetiría en otro proyecto? Sí — cualquier test que dependa de `boundingBox()`/`elementHandle` justo después de un cambio de ruta en la MISMA pantalla (sin recarga completa) es candidato a esta carrera; conviene envolver la lectura en `expect.poll` en vez de confiar en que el render ya terminó.
+
+### 59. `npm test` rojo al remedir la geometría/tipografía de los 4 presets contra los mocks Stitch (ronda "calzan con los mocks", 2026-09-29)
+- **Paso:** `node --test test/geometria-presets.test.js test/modelo.test.js`, después de reescribir `js/geometria-presets.js` (constantes MEDIDAS de cada mock, no estimadas) y la tipografía de fábrica de `js/modelo.js` (Newsreader/Manrope en vez de Montserrat/Playfair, tamaños 2-3× más grandes).
+- **Error exacto (5 tests, resumen):**
+  ```
+  geometriaBannerInferior: sin precio... → 984 !== 968 (margen viejo hardcodeado en el test: 56, el real ahora es 48)
+  geometriaEditorial: sin precio ni descripción... → esperaba null, la línea "$precio • SECCIÓN" seguía con conSeccion:true por defecto
+  geometriaStoryInmersiva: ...anclado abajo → assert.ok(precio.y < descripcion.y) — ahora van EN LA MISMA FILA (lado a lado, como el mock), no apilados
+  geometriaStoryInmersiva: sin precio, el nombre baja... → nombre.y no se mueve (la fila conserva su alto haya o no precio, solo cambia el ancho de la descripción)
+  AJUSTES_POR_DEFECTO_POR_ESTILO: ...solo las 6 tipografías OFL → los presets ahora usan Newsreader/Manrope (fijas, no elegibles) a propósito
+  ```
+- **Causa:** ninguna es una regresión real — todas son tests con la geometría/tipografía VIEJA hardcodeada, desactualizados por un cambio de diseño intencional (la geometría vieja tenía números "a ojo" que rendían el texto a menos de la mitad del tamaño real del mock, causa raíz reportada en el brief de esta ronda).
+- **Arreglo:**
+  - `test/geometria-presets.test.js` — valores de margen actualizados (56→48), tests de `geometriaEditorial`/`geometriaStoryInmersiva` reescritos para el nuevo comportamiento (línea combinada precio+sección, precio+descripción en la misma fila) + casos borde nuevos (sin sección, sin nombre del negocio).
+  - `test/modelo.test.js` — el test de tipografía pasa a verificar contra `REGISTRO_FUENTES` (fuentes.js, el registro REAL de canvas) en vez de `FUENTES_DISPONIBLES` (las 6 elegibles a mano), y además confirma que los presets NO usan una de esas 6 (es tipografía fija de diseño).
+- **Resuelto:** sí — `npm test` en verde (168/168).
+- ¿Se repetiría en otro proyecto? Sí, en general — el mismo punto que BUGS.md #44 de otra ronda: medir el valor real (`node -e`) antes de fijar una aserción de geometría, en vez de asumir la dirección/magnitud "porque suena lógico".
+
+### 60. Sesión completa en la rama base EQUIVOCADA — el trabajo de esta ronda se rehizo desde cero sobre `rediseno-organic`
+- **Paso:** arranque de la tarea "que los 4 presets calcen con los mocks Stitch" — el brief pedía verificar `git log --oneline -3` contra `rediseno-organic` ANTES de tocar nada, y hacer `checkout -b` desde ahí si no coincidía.
+- **Error exacto:** no hubo error de comando — el worktree ya estaba parado en un commit (`17db5e4`, "APK 1.3") que resultó ser un ANCESTRO común de `main` y `rediseno-organic`, no la punta de `rediseno-organic` (`ace4e15` al momento de arrancar). El chequeo pedido explícitamente en el brief se pasó por alto al principio de la sesión, y se construyó una implementación entera de los 4 presets (geometría, componer.js, modelo.js, plantilla.js, tests, script de comparación) sobre una base sin el reskin "Organic Minimalist" ni el catálogo de presets que YA existía en `rediseno-organic` desde la "Fase 4" (commit `2fa739a`) — es decir, se reinventó desde cero algo que ya estaba construido (aunque con la misma geometría "a ojo" que había que corregir).
+- **Reproducir:** `git log --oneline -3` al arrancar mostraba `17db5e4`, no un commit de `rediseno-organic`; `git merge-base --is-ancestor 17db5e4 rediseno-organic` da `true` (es ancestro común, no la rama pedida).
+- **Causa:** el chequeo de rama del brief se leyó pero no se ejecutó como primer paso real — se pasó directo a explorar archivos, y como el árbol de archivos SÍ tenía `js/modelo.js`/`js/componer.js` con contenido plausible (versión vieja, pre-reskin, de antes incluso de la Fase 4 de presets), no saltó ninguna señal de alarma hasta mucho más tarde, cuando `git checkout -b ... rediseno-organic` mostró un `CLAUDE.md` completamente distinto (8 fuentes, "Organic Minimalist", `PRESETS_COMPOSICION` ya documentado).
+- **Arreglo:** se hizo `git stash push -u` de TODO el trabajo hecho sobre la base equivocada, `git checkout -b presets-composicion rediseno-organic` (rama nueva, correcta), y se reaplicó el mismo diseño (geometría medida, tipografía Newsreader/Manrope, nombre del negocio/texto del botón, sección/N° de tanda) A MANO sobre los archivos REALES de `rediseno-organic` — que ya tenían el catálogo de 8 estilos, la galería de presets en `plantilla.js`, `test/geometria-presets.test.js` y `test/e2e/presets.spec.js` existentes. El trabajo conceptual (medir los mocks, elegir colores/tipografía) no se perdió; el trabajo de integración sí se rehizo.
+- **Resuelto:** sí — confirmado que `git log --oneline -3` ahora corre sobre `presets-composicion` (rama nueva desde `rediseno-organic`).
+- ¿Se repetiría en otro proyecto? Sí, siempre que un brief pida verificar la rama base ANTES de empezar — es un chequeo de UN comando (`git log --oneline -3` + comparar) que hay que ejecutar literal como PRIMER paso de la sesión, no asumir que el worktree ya está bien parado porque "los archivos se ven razonables". Vale la pena llevarlo a una regla dura: cualquier brief que mencione una rama base específica, el primer tool call de la sesión (antes de leer ningún archivo) tiene que ser el chequeo de esa rama.
+
+### 61. `#campo-texto-boton` (y `#campo-nombre-negocio`) quedan VISIBLES con `hidden` puesto — `.campo{display:flex}` pisa el `display:none` del atributo
+- **Paso:** `test/e2e/presets.spec.js` nuevo, "Datos del negocio solo aparece en los presets que los dibujan" — `#campo-texto-boton.hidden = true` en `editorial` (`ESTILOS_CON_TEXTO_BOTON` no lo incluye), pero el input seguía visible.
+- **Error exacto:**
+  ```
+  Error: expect(locator).toBeHidden() failed
+  Locator: locator('#campo-texto-boton')
+  Expected: hidden
+  Received: visible
+  ```
+- **Reproducir:** `js/vistas/plantilla.js`, `campoTextoBoton.hidden = !ESTILOS_CON_TEXTO_BOTON.includes(estiloEditando)` puesto en `true` sobre un `<div class="campo">`.
+- **Causa:** `css/estilos.css` define `.campo { display: flex; ... }` sin excepción para `[hidden]` — como la regla de autor (`.campo`, clase) y la regla del navegador (`[hidden]`, atributo) tienen la MISMA especificidad y la del navegador es de la hoja de estilos de USER AGENT (menor prioridad que cualquier regla de autor), `display:flex` gana siempre y el atributo `hidden` queda sin efecto visual. Es EXACTAMENTE la misma trampa que ya está documentada y resuelta para `.fila[hidden]`/`.tarjeta-estilo__badge[hidden]` (comentario en `css/estilos.css` línea ~2131) — pero nadie había puesto `hidden` sobre un `.campo` hasta esta ronda.
+- **Arreglo:** `css/estilos.css` — se agrega `.campo[hidden] { display: none; }` justo después de la definición de `.campo` (mismo patrón que las otras 2 excepciones ya existentes).
+- **Resuelto:** sí — `test/e2e/presets.spec.js` (9/9) y la suite completa (101/101) en verde.
+- ¿Se repetiría en otro proyecto? Sí — es un patrón de bug recurrente EN ESTE proyecto específico (van 3 clases distintas con el mismo problema: `.fila`, `.tarjeta-estilo__badge`, ahora `.campo`): cualquier clase con `display` propio (flex/grid/block) necesita su propio `[hidden]{display:none}` si algún componente la oculta con el atributo `hidden` en vez de una clase `.oculto`. Vale la pena una regla general en `patrones.md`: toda clase de layout con `display` explícito debe traer su par `.clase[hidden]{display:none}`, o usar `:where([hidden])` una sola vez con máxima especificidad baja para cubrir TODAS las clases de una — evitaría repetir este bug una 4ª vez.

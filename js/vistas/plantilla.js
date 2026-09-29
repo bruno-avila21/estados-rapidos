@@ -40,6 +40,8 @@ import {
   PRESETS_FONDO_TEXTO,
   aplicarPresetFondo,
   PRESETS_COMPOSICION,
+  resolverSeccionNombre,
+  TEXTO_BOTON_POR_DEFECTO,
 } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { crearIcono } from '../utils/iconos.js';
@@ -50,6 +52,11 @@ import { tarjetaEstilo, mostrarMiniatura } from './ajustes.js';
 const COLORES_RAPIDOS = ['#ffffff', '#242220', '#3a4d39', '#6e5b49', '#f5a623', '#3f5c38'];
 const CLAVES_TEXTO = ['nombre', 'precio', 'descripcion'];
 const HANDLES = ['nw', 'ne', 'sw', 'se'];
+// "Nombre del negocio" lo dibujan banner-inferior (pie) y editorial (pie); "Texto del botón" solo
+// banner-inferior (el único con botón/CTA propio) — polaroid y story-inmersiva no usan ninguno de
+// los dos. Los campos se muestran solo mientras se edita un estilo que efectivamente los dibuja.
+const ESTILOS_CON_NOMBRE_NEGOCIO = ['banner-inferior', 'editorial'];
+const ESTILOS_CON_TEXTO_BOTON = ['banner-inferior'];
 
 // Blobs de las miniaturas de la galería de presets (Fase 4): urls de objeto que hay que revocar
 // para no perder memoria — mismo criterio que `urlsMiniaturas` en ajustes.js.
@@ -93,6 +100,12 @@ export async function render(contenedor, { navegar, params } = {}) {
   // imagen rota / el fondo liso sin foto en cuanto la galería de presets se mudó a esta pantalla).
   const fotoEjemplo = fotoEjemploBlob ? await createImageBitmap(fotoEjemploBlob) : await fotoDeEjemploPorDefecto();
   const descripcionEjemplo = resolverDescripcion(productoEjemplo, { ...general, formatoPrecio });
+  const seccionesDisponibles = await repo.listarSecciones();
+  // Ejemplo representativo para la vista previa de los 4 presets de composición: sección real del
+  // producto de ejemplo (si tiene una) y una posición de tanda de más de 1 para que "N° 0X" (preset
+  // Editorial) se vea en el editor tal cual se vería publicando varios juntos.
+  const seccionNombreEjemplo = resolverSeccionNombre(productoEjemplo, seccionesDisponibles);
+  const posicionEjemplo = { n: 1, m: 3 };
 
   await cargarFuentes(); // una sola vez: dibujarSegunEstilo es síncrona, asume fuentes ya listas
 
@@ -323,6 +336,65 @@ export async function render(contenedor, { navegar, params } = {}) {
   });
   grupoSubida.append(btnSubir, inputPlantilla);
 
+  // --- Datos del negocio (ronda 2026-09-29): "Nombre del negocio" (vacío = no se dibuja) y "Texto
+  // del botón" del preset "Banner inferior" — ajustes GENERALES (uno solo para toda la app, no por
+  // estilo), solo visibles mientras se edita un preset que los usa. ---
+  const grupoNegocio = document.createElement('div');
+  grupoNegocio.className = 'grupo';
+  const tituloNegocio = document.createElement('div');
+  tituloNegocio.className = 'grupo__titulo';
+  tituloNegocio.textContent = 'Datos del negocio';
+  grupoNegocio.append(tituloNegocio);
+
+  const campoNombreNegocio = document.createElement('div');
+  campoNombreNegocio.className = 'campo';
+  const labelNombreNegocio = document.createElement('label');
+  labelNombreNegocio.className = 'campo__etiqueta';
+  labelNombreNegocio.htmlFor = 'campo-nombre-negocio';
+  labelNombreNegocio.textContent = 'Nombre del negocio (opcional)';
+  const inputNombreNegocio = document.createElement('input');
+  inputNombreNegocio.type = 'text';
+  inputNombreNegocio.id = 'campo-nombre-negocio';
+  inputNombreNegocio.maxLength = 60;
+  inputNombreNegocio.placeholder = 'Vacío: no se dibuja';
+  inputNombreNegocio.value = general.nombreNegocio || '';
+  inputNombreNegocio.setAttribute('data-accion', 'campo-nombre-negocio');
+  campoNombreNegocio.append(labelNombreNegocio, inputNombreNegocio);
+  campoNombreNegocio.hidden = !ESTILOS_CON_NOMBRE_NEGOCIO.includes(estiloEditando);
+
+  const campoTextoBoton = document.createElement('div');
+  campoTextoBoton.className = 'campo';
+  const labelTextoBoton = document.createElement('label');
+  labelTextoBoton.className = 'campo__etiqueta';
+  labelTextoBoton.htmlFor = 'campo-texto-boton';
+  labelTextoBoton.textContent = 'Texto del botón/llamado';
+  const inputTextoBoton = document.createElement('input');
+  inputTextoBoton.type = 'text';
+  inputTextoBoton.id = 'campo-texto-boton';
+  inputTextoBoton.maxLength = 40;
+  inputTextoBoton.value = general.textoBoton || TEXTO_BOTON_POR_DEFECTO;
+  inputTextoBoton.setAttribute('data-accion', 'campo-texto-boton');
+  campoTextoBoton.append(labelTextoBoton, inputTextoBoton);
+  campoTextoBoton.hidden = !ESTILOS_CON_TEXTO_BOTON.includes(estiloEditando);
+
+  grupoNegocio.append(campoNombreNegocio, campoTextoBoton);
+  grupoNegocio.hidden = campoNombreNegocio.hidden && campoTextoBoton.hidden;
+
+  let debounceNegocio = null;
+  inputNombreNegocio.addEventListener('input', () => {
+    general.nombreNegocio = inputNombreNegocio.value;
+    solicitarRedibujo();
+    clearTimeout(debounceNegocio);
+    debounceNegocio = setTimeout(() => repo.guardarNombreNegocio(inputNombreNegocio.value), 350);
+  });
+  let debounceBoton = null;
+  inputTextoBoton.addEventListener('input', () => {
+    general.textoBoton = inputTextoBoton.value;
+    solicitarRedibujo();
+    clearTimeout(debounceBoton);
+    debounceBoton = setTimeout(() => repo.guardarTextoBoton(inputTextoBoton.value), 350);
+  });
+
   // --- Cabecera de la vista previa: "Previsualización de estado (9:16)" + "● Guías interactivas"
   // EN LA MISMA LÍNEA (editar_plantilla_natural) — `flex-wrap: nowrap` a propósito, con el punto
   // de color que trae el mock delante del texto. ---
@@ -400,7 +472,7 @@ export async function render(contenedor, { navegar, params } = {}) {
   // tarjeta del diseño.
   const panelControles = document.createElement('div');
   panelControles.className = 'panel pila editor-plantilla__panel-controles';
-  panelControles.append(selectorEstilo, grupoSubida, filaHistorial);
+  panelControles.append(selectorEstilo, grupoSubida, grupoNegocio, filaHistorial);
 
   // Orden final, de arriba a abajo, calcado de editar_plantilla_natural: barra superior propia →
   // tarjeta de controles → "Presets de diseño rápidos" (tira horizontal) → cabecera de la vista
@@ -480,6 +552,9 @@ export async function render(contenedor, { navegar, params } = {}) {
       formatoPrecio,
       descripcion: descripcionEjemplo,
       encuadreFoto: general.encuadreFoto,
+      general,
+      seccionNombre: seccionNombreEjemplo,
+      posicion: posicionEjemplo,
     });
     contadorDibujos += 1;
     // Para tests E2E (CREAR-BRIEF.md: "exponer en window para test el último layout dibujado") —
@@ -509,6 +584,9 @@ export async function render(contenedor, { navegar, params } = {}) {
             formatoPrecio,
             descripcion: descripcionEjemplo,
             encuadreFoto: general.encuadreFoto,
+            general,
+            seccionNombre: seccionNombreEjemplo,
+            posicion: posicionEjemplo,
           });
           const url = URL.createObjectURL(blob);
           urlsGaleriaPresets.push(url);
@@ -537,6 +615,9 @@ export async function render(contenedor, { navegar, params } = {}) {
             formatoPrecio,
             descripcion: descripcionEjemplo,
             encuadreFoto: general.encuadreFoto,
+            general,
+            seccionNombre: seccionNombreEjemplo,
+            posicion: posicionEjemplo,
           });
           const url = URL.createObjectURL(blob);
           urlsGaleriaPresets.push(url);

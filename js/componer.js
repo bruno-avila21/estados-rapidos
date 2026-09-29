@@ -18,11 +18,18 @@
 // del preset, con el encuadre elegido en Ajustes: "Entera"/contain por defecto, o "Llenar la
 // pantalla"/cover — los 4 presets nuevos siempre son "cover" dentro de su propia zona de foto,
 // como en el mockup original).
-// Los 4 presets de composición (Fase 4, "catálogo de presets"): la zona DECORATIVA de cada uno
-// (franja del banner, marco del editorial, tarjeta del polaroid, scrim de la story) la calculan
-// las funciones puras de geometria-presets.js según la visibilidad VIGENTE de precio/descripción;
-// nombre/precio/descripción en sí siguen viniendo de `datos.ajustes`, igual que los demás estilos
-// con texto (el usuario los mueve/redimensiona en el editor de plantilla exactamente igual).
+// Los 4 presets de composición (Fase 4, "catálogo de presets"; ronda 2026-09-29 "calzan con los
+// mocks"): la zona DECORATIVA de cada uno (franja del banner, marco del editorial, tarjeta del
+// polaroid, scrim de la story) la calculan las funciones puras de geometria-presets.js según la
+// visibilidad VIGENTE de precio/descripción/sección/nombre del negocio; nombre/precio/descripción
+// en sí siguen viniendo de `datos.ajustes`, igual que los demás estilos con texto (el usuario los
+// mueve/redimensiona en el editor de plantilla exactamente igual). El resto de los elementos de
+// cada preset (sección, número de tanda, nombre del negocio, botón) son decoración fija:
+// `datos.seccionNombre` (resuelta por quien llama con `resolverSeccionNombre`, modelo.js),
+// `datos.posicion` ({n, m}, la posición del producto en la tanda que se está publicando) y
+// `datos.general.nombreNegocio`/`datos.general.textoBoton` (ajustes generales, editables en la
+// pantalla Plantilla) — ninguno inventado: si falta el dato, no se dibuja (nunca "Stock"/"Ref."/
+// "Pieza única"/"Edición limitada" de relleno).
 import { calcularLineas, calcularRecorteCover } from './layout.js';
 import { formatearPrecio } from './modelo.js';
 import { cargarFuentes, familiaCanvas } from './fuentes.js';
@@ -37,14 +44,34 @@ export const ANCHO = 1080;
 export const ALTO = 1920;
 const FONDO_BASE = '#0d0f1a';
 
-// --- Colores de fondo de los 4 presets de composición (Fase 4): tokens de la piel "Organic
-// Minimalist" (css/estilos.css: --color-primario/--color-superficie-alta/--color-superficie),
-// para que calcen con el resto de la app en vez de copiar la paleta verde/beige del mockup Stitch
-// tal cual. */
+// --- Colores propios de los 4 presets de composición: tokens de la piel "Organic Minimalist"
+// (css/estilos.css: --color-primario #3a4d39, --color-primario-oscuro #243624, --color-acento
+// #6e5b49, --color-primario-tinte-suave #d2e9ce) medidos de los mocks Stitch organic_minimalist —
+// ver ANALISIS-STITCH.md y geometria-presets.js. ---
 const COLOR_BANNER_FRANJA = '#3a4d39';
+const COLOR_BANNER_LABEL = 'rgba(253,248,245,0.72)';
+const COLOR_BANNER_DIVISOR = 'rgba(255,255,255,0.16)';
+const COLOR_BANNER_NEGOCIO = '#d2e9ce';
+const COLOR_BANNER_BOTON_BG = '#fdf8f5';
+const COLOR_BANNER_BOTON_TEXTO = '#243624';
+
 const COLOR_EDITORIAL_FONDO = '#f6f3ed';
+const COLOR_EDITORIAL_MARCO = 'rgba(36,34,32,0.2)';
+const COLOR_EDITORIAL_MARCO_OFFSET = 'rgba(58,77,57,0.35)';
+const COLOR_EDITORIAL_SECCION = '#3a4d39';
+const COLOR_EDITORIAL_NUMERO = '#5a5856';
+const COLOR_EDITORIAL_DIVISOR = 'rgba(36,34,32,0.14)';
+const COLOR_EDITORIAL_NEGOCIO = '#747871';
+
 const COLOR_POLAROID_FONDO = '#ebe5dd';
+const COLOR_POLAROID_PUNTOS = 'rgba(58,77,57,0.16)';
 const COLOR_POLAROID_TARJETA = '#fbf9f5';
+const COLOR_POLAROID_DIVISOR = 'rgba(90,88,86,0.4)';
+
+const COLOR_STORY_SCRIM_ARRIBA = 'rgba(5,6,10,0)';
+const COLOR_STORY_SCRIM_ABAJO = 'rgba(5,6,10,0.85)';
+const COLOR_STORY_PILL_BG = 'rgba(255,255,255,0.18)';
+const COLOR_STORY_PILL_BORDE = 'rgba(255,255,255,0.38)';
 
 /**
  * Dibuja el estado completo en `ctx` según el estilo resuelto (ver `resolverEstilo` en modelo.js).
@@ -52,10 +79,22 @@ const COLOR_POLAROID_TARJETA = '#fbf9f5';
  * que las imágenes (`plantillaImagen`/`fotoImagen`) ya son `ImageBitmap` decodificados — así se
  * puede llamar en cada frame sin volver a decodificar ni esperar nada.
  * @param {CanvasRenderingContext2D} ctx
- * @param {{estilo:string, plantillaImagen, fotoImagen, producto, ajustes, formatoPrecio, descripcion, encuadreFoto}} datos
+ * @param {{estilo:string, plantillaImagen, fotoImagen, producto, ajustes, formatoPrecio, descripcion, encuadreFoto, general, seccionNombre, posicion}} datos
  */
 export function dibujarSegunEstilo(ctx, datos) {
-  const { estilo, plantillaImagen, fotoImagen, producto, ajustes, formatoPrecio, descripcion, encuadreFoto } = datos;
+  const {
+    estilo,
+    plantillaImagen,
+    fotoImagen,
+    producto,
+    ajustes,
+    formatoPrecio,
+    descripcion,
+    encuadreFoto,
+    general,
+    seccionNombre,
+    posicion,
+  } = datos;
   limpiarLienzo(ctx);
 
   if (estilo === 'foto-precio') {
@@ -82,22 +121,37 @@ export function dibujarSegunEstilo(ctx, datos) {
     return;
   }
 
-  // --- 4 presets de composición (Fase 4, catálogo de presets) ---
+  // --- 4 presets de composición (Fase 4, catálogo de presets; ronda 2026-09-29 "calzan con los
+  // mocks") ---
   // La geometría (foto de fondo + zona decorativa) la calculan las funciones puras de
-  // geometria-presets.js, siempre con la visibilidad VIGENTE de precio/descripción (no la de
-  // fábrica): "sin precio"/"sin descripción" nunca deja un hueco en el fondo. Nombre/precio/
-  // descripción en sí se dibujan con `ajustes[clave]` igual que los demás estilos con texto —
-  // el usuario los puede mover/redimensionar en el editor exactamente igual.
+  // geometria-presets.js, siempre con la visibilidad VIGENTE de precio/descripción/sección/nombre
+  // del negocio (no la de fábrica): "sin precio"/"sin descripción"/etc. nunca deja un hueco en el
+  // fondo. Nombre/precio/descripción en sí se dibujan con `ajustes[clave]` igual que los demás
+  // estilos con texto — el usuario los puede mover/redimensionar en el editor exactamente igual.
   if (estilo === 'banner-inferior') {
     const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
     const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
     const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
-    const geo = geometriaBannerInferior({ conPrecio, conDescripcion });
+    const conSeccion = !!seccionNombre;
+    const geo = geometriaBannerInferior({ conPrecio, conDescripcion, conSeccion });
+
     dibujarFondoFoto(ctx, fotoImagen, 'cover');
-    dibujarRectanguloSolido(ctx, geo.franja, COLOR_BANNER_FRANJA, { arribaIzq: 32, arribaDer: 32 });
+    dibujarRectanguloSolido(ctx, geo.franja, COLOR_BANNER_FRANJA, { arribaIzq: geo.radioSuperior, arribaDer: geo.radioSuperior });
+    if (conSeccion) {
+      dibujarEtiqueta(ctx, seccionNombre.toUpperCase(), geo.seccion, {
+        tamano: 24,
+        familia: 'manrope',
+        peso: 600,
+        color: COLOR_BANNER_LABEL,
+        alineacion: 'left',
+        tracking: 2,
+      });
+    }
     if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto?.nombre ?? '', ajustes.nombre);
     if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
     if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
+    dibujarLineaFina(ctx, geo.divisor, COLOR_BANNER_DIVISOR);
+    dibujarPieBanner(ctx, geo.pie, { nombreNegocio: general?.nombreNegocio, textoBoton: general?.textoBoton });
     return;
   }
 
@@ -105,16 +159,29 @@ export function dibujarSegunEstilo(ctx, datos) {
     const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
     const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
     const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
-    const geo = geometriaEditorial({ conPrecio, conDescripcion });
+    const conSeccion = !!seccionNombre;
+    const conNombreNegocio = !!general?.nombreNegocio;
+    const geo = geometriaEditorial({ conPrecio, conDescripcion, conSeccion, conNombreNegocio });
+
     ctx.save();
     ctx.fillStyle = COLOR_EDITORIAL_FONDO;
     ctx.fillRect(0, 0, ANCHO, ALTO);
     ctx.restore();
+
+    dibujarFilaSuperiorEditorial(ctx, geo.topRow, seccionNombre, posicion);
+    dibujarMarcoDesplazado(ctx, geo.marco, COLOR_EDITORIAL_MARCO_OFFSET);
     if (fotoImagen) dibujarFotoCover(ctx, fotoImagen, geo.marco);
-    dibujarBordeFino(ctx, geo.marco, 'rgba(36,34,32,0.18)');
+    dibujarBordeFino(ctx, geo.marco, COLOR_EDITORIAL_MARCO);
+
     if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto?.nombre ?? '', ajustes.nombre);
-    if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
+    if (geo.precio) {
+      const textoLinea = [conPrecio ? textoPrecio : null, conSeccion ? seccionNombre.toUpperCase() : null]
+        .filter(Boolean)
+        .join('  •  ');
+      dibujarCajaTexto(ctx, textoLinea, ajustes.precio);
+    }
     if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
+    if (conNombreNegocio) dibujarPieEditorial(ctx, geo.pie, general.nombreNegocio);
     return;
   }
 
@@ -123,15 +190,16 @@ export function dibujarSegunEstilo(ctx, datos) {
     const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
     const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
     const geo = geometriaPolaroid({ conPrecio, conDescripcion });
-    ctx.save();
-    ctx.fillStyle = COLOR_POLAROID_FONDO;
-    ctx.fillRect(0, 0, ANCHO, ALTO);
-    ctx.restore();
-    dibujarRectanguloSolido(ctx, geo.tarjeta, COLOR_POLAROID_TARJETA, { todas: 6 });
+
+    dibujarFondoPuntos(ctx, COLOR_POLAROID_FONDO, COLOR_POLAROID_PUNTOS);
+    dibujarRectanguloSolido(ctx, geo.tarjeta, COLOR_POLAROID_TARJETA, { todas: 10 }, { blur: 36, color: 'rgba(58,48,40,0.16)', y: 10 });
     if (fotoImagen) dibujarFotoCover(ctx, fotoImagen, geo.foto);
     if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto?.nombre ?? '', ajustes.nombre);
-    if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
-    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
+    if (conPrecio) dibujarCajaTexto(ctx, `— ${textoPrecio}`, ajustes.precio);
+    if (conDescripcion) {
+      dibujarLineaFina(ctx, geo.divisor, COLOR_POLAROID_DIVISOR);
+      dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
+    }
     return;
   }
 
@@ -139,11 +207,29 @@ export function dibujarSegunEstilo(ctx, datos) {
     const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
     const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
     const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
-    const geo = geometriaStoryInmersiva({ conPrecio, conDescripcion });
+    const conSeccion = !!seccionNombre;
+    const geo = geometriaStoryInmersiva({ conPrecio, conDescripcion, conSeccion });
+
     dibujarFondoFoto(ctx, fotoImagen, 'cover');
-    dibujarDegradadoVertical(ctx, geo.scrim, 'rgba(5,6,10,0)', 'rgba(5,6,10,0.82)');
+    dibujarDegradadoVertical(ctx, geo.scrim, COLOR_STORY_SCRIM_ARRIBA, COLOR_STORY_SCRIM_ABAJO);
+    if (conSeccion) {
+      dibujarPill(ctx, geo.seccion, seccionNombre.toUpperCase(), {
+        tamano: 24,
+        familia: 'manrope',
+        peso: 600,
+        color: '#ffffff',
+        fondoColor: COLOR_STORY_PILL_BG,
+        bordeColor: COLOR_STORY_PILL_BORDE,
+        tracking: 2,
+      });
+    }
     if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto?.nombre ?? '', ajustes.nombre);
-    if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
+    if (conPrecio) {
+      dibujarCajaTexto(ctx, textoPrecio, {
+        ...ajustes.precio,
+        bordeColor: COLOR_STORY_PILL_BORDE,
+      });
+    }
     if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
     return;
   }
@@ -290,12 +376,23 @@ function hexARgba(hex, alfa) {
   return `rgba(${r}, ${g}, ${b}, ${alfa})`;
 }
 
+/** Un color CSS (hex o ya `rgb(a)(...)`) tal cual lo puede usar `fillStyle`/`strokeStyle`. */
+function colorCss(color) {
+  return color || '#000000';
+}
+
 /** Rectángulo sólido con esquinas redondeadas: todas iguales (`radios.todas`, ej. la tarjeta
- * Polaroid) o solo las de arriba (`radios.arribaIzq/arribaDer`, la franja del banner inferior). */
-function dibujarRectanguloSolido(ctx, rect, color, radios = {}) {
+ * Polaroid) o solo las de arriba (`radios.arribaIzq/arribaDer`, la franja del banner inferior).
+ * `sombra` opcional (`{blur,color,y}`) para la sombra suave de la tarjeta Polaroid. */
+function dibujarRectanguloSolido(ctx, rect, color, radios = {}, sombra = null) {
   if (!rect) return;
   ctx.save();
-  ctx.fillStyle = color;
+  if (sombra) {
+    ctx.shadowColor = sombra.color;
+    ctx.shadowBlur = sombra.blur;
+    ctx.shadowOffsetY = sombra.y || 0;
+  }
+  ctx.fillStyle = colorCss(color);
   if (radios.todas != null) {
     rutaRedondeada(ctx, rect.x, rect.y, rect.w, rect.h, radios.todas);
   } else {
@@ -339,25 +436,243 @@ function dibujarDegradadoVertical(ctx, rect, colorArriba, colorAbajo) {
   ctx.restore();
 }
 
-/** Dibuja el fondo/etiqueta (color, opacidad, redondeo) de una caja de texto, si corresponde. */
-function dibujarFondoCaja(ctx, caja) {
-  if (!caja.fondoColor || !(caja.fondoOpacidad > 0)) return;
+/** El "hairline" desplazado detrás del marco del preset "Editorial" (el rectángulo que sobresale
+ * arriba/a la derecha en el mock) — se dibuja ANTES que la foto, así solo se ve peeking por los
+ * bordes que la foto no tapa. */
+function dibujarMarcoDesplazado(ctx, rect, color) {
+  if (!rect) return;
+  const dx = Math.round(rect.w * 0.02);
   ctx.save();
-  ctx.fillStyle = hexARgba(caja.fondoColor, caja.fondoOpacidad);
-  rutaRedondeada(ctx, caja.x, caja.y, caja.w, caja.h, caja.fondoRadio ?? 0);
+  ctx.strokeStyle = colorCss(color);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(rect.x + dx, rect.y - dx, rect.w, rect.h);
+  ctx.restore();
+}
+
+/** Fondo con un patrón de puntos sutil (el beige del preset "Polaroid"): grilla espaciada, no
+ * pixel-a-pixel — barato incluso a 1080×1920. */
+function dibujarFondoPuntos(ctx, colorFondo, colorPunto) {
+  ctx.save();
+  ctx.fillStyle = colorFondo;
+  ctx.fillRect(0, 0, ANCHO, ALTO);
+  ctx.fillStyle = colorCss(colorPunto);
+  const paso = 40;
+  const radio = 2.2;
+  for (let y = paso / 2; y < ALTO; y += paso) {
+    for (let x = paso / 2; x < ANCHO; x += paso) {
+      ctx.beginPath();
+      ctx.arc(x, y, radio, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+/** Línea fina horizontal (el separador entre la descripción y el pie, en Banner inferior/Polaroid). */
+function dibujarLineaFina(ctx, rect, color) {
+  if (!rect) return;
+  ctx.save();
+  ctx.strokeStyle = colorCss(color);
+  ctx.lineWidth = Math.max(1, rect.h);
+  ctx.beginPath();
+  ctx.moveTo(rect.x, rect.y + rect.h / 2);
+  ctx.lineTo(rect.x + rect.w, rect.y + rect.h / 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Intenta aplicar tracking (letter-spacing) real de canvas; en motores que no lo soportan
+ * (`ctx.letterSpacing` es relativamente nuevo) simplemente no hace nada — nunca rompe el dibujo. */
+function conTracking(ctx, px) {
+  try {
+    ctx.letterSpacing = `${px}px`;
+  } catch {
+    /* no soportado: se sigue sin tracking, no es crítico */
+  }
+}
+
+/** Etiqueta chica de una sola línea (la sección del preset "Banner inferior"): mayúsculas ya
+ * resueltas por quien llama, tracking, sin fondo. Achica si hiciera falta para no desbordar. */
+function dibujarEtiqueta(ctx, texto, rect, { tamano, familia, peso, color, alineacion = 'left', tracking = 0 }) {
+  if (!rect || !texto) return;
+  const fam = familiaCanvas(familia);
+  ctx.save();
+  conTracking(ctx, tracking);
+  const medirAncho = (t, tam) => {
+    ctx.font = `${peso} ${tam}px ${fam}`;
+    return ctx.measureText(t).width;
+  };
+  const { lineas, tamano: tamanoFinal } = calcularLineas({
+    texto,
+    anchoMax: rect.w,
+    medirAncho,
+    tamanoInicial: tamano,
+    tamanoMinimo: Math.max(12, Math.round(tamano * 0.6)),
+    maxLineas: 1,
+    elipsis: true,
+  });
+  ctx.font = `${peso} ${tamanoFinal}px ${fam}`;
+  ctx.fillStyle = colorCss(color);
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = alineacion;
+  const x = alineacion === 'left' ? rect.x : alineacion === 'right' ? rect.x + rect.w : rect.x + rect.w / 2;
+  ctx.fillText(lineas[0], x, rect.y + rect.h / 2);
+  ctx.restore();
+}
+
+/** Pill translúcido con borde (la sección de "Story inmersiva"): fondo + borde redondeados +
+ * etiqueta centrada. */
+function dibujarPill(ctx, rect, texto, { tamano, familia, peso, color, fondoColor, bordeColor, tracking = 0 }) {
+  if (!rect) return;
+  const radio = rect.h / 2;
+  ctx.save();
+  ctx.fillStyle = colorCss(fondoColor);
+  rutaRedondeada(ctx, rect.x, rect.y, rect.w, rect.h, radio);
+  ctx.fill();
+  if (bordeColor) {
+    ctx.strokeStyle = colorCss(bordeColor);
+    ctx.lineWidth = 1.5;
+    rutaRedondeada(ctx, rect.x + 0.75, rect.y + 0.75, rect.w - 1.5, rect.h - 1.5, radio - 0.75);
+    ctx.stroke();
+  }
+  ctx.restore();
+  if (texto) dibujarEtiqueta(ctx, texto, rect, { tamano, familia, peso, color, alineacion: 'center', tracking });
+}
+
+/** Icono chico de "chat" (burbuja con una línea), dibujado con primitivas de canvas — nunca una
+ * fuente de íconos remota. Usado en el botón del preset "Banner inferior". */
+function dibujarIconoChat(ctx, cx, cy, tamano, color) {
+  ctx.save();
+  ctx.fillStyle = colorCss(color);
+  const w = tamano;
+  const h = tamano * 0.8;
+  rutaRedondeada(ctx, cx - w / 2, cy - h / 2, w, h * 0.82, h * 0.28);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx - w * 0.15, cy + h * 0.12);
+  ctx.lineTo(cx - w * 0.05, cy + h * 0.38);
+  ctx.lineTo(cx + w * 0.2, cy + h * 0.12);
+  ctx.closePath();
   ctx.fill();
   ctx.restore();
 }
 
-/** Dibuja una caja de texto completa: fondo/etiqueta + texto ajustado (achica o parte en líneas). */
+/** Fila de pie del preset "Banner inferior": "Nombre del negocio" a la izquierda (si hay) + botón
+ * blanco con ícono de chat y el texto del botón a la derecha, hugging su propio ancho (nunca un
+ * botón fijo más ancho o más angosto que el texto real). */
+function dibujarPieBanner(ctx, rect, { nombreNegocio, textoBoton }) {
+  if (!rect) return;
+  const texto = (textoBoton || '').trim() || 'Pedir por privado';
+  const tamanoBoton = 28;
+  const familiaBoton = familiaCanvas('manrope');
+  ctx.save();
+  ctx.font = `700 ${tamanoBoton}px ${familiaBoton}`;
+  const anchoTexto = ctx.measureText(texto).width;
+  const iconoTamano = 34;
+  const gapIconoTexto = 10;
+  const padX = 22;
+  const anchoBoton = Math.min(rect.w, padX * 2 + iconoTamano + gapIconoTexto + anchoTexto);
+  const xBoton = rect.x + rect.w - anchoBoton;
+  const alturaBoton = Math.min(rect.h, 58);
+  const yBoton = rect.y + (rect.h - alturaBoton) / 2;
+
+  ctx.fillStyle = colorCss(COLOR_BANNER_BOTON_BG);
+  rutaRedondeada(ctx, xBoton, yBoton, anchoBoton, alturaBoton, alturaBoton / 2);
+  ctx.fill();
+  dibujarIconoChat(ctx, xBoton + padX + iconoTamano / 2, yBoton + alturaBoton / 2, iconoTamano * 0.62, COLOR_BANNER_BOTON_TEXTO);
+  ctx.fillStyle = colorCss(COLOR_BANNER_BOTON_TEXTO);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(texto, xBoton + padX + iconoTamano + gapIconoTexto, yBoton + alturaBoton / 2 + 1);
+  ctx.restore();
+
+  const nombre = (nombreNegocio || '').trim();
+  if (nombre) {
+    dibujarEtiqueta(ctx, nombre, { x: rect.x, y: rect.y, w: Math.max(0, xBoton - rect.x - 16), h: rect.h }, {
+      tamano: 27,
+      familia: 'manrope',
+      peso: 600,
+      color: COLOR_BANNER_NEGOCIO,
+      alineacion: 'left',
+    });
+  }
+}
+
+/** Fila superior del preset "Editorial": sección en mayúsculas con tracking a la izquierda + "N°
+ * 0X" (posición en la tanda) a la derecha. Ninguna de las dos es inventada: si no hay sección, ese
+ * lado queda vacío; el número sale de `datos.posicion` (quien publica sabe cuántos son). */
+function dibujarFilaSuperiorEditorial(ctx, rect, seccionNombre, posicion) {
+  if (!rect) return;
+  if (seccionNombre) {
+    dibujarEtiqueta(ctx, seccionNombre.toUpperCase(), rect, {
+      tamano: 26,
+      familia: 'newsreader',
+      peso: 500,
+      color: COLOR_EDITORIAL_SECCION,
+      alineacion: 'left',
+      tracking: 3,
+    });
+  }
+  if (posicion?.m > 1) {
+    const numero = `N° ${String(posicion.n).padStart(2, '0')}`;
+    dibujarEtiqueta(ctx, numero, rect, {
+      tamano: 24,
+      familia: 'newsreader',
+      peso: 400,
+      color: COLOR_EDITORIAL_NUMERO,
+      alineacion: 'right',
+      tracking: 1,
+    });
+  }
+  dibujarLineaFina(ctx, { x: rect.x, y: rect.y + rect.h + 2, w: rect.w, h: 1 }, COLOR_EDITORIAL_DIVISOR);
+}
+
+/** Pie del preset "Editorial": separador fino + "NOMBRE DEL NEGOCIO" en mayúsculas con tracking. */
+function dibujarPieEditorial(ctx, rect, nombreNegocio) {
+  if (!rect || !nombreNegocio) return;
+  dibujarLineaFina(ctx, { x: rect.x, y: rect.y, w: rect.w, h: 1 }, COLOR_EDITORIAL_DIVISOR);
+  dibujarEtiqueta(ctx, nombreNegocio.toUpperCase(), { x: rect.x, y: rect.y + 10, w: rect.w, h: rect.h - 10 }, {
+    tamano: 22,
+    familia: 'manrope',
+    peso: 600,
+    color: COLOR_EDITORIAL_NEGOCIO,
+    alineacion: 'left',
+    tracking: 2,
+  });
+}
+
+/** Dibuja el fondo/etiqueta (color, opacidad, redondeo, borde opcional) de una caja de texto. */
+function dibujarFondoCaja(ctx, caja) {
+  const tieneFondo = caja.fondoColor && caja.fondoOpacidad > 0;
+  const tieneBorde = !!caja.bordeColor;
+  if (!tieneFondo && !tieneBorde) return;
+  ctx.save();
+  if (tieneFondo) {
+    ctx.fillStyle = hexARgba(caja.fondoColor, caja.fondoOpacidad);
+    rutaRedondeada(ctx, caja.x, caja.y, caja.w, caja.h, caja.fondoRadio ?? 0);
+    ctx.fill();
+  }
+  if (tieneBorde) {
+    ctx.strokeStyle = colorCss(caja.bordeColor);
+    ctx.lineWidth = caja.bordeAncho ?? 1.5;
+    rutaRedondeada(ctx, caja.x + 1, caja.y + 1, caja.w - 2, caja.h - 2, (caja.fondoRadio ?? 0) - 1);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Dibuja una caja de texto completa: fondo/etiqueta + texto ajustado (achica o parte en líneas, o
+ * trunca con "…" si `caja.elipsis` — los 4 presets de composición). `caja.familia ===
+ * 'newsreader-italica'` fuerza `font-style: italic` real (la descripción del preset "Polaroid"). */
 function dibujarCajaTexto(ctx, texto, caja) {
   if (!caja || caja.visible === false) return;
   dibujarFondoCaja(ctx, caja);
 
   const familia = familiaCanvas(caja.familia);
   const peso = caja.peso || 400;
+  const cursiva = caja.familia === 'newsreader-italica' ? 'italic ' : '';
   const medirAncho = (t, tamano) => {
-    ctx.font = `${peso} ${tamano}px ${familia}`;
+    ctx.font = `${cursiva}${peso} ${tamano}px ${familia}`;
     return ctx.measureText(t).width;
   };
   const tamanoInicial = caja.tamano || 48;
@@ -382,7 +697,7 @@ function dibujarCajaTexto(ctx, texto, caja) {
   ctx.rect(caja.x, caja.y, caja.w, caja.h ?? tamano * 1.3 * lineas.length);
   ctx.clip();
 
-  ctx.font = `${peso} ${tamano}px ${familia}`;
+  ctx.font = `${cursiva}${peso} ${tamano}px ${familia}`;
   ctx.fillStyle = caja.color || '#ffffff';
   ctx.textBaseline = 'middle';
   const alineacion = caja.alineacion || 'center';
