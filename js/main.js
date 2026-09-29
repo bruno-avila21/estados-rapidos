@@ -27,15 +27,23 @@ const RUTAS = [
   // productos_lista_natural/productos_vista_grilla_natural — el resto de las pantallas, fuera del
   // alcance de este rediseño, sigue mostrando el nombre de la pantalla.
   { patron: /^#\/$/, modulo: lista, titulo: 'Estados Rápidos', ruta: '#/', subtitulo: 'Catálogo para estados de WhatsApp' },
-  { patron: /^#\/producto\/(.+)$/, modulo: detalle, titulo: 'Producto', ruta: null },
+  // Título dinámico (editar_producto_natural): "Agregar Producto" en el alta, "Editar Producto"
+  // al editar uno existente — antes decía "Producto" siempre.
+  {
+    patron: /^#\/producto\/(.+)$/,
+    modulo: detalle,
+    titulo: (params) => (!params.id || params.id === 'nuevo' ? 'Agregar Producto' : 'Editar Producto'),
+    subtitulo: 'Foto, precio y secciones del estado',
+    ruta: null,
+  },
   // No está en la navegación principal: se llega desde el chip "⚙ Secciones" de Productos.
-  { patron: /^#\/secciones$/, modulo: secciones, titulo: 'Secciones', ruta: null },
+  { patron: /^#\/secciones$/, modulo: secciones, titulo: 'Secciones', subtitulo: 'Agrupá tus productos por día o rubro', ruta: null },
   { patron: /^#\/ajustes$/, modulo: ajustes, titulo: 'Ajustes', ruta: '#/ajustes' },
   // "Plantilla" ya no está en la navegación principal: se llega desde Ajustes (botón "Abrir
   // editor de plantilla" o "Editar" de una tarjeta de estilo). `?estilo=` (ronda "ajustes por
   // estilo", 2026-09-28) dice CUÁL de los 3 estilos con texto edita — se lee de `params.query`.
   { patron: /^#\/plantilla$/, modulo: plantilla, titulo: 'Plantilla', ruta: null },
-  { patron: /^#\/respaldo$/, modulo: respaldo, titulo: 'Respaldo', ruta: '#/respaldo' },
+  { patron: /^#\/respaldo$/, modulo: respaldo, titulo: 'Respaldo', subtitulo: 'Copia de seguridad de tu catálogo', ruta: '#/respaldo' },
 ];
 
 function navegar(hash) {
@@ -53,9 +61,10 @@ async function enrutar() {
   const match = hash.match(encontrada.patron);
   const params = { id: match?.[1], query: new URLSearchParams(queryString || '') };
 
-  titulo.textContent = encontrada.titulo;
-  subtitulo.textContent = encontrada.subtitulo || '';
-  subtitulo.hidden = !encontrada.subtitulo;
+  titulo.textContent = typeof encontrada.titulo === 'function' ? encontrada.titulo(params) : encontrada.titulo;
+  const textoSubtitulo = typeof encontrada.subtitulo === 'function' ? encontrada.subtitulo(params) : encontrada.subtitulo;
+  subtitulo.textContent = textoSubtitulo || '';
+  subtitulo.hidden = !textoSubtitulo;
   navBotones.forEach((b) => b.classList.toggle('activo', b.dataset.ruta === encontrada.ruta));
 
   try {

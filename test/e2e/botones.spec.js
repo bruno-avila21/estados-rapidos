@@ -97,7 +97,9 @@ test('precio vacío es válido (producto sin precio); negativo sigue siendo erro
   await page.locator('[data-accion="editar"]', { hasText: 'Sin precio' }).click();
   await page.locator('#campo-precio').fill('-500');
   await page.locator('[data-accion="guardar"]').click();
-  await expect(page.locator('#campo-precio').locator('..').locator('.campo__error')).toHaveText(/mayor a cero/i);
+  // '../..': el precio ahora vive en `.campo__envoltorio` (prefijo "$", Fase 5 reskin
+  // editar_producto_natural) — el error sigue siendo hermano de ese envoltorio, no del input.
+  await expect(page.locator('#campo-precio').locator('../..').locator('.campo__error')).toHaveText(/mayor a cero/i);
   await expect(page).toHaveURL(/#\/producto\//); // no navegó: no se guardó el negativo
 });
 

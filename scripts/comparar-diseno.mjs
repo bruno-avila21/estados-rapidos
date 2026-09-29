@@ -50,6 +50,64 @@ const GRILLA_PRODUCTOS = [
 const ESCENAS = {
   productos_lista_natural: { hash: '#/', vista: 'compacta', titulo: 'Productos — lista', secciones: ['Lencería', 'Novedades'], productos: LISTA_PRODUCTOS },
   productos_vista_grilla_natural: { hash: '#/', vista: 'grilla', titulo: 'Productos — grilla', secciones: ['Lencería', 'Novedades'], productos: GRILLA_PRODUCTOS },
+  // Fase 5: 3 pantallas con seed propio (no lista/grilla) — usan `preparar(page)` en vez del
+  // dataset lista/grilla de arriba, porque cada una necesita navegar a una ruta distinta
+  // (#/producto/<id>, #/secciones, #/respaldo) después de sembrar.
+  editar_producto_natural: {
+    titulo: 'Editar producto',
+    async preparar(page) {
+      const fotoBase64 = fs.readFileSync(path.join(FOTOS_DIR, 'lista-2-michi.jpg')).toString('base64');
+      await page.goto('/');
+      const id = await page.evaluate(async (fotoBase64) => {
+        const repo = await import('/js/repositorio.js');
+        const secciones = await Promise.all(
+          ['Novedades de la semana', 'Ofertas especiales', 'Lencería y Textil', 'Hecho a mano'].map((n) => repo.crearSeccion(n))
+        );
+        const aBytes = (b64) => {
+          const binario = atob(b64);
+          const bytes = new Uint8Array(binario.length);
+          for (let i = 0; i < binario.length; i += 1) bytes[i] = binario.charCodeAt(i);
+          return bytes;
+        };
+        const archivo = new File([aBytes(fotoBase64)], 'michi.jpg', { type: 'image/jpeg' });
+        const guardado = await repo.guardarProducto(
+          {
+            nombre: 'Michi Peluche Miau',
+            precio: 8900,
+            descripcion: 'Peluche artesanal tejido en lana premium hipoalergénica. Ideal para regalo o deco infantil. Consultas por mensaje directo.',
+            secciones: [secciones[0].id],
+          },
+          archivo
+        );
+        return guardado.id;
+      }, fotoBase64);
+      await page.goto(`/#/producto/${id}`);
+      await page.waitForSelector('.foto-picker__vista:not([hidden])', { state: 'visible' });
+      await page.waitForTimeout(150);
+    },
+  },
+  gesti_n_de_secciones_natural: {
+    titulo: 'Gestión de secciones',
+    async preparar(page) {
+      await page.goto('/');
+      await page.evaluate(async () => {
+        const repo = await import('/js/repositorio.js');
+        for (const nombre of ['Novedades de la semana', 'Ofertas especiales', 'Lencería y Textil']) {
+          await repo.crearSeccion(nombre);
+        }
+      });
+      await page.goto('/#/secciones');
+      await page.waitForTimeout(150);
+    },
+  },
+  respaldo_natural: {
+    titulo: 'Respaldo',
+    async preparar(page) {
+      await page.goto('/');
+      await page.goto('/#/respaldo');
+      await page.waitForTimeout(150);
+    },
+  },
 };
 
 function esperarLinea(child, contiene) {
@@ -187,9 +245,13 @@ async function main() {
 
     // 2) App real, servida local, sembrada con datos parecidos.
     const paginaApp = await browser.newPage({ viewport: { width: ANCHO, height: ALTO }, baseURL: `http://localhost:${puerto}` });
-    await sembrarApp(paginaApp, { vista: escena.vista, secciones: escena.secciones, productos: escena.productos });
-    if (escena.hash !== '#/') await paginaApp.evaluate((h) => { location.hash = h; }, escena.hash);
-    await paginaApp.waitForTimeout(150);
+    if (escena.preparar) {
+      await escena.preparar(paginaApp);
+    } else {
+      await sembrarApp(paginaApp, { vista: escena.vista, secciones: escena.secciones, productos: escena.productos });
+      if (escena.hash !== '#/') await paginaApp.evaluate((h) => { location.hash = h; }, escena.hash);
+      await paginaApp.waitForTimeout(150);
+    }
     const appPng = await paginaApp.screenshot();
     await paginaApp.close();
 

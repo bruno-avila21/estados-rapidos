@@ -146,6 +146,50 @@ const TRAZOS = Object.freeze({
     ['circle', { cx: 8, cy: 15, r: 1.4 }],
     ['circle', { cx: 16, cy: 15, r: 1.4 }],
   ],
+  // Fase 5 (editar_producto_natural/gesti_n_de_secciones_natural/respaldo_natural): íconos nuevos
+  // que no existían en el reskin de lista/grilla.
+  // "photo_library": marco trasero + esquina del de adelante — botón "Galería" del editor de foto.
+  galeria: [
+    ['rect', { x: 3, y: 3, width: 14, height: 14, rx: 2 }],
+    ['path', { d: 'M7 21h12a2 2 0 0 0 2-2V7' }],
+  ],
+  // "check": tilde de línea — botón "Guardar" y chip de sección activo.
+  check: [['polyline', { points: '5,13 10,18 19,7' }]],
+  // "folder_open": tarjetas "Tus secciones"/"Restaurar catálogo".
+  carpeta: [
+    ['path', { d: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z' }],
+  ],
+  // Estado del respaldo local (sin cloud real detrás, solo el archivo .json del celular).
+  escudo: [
+    ['path', { d: 'M12 3.5 19 6.2v5c0 5-3.5 8.3-7 9.3-3.5-1-7-4.3-7-9.3v-5l7-2.7z' }],
+    ['polyline', { points: '9,12 11,14 15,10' }],
+  ],
+  // "calendar_today": preset de sección "Publicaciones de Lunes".
+  calendario: [
+    ['rect', { x: 4, y: 5, width: 16, height: 15, rx: 2 }],
+    ['line', { x1: 4, y1: 10, x2: 20, y2: 10 }],
+    ['line', { x1: 8, y1: 3, x2: 8, y2: 7 }],
+    ['line', { x1: 16, y1: 3, x2: 16, y2: 7 }],
+  ],
+  // "percent": preset de sección "Liquidación de temporada".
+  porcentaje: [
+    ['line', { x1: 6, y1: 18, x2: 18, y2: 6 }],
+    ['circle', { cx: 7.5, cy: 7.5, r: 2 }],
+    ['circle', { cx: 16.5, cy: 16.5, r: 2 }],
+  ],
+  // "local_fire_department": preset de sección "Destacados del mes".
+  fuego: [
+    ['path', { d: 'M12 3.2c1 2.6-2.6 3.6-2.6 6.4a2.6 2.6 0 0 0 5.2 0c0-.8-.6-1.5-.6-1.5 1.6.9 2.6 2.6 2.6 4.4a5 5 0 0 1-10 0c0-4 3.6-4.9 5.4-9.3z' }],
+  ],
+  // "auto_awesome": destello de 4 puntas — cabecera de "Plantillas sugeridas".
+  chispa: [
+    ['line', { x1: 12, y1: 3, x2: 12, y2: 9 }],
+    ['line', { x1: 12, y1: 15, x2: 12, y2: 21 }],
+    ['line', { x1: 3, y1: 12, x2: 9, y2: 12 }],
+    ['line', { x1: 15, y1: 12, x2: 21, y2: 12 }],
+    ['line', { x1: 5.5, y1: 5.5, x2: 9.5, y2: 9.5 }],
+    ['line', { x1: 14.5, y1: 14.5, x2: 18.5, y2: 18.5 }],
+  ],
 });
 
 /**

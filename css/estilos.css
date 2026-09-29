@@ -2314,3 +2314,469 @@ details[open] > .grupo__titulo--seccion::after {
   margin-top: 2px;
   border-top: 1px solid var(--color-borde);
 }
+
+/* =========================================================================================
+   Fase 5 — Editar Producto / Gestión de secciones / Respaldo (Interfaz/stitch_.../
+   editar_producto_natural, gesti_n_de_secciones_natural, respaldo_natural).
+   `.panel`: la tarjeta "bg-surface-container-low rounded-xl border ... shadow-sm" que los 3
+   diseños repiten para cada bloque temático — reusada tal cual en las 3 pantallas.
+   ========================================================================================= */
+.panel {
+  background: var(--color-superficie-baja);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio);
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px 0 rgba(58, 48, 40, 0.03);
+}
+.panel:last-child {
+  margin-bottom: 0;
+}
+.panel__cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+/* Rótulo chico con ícono (label-lg del diseño: 0.875rem/600, mayúsculas suaves en vez de
+   uppercase estricto — el mock usa "tracking-wide", no `text-transform: uppercase`). */
+.panel__rotulo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--color-primario-oscuro);
+  margin-bottom: 10px;
+}
+.panel__rotulo .icono {
+  width: 18px;
+  height: 18px;
+  color: var(--color-acento);
+  margin-right: 0;
+}
+.panel__titulo {
+  font-family: var(--font-titulo);
+  font-size: 1.375rem;
+  line-height: 1.75rem;
+  font-weight: 500;
+  color: var(--color-primario-oscuro);
+  margin-bottom: 12px;
+}
+.panel__subtitulo {
+  margin: -8px 0 12px;
+  font-size: var(--tamano-14);
+  color: var(--color-texto-tenue);
+  line-height: 1.4;
+}
+.panel__badge {
+  flex-shrink: 0;
+  font-family: var(--font-datos);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-texto-tenue);
+  background: var(--color-superficie);
+  border: 1px solid var(--borde-sutil);
+  padding: 2px 8px;
+  border-radius: var(--radio-chico);
+  white-space: nowrap;
+}
+.panel__pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+.panel__pie .texto-tenue {
+  min-width: 0;
+}
+.panel__accion-texto {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+  margin: -6px -4px;
+  border: none;
+  background: none;
+  color: var(--color-primario-oscuro);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  cursor: pointer;
+}
+.panel__accion-texto:hover {
+  text-decoration: underline;
+}
+.panel__accion-texto:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+  border-radius: var(--radio-chico);
+}
+.panel__accion-texto .icono {
+  width: 15px;
+  height: 15px;
+  margin-right: 0;
+}
+
+/* ---------- Editar Producto: panel de foto cuadrado + acciones + campos con prefijo ---------- */
+.foto-picker {
+  display: flex;
+  flex-direction: column;
+}
+.foto-picker__marco {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radio);
+  background: var(--color-superficie-alta);
+  border: 1px solid var(--color-borde);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.foto-picker__vista {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.foto-picker__vista--vacia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-texto-tenue);
+}
+.foto-picker__vista--vacia .icono {
+  width: 2.5rem;
+  height: 2.5rem;
+  stroke-width: 1.25;
+}
+.foto-picker__badge {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 3px 8px;
+  border-radius: var(--radio-chico);
+  background: rgba(253, 248, 245, 0.92);
+  border: 1px solid var(--borde-sutil);
+  color: var(--color-texto);
+  font-family: var(--font-cuerpo);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+.foto-picker__acciones {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.foto-picker__accion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: var(--toque-min);
+  padding: 10px 6px;
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--color-borde);
+  background: var(--color-superficie);
+  color: var(--color-texto-tenue);
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease);
+}
+.foto-picker__accion:hover {
+  border-color: var(--color-acento);
+}
+.foto-picker__accion:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.foto-picker__accion:active {
+  transform: scale(0.97);
+}
+.foto-picker__accion .icono {
+  width: 20px;
+  height: 20px;
+  color: var(--color-primario-oscuro);
+  margin-right: 0;
+}
+.foto-picker__accion span {
+  font-family: var(--font-cuerpo);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+.foto-picker__nota {
+  margin: 10px 0 0;
+  text-align: center;
+}
+
+.campo__fila-etiqueta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.campo__envoltorio {
+  position: relative;
+  min-width: 0;
+}
+/* El <input> ya no es hijo directo de `.campo` (flex column, stretch automático): envuelto en
+   `.campo__envoltorio` (div normal) perdía el ancho completo y volvía al ancho intrínseco del
+   navegador — invisible a simple vista pero se notaba (y desbordaba) con fuente grande del
+   sistema (overflow-fuente-grande.spec.js). */
+.campo__envoltorio input {
+  width: 100%;
+  min-width: 0;
+}
+.campo__envoltorio--prefijo .campo__prefijo {
+  position: absolute;
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  color: var(--color-texto-tenue);
+  font-family: var(--font-cuerpo);
+  font-weight: 600;
+  pointer-events: none;
+}
+/* Más específico que `.campo input[type='text']` (padding:10px 12px) a propósito: si no, ese
+   shorthand le gana al padding-left de acá y el "$" queda tapando el primer dígito del precio. */
+.campo .campo__envoltorio--prefijo input[type='text'] {
+  padding-left: 28px;
+}
+
+/* Chip con guion punteado: abre el alta rápida de sección (progresiva, patrones.md regla 8). */
+.chip--agregar {
+  border-style: dashed;
+  color: var(--color-acento);
+  background: transparent;
+}
+.chip--agregar:hover {
+  border-color: var(--color-acento);
+  background: var(--color-superficie);
+}
+.chips-secciones__form {
+  margin-top: 10px;
+}
+
+.formulario-producto__acciones {
+  align-items: stretch;
+}
+.formulario-producto__acciones .boton--fantasma {
+  flex-shrink: 0;
+}
+.formulario-producto__acciones .boton--primario {
+  flex: 1;
+}
+
+/* ---------- Gestión de secciones (#/secciones): tarjetas "Tus secciones" / "Nueva sección" /
+   "Plantillas sugeridas" / consejo — reemplaza la pila plana anterior. ---------- */
+.panel-secciones__fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio);
+  margin-bottom: 8px;
+}
+.panel-secciones__fila:last-child {
+  margin-bottom: 0;
+}
+.panel-secciones__info {
+  min-width: 0;
+  flex: 1;
+}
+.panel-secciones__nombre {
+  display: block;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 4px 0;
+  color: var(--color-texto);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-16);
+  font-weight: 500;
+}
+.panel-secciones__nombre:focus-visible {
+  outline: none;
+  border-bottom: 1px solid var(--color-acento);
+}
+.panel-secciones__conteo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  color: var(--color-texto-tenue);
+  font-family: var(--font-cuerpo);
+  font-size: 0.75rem;
+}
+.panel-secciones__conteo .icono {
+  width: 13px;
+  height: 13px;
+  margin-right: 0;
+}
+/* Apiladas verticalmente (no lado a lado): 2 botones de 48px de ancho lado a lado se comían casi
+   la mitad de una fila de 380px y el nombre de una sección larga quedaba sin espacio (BUGS.md,
+   ronda "Fase 5"). Visual de 32px (como el ícono suelto del mock) con el objetivo táctil de 48px
+   restaurado por un `::after` con inset negativo (patrones.md regla 6), mismo truco que `.chip`. */
+.panel-secciones__acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex-shrink: 0;
+}
+.panel-secciones__acciones .boton-icono-mini {
+  position: relative;
+  width: 32px;
+  height: 32px;
+}
+.panel-secciones__acciones .boton-icono-mini::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+.panel-secciones__acciones .boton-icono-mini .icono {
+  width: 16px;
+  height: 16px;
+}
+.panel-secciones__preset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio);
+  margin-bottom: 8px;
+}
+.panel-secciones__preset:last-child {
+  margin-bottom: 0;
+}
+.panel-secciones__preset-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.panel-secciones__preset-icono {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie);
+  color: var(--color-primario-oscuro);
+}
+.panel-secciones__preset-icono .icono {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
+}
+.panel-secciones__preset-textos {
+  min-width: 0;
+}
+.panel-secciones__preset-titulo {
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  color: var(--color-texto);
+}
+.panel-secciones__preset-subtitulo {
+  font-size: 0.75rem;
+  color: var(--color-texto-tenue);
+}
+
+/* ---------- Respaldo (#/respaldo): tarjetas de estado / restaurar / zona de peligro ---------- */
+.panel-respaldo__estado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--borde-sutil);
+}
+.panel-respaldo__pastilla {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radio-chico);
+  background: var(--color-primario-tinte);
+  color: var(--color-primario-oscuro);
+  font-family: var(--font-cuerpo);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.panel-respaldo__pastilla .icono {
+  width: 14px;
+  height: 14px;
+  margin-right: 0;
+}
+.panel-respaldo__datos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.panel-respaldo__fila-dato {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: var(--tamano-14);
+  color: var(--color-texto-tenue);
+}
+.panel-respaldo__fila-dato strong {
+  color: var(--color-texto);
+  font-weight: 600;
+  text-align: right;
+}
+.panel-respaldo__boton-secundario {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.secciones__cabecera {
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.secciones__kicker {
+  min-width: 0;
+  color: var(--color-texto-tenue);
+  font-family: var(--font-cuerpo);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.secciones__nota-multiple {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+.secciones__nota-multiple .icono {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin-right: 0;
+}

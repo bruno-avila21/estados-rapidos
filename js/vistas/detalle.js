@@ -1,4 +1,7 @@
 // Alta / edición de producto: foto (galería o cámara), nombre, precio, descripción.
+// Reskin "Organic Minimalist" (Interfaz/stitch_.../editar_producto_natural): formulario partido en
+// paneles temáticos (Fotografía / Información general / Descripción / Secciones), en vez de la
+// pila plana anterior — misma lógica de guardado/validación, solo reorganizada en tarjetas.
 import * as repo from '../repositorio.js';
 import { validarProducto, parsearPrecio, formatearPrecio, ESTILOS_IMAGEN, ETIQUETA_ESTILO, validarNombreSeccion } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
@@ -28,9 +31,16 @@ export async function render(contenedor, { navegar, params }) {
   form.className = 'pila';
   form.noValidate = true;
 
-  // --- Capa 1: foto + nombre + precio (lo que se usa siempre) ---
-  const grupoFoto = document.createElement('div');
-  grupoFoto.className = 'foto-picker';
+  // --- Panel 1: fotografía (lo que se usa siempre) ---
+  const panelFoto = document.createElement('section');
+  panelFoto.className = 'panel foto-picker';
+  const rotuloFoto = document.createElement('span');
+  rotuloFoto.className = 'panel__rotulo';
+  rotuloFoto.textContent = 'Fotografía principal';
+  panelFoto.append(rotuloFoto);
+
+  const marcoFoto = document.createElement('div');
+  marcoFoto.className = 'foto-picker__marco';
   const previa = document.createElement('img');
   previa.className = 'foto-picker__vista';
   previa.alt = '';
@@ -38,10 +48,17 @@ export async function render(contenedor, { navegar, params }) {
   previa.hidden = !urlPreviaActual;
 
   const previaVacia = document.createElement('div');
-  previaVacia.className = 'foto-picker__vista tarjeta__foto--vacia';
+  previaVacia.className = 'foto-picker__vista foto-picker__vista--vacia';
   previaVacia.setAttribute('aria-hidden', 'true');
   previaVacia.append(crearIcono('camara'));
   previaVacia.hidden = !!urlPreviaActual;
+
+  const badgeFoto = document.createElement('span');
+  badgeFoto.className = 'foto-picker__badge';
+  badgeFoto.textContent = 'Foto actual';
+  badgeFoto.hidden = !urlPreviaActual;
+
+  marcoFoto.append(previa, previaVacia, badgeFoto);
 
   const inputGaleria = document.createElement('input');
   inputGaleria.type = 'file';
@@ -67,50 +84,68 @@ export async function render(contenedor, { navegar, params }) {
     previa.src = urlPreviaActual;
     previa.hidden = false;
     previaVacia.hidden = true;
+    badgeFoto.hidden = false;
   };
   inputGaleria.addEventListener('change', alElegirFoto(inputGaleria));
   inputCamara.addEventListener('change', alElegirFoto(inputCamara));
 
-  const botonesFoto = document.createElement('div');
-  botonesFoto.className = 'pila';
-  const btnGaleria = document.createElement('button');
-  btnGaleria.type = 'button';
-  btnGaleria.className = 'boton boton--chico';
-  btnGaleria.setAttribute('data-accion', 'elegir-galeria');
-  btnGaleria.textContent = 'Galería';
-  btnGaleria.addEventListener('click', () => inputGaleria.click());
-  const btnCamara = document.createElement('button');
-  btnCamara.type = 'button';
-  btnCamara.className = 'boton boton--chico';
-  btnCamara.setAttribute('data-accion', 'elegir-camara');
-  btnCamara.textContent = 'Cámara';
+  const accionesFoto = document.createElement('div');
+  accionesFoto.className = 'foto-picker__acciones';
+  const btnCamara = botonFoto({ icono: 'camara', texto: 'Cámara', accion: 'elegir-camara' });
   btnCamara.addEventListener('click', () => inputCamara.click());
-  botonesFoto.append(btnGaleria, btnCamara);
+  const btnGaleria = botonFoto({ icono: 'galeria', texto: 'Galería', accion: 'elegir-galeria' });
+  btnGaleria.addEventListener('click', () => inputGaleria.click());
+  accionesFoto.append(btnCamara, btnGaleria);
 
-  grupoFoto.append(previa, previaVacia, botonesFoto, inputGaleria, inputCamara);
+  const notaFoto = document.createElement('p');
+  notaFoto.className = 'texto-tenue foto-picker__nota';
+  notaFoto.textContent = 'Se recorta a 1080×1920 al publicar el estado.';
+
+  panelFoto.append(marcoFoto, accionesFoto, notaFoto, inputGaleria, inputCamara);
+
+  // --- Panel 2: información general (nombre + precio) ---
+  const panelInfo = document.createElement('section');
+  panelInfo.className = 'panel';
+  const tituloInfo = document.createElement('h2');
+  tituloInfo.className = 'panel__titulo';
+  tituloInfo.textContent = 'Información general';
+  panelInfo.append(tituloInfo);
 
   const campoNombre = campoTexto({
     id: 'nombre',
-    etiqueta: 'Nombre',
+    etiqueta: 'Nombre del producto',
     valor: producto?.nombre ?? '',
     tipo: 'text',
   });
 
   const campoPrecio = campoTexto({
     id: 'precio',
-    etiqueta: 'Precio',
+    etiqueta: 'Precio de catálogo',
     valor: producto?.precio != null ? String(producto.precio) : '',
     tipo: 'text',
     inputMode: 'decimal',
-    ariaDescripcion: 'Opcional: dejalo vacío para publicar sin precio.',
+    prefijo: '$',
+    etiquetaExtra: 'Opcional',
+    ariaDescripcion: 'Dejalo vacío para publicar el estado sin precio visible.',
   });
 
-  // --- Capa 2: descripción (agrupada, para la leyenda del estado) ---
-  const grupoDescripcion = document.createElement('div');
-  grupoDescripcion.className = 'grupo';
-  const tituloDescripcion = document.createElement('div');
-  tituloDescripcion.className = 'grupo__titulo';
-  tituloDescripcion.textContent = 'Descripción (leyenda al publicar)';
+  panelInfo.append(campoNombre.contenedor, campoPrecio.contenedor);
+
+  // --- Panel 3: descripción / leyenda al publicar (con copiar al portapapeles) ---
+  const panelDescripcion = document.createElement('section');
+  panelDescripcion.className = 'panel';
+  const cabeceraDescripcion = document.createElement('div');
+  cabeceraDescripcion.className = 'panel__cabecera';
+  const rotuloDescripcion = document.createElement('span');
+  rotuloDescripcion.className = 'panel__rotulo';
+  rotuloDescripcion.append(crearIcono('lista'), document.createTextNode('Descripción / leyenda al publicar'));
+  const btnCopiarDescripcion = document.createElement('button');
+  btnCopiarDescripcion.type = 'button';
+  btnCopiarDescripcion.className = 'panel__accion-texto';
+  btnCopiarDescripcion.setAttribute('data-accion', 'copiar-descripcion');
+  btnCopiarDescripcion.append(crearIcono('copiar'), document.createTextNode('Copiar'));
+  cabeceraDescripcion.append(rotuloDescripcion, btnCopiarDescripcion);
+
   const campoDescripcion = document.createElement('div');
   campoDescripcion.className = 'campo';
   const textareaDescripcion = document.createElement('textarea');
@@ -118,48 +153,85 @@ export async function render(contenedor, { navegar, params }) {
   textareaDescripcion.maxLength = 300;
   textareaDescripcion.value = producto?.descripcion ?? '';
   campoDescripcion.append(textareaDescripcion);
-  grupoDescripcion.append(tituloDescripcion, campoDescripcion);
+
+  const pieDescripcion = document.createElement('div');
+  pieDescripcion.className = 'panel__pie';
+  const notaDescripcion = document.createElement('span');
+  notaDescripcion.className = 'texto-tenue';
+  notaDescripcion.textContent = 'Se puede editar al publicar; "Copiar" la deja lista para pegar en WhatsApp.';
+  const contadorDescripcion = document.createElement('span');
+  contadorDescripcion.className = 'panel__badge';
+  const pintarContador = () => {
+    const largo = textareaDescripcion.value.length;
+    contadorDescripcion.textContent = `${largo} caracter${largo === 1 ? '' : 'es'}`;
+  };
+  pintarContador();
+  textareaDescripcion.addEventListener('input', pintarContador);
+  pieDescripcion.append(notaDescripcion, contadorDescripcion);
+
+  btnCopiarDescripcion.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(textareaDescripcion.value);
+      mostrarToast('Descripción copiada');
+    } catch {
+      mostrarToast('No se pudo copiar');
+    }
+  });
+
+  panelDescripcion.append(cabeceraDescripcion, campoDescripcion, pieDescripcion);
 
   // --- Secciones (etiquetas): un producto puede estar en varias a la vez (ronda "secciones",
   // CREAR-BRIEF.md) — chips seleccionables + alta inline sin salir del formulario. ---
-  const grupoSecciones = document.createElement('div');
-  grupoSecciones.className = 'grupo';
-  const tituloSecciones = document.createElement('div');
-  tituloSecciones.className = 'grupo__titulo';
-  tituloSecciones.textContent = 'Secciones';
+  const panelSecciones = document.createElement('section');
+  panelSecciones.className = 'panel';
+  const tituloSecciones = document.createElement('h2');
+  tituloSecciones.className = 'panel__titulo';
+  tituloSecciones.textContent = 'Secciones asignadas';
+  const subtituloSecciones = document.createElement('p');
+  subtituloSecciones.className = 'panel__subtitulo';
+  subtituloSecciones.textContent = 'Elegí en qué secciones aparece este producto al filtrar o publicar.';
   const chipsSecciones = document.createElement('div');
   chipsSecciones.className = 'chips-secciones';
+
+  const btnMostrarNuevaSeccion = document.createElement('button');
+  btnMostrarNuevaSeccion.type = 'button';
+  btnMostrarNuevaSeccion.className = 'chip chip--agregar';
+  btnMostrarNuevaSeccion.setAttribute('data-accion', 'mostrar-nueva-seccion');
+  btnMostrarNuevaSeccion.append(crearIcono('agregar'), document.createTextNode('Nueva sección'));
 
   function pintarChipsSecciones() {
     chipsSecciones.textContent = '';
     if (seccionesDisponibles.length === 0) {
       const vacio = document.createElement('p');
       vacio.className = 'texto-tenue';
-      vacio.textContent = 'Todavía no creaste ninguna: agregá una acá abajo.';
+      vacio.textContent = 'Todavía no creaste ninguna: agregá una con el botón de abajo.';
       chipsSecciones.append(vacio);
-      return;
+    } else {
+      for (const seccion of seccionesDisponibles) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        const activa = seccionesSeleccionadas.has(seccion.id);
+        chip.className = 'chip' + (activa ? ' chip--activo' : '');
+        chip.setAttribute('data-accion', 'toggle-seccion');
+        chip.setAttribute('data-id', seccion.id);
+        chip.setAttribute('aria-pressed', String(activa));
+        if (activa) chip.append(crearIcono('check'));
+        chip.append(document.createTextNode(seccion.nombre));
+        chip.addEventListener('click', () => {
+          if (seccionesSeleccionadas.has(seccion.id)) seccionesSeleccionadas.delete(seccion.id);
+          else seccionesSeleccionadas.add(seccion.id);
+          pintarChipsSecciones();
+        });
+        chipsSecciones.append(chip);
+      }
     }
-    for (const seccion of seccionesDisponibles) {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      const activa = seccionesSeleccionadas.has(seccion.id);
-      chip.className = 'chip' + (activa ? ' chip--activo' : '');
-      chip.setAttribute('data-accion', 'toggle-seccion');
-      chip.setAttribute('data-id', seccion.id);
-      chip.setAttribute('aria-pressed', String(activa));
-      chip.textContent = seccion.nombre;
-      chip.addEventListener('click', () => {
-        if (seccionesSeleccionadas.has(seccion.id)) seccionesSeleccionadas.delete(seccion.id);
-        else seccionesSeleccionadas.add(seccion.id);
-        pintarChipsSecciones();
-      });
-      chipsSecciones.append(chip);
-    }
+    chipsSecciones.append(btnMostrarNuevaSeccion);
   }
   pintarChipsSecciones();
 
   const formNuevaSeccion = document.createElement('form');
-  formNuevaSeccion.className = 'fila';
+  formNuevaSeccion.className = 'fila chips-secciones__form';
+  formNuevaSeccion.hidden = true;
   const inputNuevaSeccion = document.createElement('input');
   inputNuevaSeccion.type = 'text';
   inputNuevaSeccion.maxLength = 40;
@@ -169,8 +241,14 @@ export async function render(contenedor, { navegar, params }) {
   btnNuevaSeccion.type = 'submit';
   btnNuevaSeccion.className = 'boton boton--chico';
   btnNuevaSeccion.setAttribute('data-accion', 'nueva-seccion');
-  btnNuevaSeccion.textContent = '+ Nueva sección';
+  btnNuevaSeccion.textContent = 'Agregar';
   formNuevaSeccion.append(inputNuevaSeccion, btnNuevaSeccion);
+
+  btnMostrarNuevaSeccion.addEventListener('click', () => {
+    formNuevaSeccion.hidden = false;
+    inputNuevaSeccion.focus();
+  });
+
   formNuevaSeccion.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const { ok, error } = validarNombreSeccion(inputNuevaSeccion.value);
@@ -185,9 +263,11 @@ export async function render(contenedor, { navegar, params }) {
     pintarChipsSecciones();
   });
 
-  grupoSecciones.append(tituloSecciones, chipsSecciones, formNuevaSeccion);
+  panelSecciones.append(tituloSecciones, subtituloSecciones, chipsSecciones, formNuevaSeccion);
 
-  // --- Capa 3: opciones avanzadas, detrás de un gesto explícito (patrones.md, regla 9) ---
+  // --- Opciones avanzadas: detrás de un gesto explícito (patrones.md, regla 9) — sin equivalente
+  // en el diseño Stitch (que no modela el override de estilo por producto): se mantiene con el
+  // mismo patrón `details.grupo` del resto de la app. ---
   const detallesAvanzado = document.createElement('details');
   detallesAvanzado.className = 'grupo';
   const resumenAvanzado = document.createElement('summary');
@@ -222,7 +302,7 @@ export async function render(contenedor, { navegar, params }) {
   errorGeneral.hidden = true;
 
   const filaAcciones = document.createElement('div');
-  filaAcciones.className = 'fila';
+  filaAcciones.className = 'fila formulario-producto__acciones';
   const btnCancelar = document.createElement('button');
   btnCancelar.type = 'button';
   btnCancelar.className = 'boton boton--fantasma';
@@ -234,11 +314,11 @@ export async function render(contenedor, { navegar, params }) {
   btnGuardar.type = 'submit';
   btnGuardar.className = 'boton boton--primario boton--ancho';
   btnGuardar.setAttribute('data-accion', 'guardar');
-  btnGuardar.textContent = esNuevo ? 'Agregar producto' : 'Guardar cambios';
+  btnGuardar.append(crearIcono('check'), document.createTextNode(esNuevo ? 'Agregar producto' : 'Guardar cambios'));
 
   filaAcciones.append(btnCancelar, btnGuardar);
 
-  form.append(grupoFoto, campoNombre.contenedor, campoPrecio.contenedor, grupoDescripcion, grupoSecciones, detallesAvanzado, errorGeneral, filaAcciones);
+  form.append(panelFoto, panelInfo, panelDescripcion, panelSecciones, detallesAvanzado, errorGeneral, filaAcciones);
 
   if (!esNuevo) {
     const separador = document.createElement('div');
@@ -247,7 +327,7 @@ export async function render(contenedor, { navegar, params }) {
     btnBorrar.type = 'button';
     btnBorrar.className = 'boton boton--peligro boton--ancho';
     btnBorrar.setAttribute('data-accion', 'borrar');
-    btnBorrar.textContent = 'Borrar producto';
+    btnBorrar.append(crearIcono('borrar'), document.createTextNode('Borrar producto'));
     btnBorrar.addEventListener('click', async () => {
       const ok = await pedirConfirmacion({
         titulo: 'Borrar producto',
@@ -311,29 +391,61 @@ export async function render(contenedor, { navegar, params }) {
   contenedor.append(form);
 }
 
-function campoTexto({ id, etiqueta, valor, tipo, inputMode, ariaDescripcion }) {
+function botonFoto({ icono, texto, accion }) {
+  const boton = document.createElement('button');
+  boton.type = 'button';
+  boton.className = 'foto-picker__accion';
+  boton.setAttribute('data-accion', accion);
+  const etiqueta = document.createElement('span');
+  etiqueta.textContent = texto;
+  boton.append(crearIcono(icono), etiqueta);
+  return boton;
+}
+
+function campoTexto({ id, etiqueta, valor, tipo, inputMode, ariaDescripcion, prefijo, etiquetaExtra }) {
   const contenedor = document.createElement('div');
   contenedor.className = 'campo';
+  const filaEtiqueta = document.createElement('div');
+  filaEtiqueta.className = 'campo__fila-etiqueta';
   const label = document.createElement('label');
   label.className = 'campo__etiqueta';
   label.htmlFor = `campo-${id}`;
   label.textContent = etiqueta;
+  filaEtiqueta.append(label);
+  if (etiquetaExtra) {
+    const extra = document.createElement('span');
+    extra.className = 'texto-tenue';
+    extra.textContent = etiquetaExtra;
+    filaEtiqueta.append(extra);
+  }
+
+  const envoltorioInput = document.createElement('div');
+  envoltorioInput.className = prefijo ? 'campo__envoltorio campo__envoltorio--prefijo' : 'campo__envoltorio';
+  if (prefijo) {
+    const spanPrefijo = document.createElement('span');
+    spanPrefijo.className = 'campo__prefijo';
+    spanPrefijo.setAttribute('aria-hidden', 'true');
+    spanPrefijo.textContent = prefijo;
+    envoltorioInput.append(spanPrefijo);
+  }
   const input = document.createElement('input');
   input.type = tipo;
   input.id = `campo-${id}`;
   input.value = valor;
   if (inputMode) input.inputMode = inputMode;
+  envoltorioInput.append(input);
+
   const error = document.createElement('div');
   error.className = 'campo__error';
   error.setAttribute('role', 'alert'); // se anuncia a lectores de pantalla (QA.md #7)
   error.hidden = true;
+  contenedor.append(filaEtiqueta, envoltorioInput);
   if (ariaDescripcion) {
     const ayuda = document.createElement('div');
     ayuda.className = 'texto-tenue';
     ayuda.textContent = ariaDescripcion;
-    contenedor.append(label, input, ayuda, error);
-  } else {
-    contenedor.append(label, input, error);
+    contenedor.append(ayuda);
   }
+  contenedor.append(error);
   return { contenedor, input, error };
 }

@@ -649,3 +649,32 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `js/vistas/lista.js` (`barraPublicarFija`) — ícono + texto ahora van en un `<span class="barra-publicar__contenido">` que SÍ se puede achicar (`min-width:0`, `flex-shrink:1`); el texto vive en su propio `<span class="barra-publicar__texto">` con `overflow:hidden; text-overflow:ellipsis; white-space:nowrap` (trunca en vez de desbordar — `el.textContent` del botón sigue siendo exacto "Publicar N producto(s)" para los tests, la ellipsis es puramente visual). `css/estilos.css` — el botón usa `justify-content: space-between` solo cuando lleva badge (`.boton--publicar-grilla`) y `center` si no; ícono y badge llevan `flex-shrink: 0`.
 - **Resuelto:** sí — confirmado con `overflow-fuente-grande.spec.js` (6/6 verdes) y la suite completa (100/100 e2e).
 - ¿Se repetiría en otro proyecto? Sí — mismo espíritu que #35/#42: un botón con contenido variable (ícono + texto + badge opcional) necesita que el elemento que puede crecer sea el que se achica (`min-width:0` + ellipsis en el texto), nunca `justify-content: center`/`nowrap` a ciegas en el contenedor entero, porque eso empuja los elementos de ancho fijo (íconos, badges) fuera de la pantalla en vez de recortar el texto.
+
+### 44. Reskin editar_producto_natural: `#campo-nombre`/`#campo-precio` se pasan del viewport a 320-360px + letra grande del sistema
+- **Paso:** suite completa de e2e tras envolver nombre/precio en `.campo__envoltorio` (Fase 5, prefijo "$" del precio) en `js/vistas/detalle.js`.
+- **Error exacto:**
+  ```
+  Alta de producto: scrollOverflow=false
+  INPUT#campo-nombre right=348 left=33 ""
+  INPUT#campo-precio right=364 left=33 ""
+  ```
+- **Reproducir:** `#/producto/nuevo`, viewport 320-360px, `document.documentElement.style.fontSize` al 160%.
+- **Causa:** `.campo input[type='text']` nunca necesitó un `width` explícito porque `.campo` es `display:flex; flex-direction:column`, y el `align-items: stretch` por defecto estira a los HIJOS DIRECTOS a todo el ancho. Al envolver el `<input>` en `.campo__envoltorio` (un `<div>` normal, no flex) para el prefijo "$", el input dejó de ser hijo directo de `.campo` — quedó con su ancho intrínseco de navegador (el de `size` por defecto, ~20 caracteres), que crece con la fuente y a 160% + viewport chico se pasa del borde.
+- **Arreglo:** `css/estilos.css` — `.campo__envoltorio input { width: 100%; min-width: 0; }`.
+- **Resuelto:** sí — confirmado con las 6 combinaciones de `overflow-fuente-grande.spec.js` en verde.
+- ¿Se repetiría en otro proyecto? Sí — cualquier `<input>` que deje de ser hijo directo de un flex-column con `stretch` (por ej. al agregarle un ícono/prefijo con un wrapper) necesita su propio `width: 100%` explícito; el estiramiento del flex padre no "atraviesa" un div intermedio.
+
+### 45. Reskin editar_producto_natural: el selector de `.campo__error` del precio en `botones.spec.js` dejó de encontrarlo
+- **Paso:** suite completa de e2e, mismo cambio que #44 (envoltorio `.campo__envoltorio` para el prefijo "$" del precio).
+- **Error exacto:**
+  ```
+  Error: expect(locator).toHaveText(expected) failed
+  Locator: locator('#campo-precio').locator('..').locator('.campo__error')
+  Expected pattern: /mayor a cero/i
+  Error: element(s) not found
+  ```
+- **Reproducir:** `test/e2e/botones.spec.js`, test "precio vacío es válido... negativo sigue siendo error".
+- **Causa:** no es un bug de la app — el test asumía que `.campo__error` es HERMANO directo del `<input>` (`#campo-precio` → `..` → buscar `.campo__error` ahí mismo). Desde Fase 5, el precio envuelve el input en `.campo__envoltorio` (prefijo "$"): el padre inmediato del input ahora es ese envoltorio, no `.campo`, y `.campo__error` sigue siendo hijo de `.campo` (un nivel más arriba).
+- **Arreglo:** `test/e2e/botones.spec.js` — `'..'` → `'../..'` para subir hasta `.campo` antes de buscar `.campo__error`.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí, es el mismo punto que #44: un test que asume una estructura de DOM exacta (en vez de un `data-*`/rol estable) se rompe apenas se agrega un wrapper intermedio: preferible pero no bloqueante para este cambio puntual.
