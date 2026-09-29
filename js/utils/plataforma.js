@@ -38,14 +38,46 @@ function archivoADataUrl(archivo) {
   });
 }
 
-/** Copiar al portapapeles. En el APK, `navigator.clipboard` puede fallar dentro del WebView. */
+/** Copiar al portapapeles. En el APK, `navigator.clipboard` puede fallar dentro del WebView; en el
+ * navegador, `navigator.clipboard` puede no existir (contexto no seguro) o rechazar (permiso
+ * denegado) — en ambos casos se cae a `document.execCommand('copy')` sobre un `<textarea>` oculto
+ * antes de darse por vencido (Fase 2, "S" #4: "con fallback si clipboard falla"). */
 export async function copiarTexto(texto) {
   if (enApk()) {
     window.Android.copiar(texto);
     return true;
   }
-  await navigator.clipboard.writeText(texto);
-  return true;
+  try {
+    await navigator.clipboard.writeText(texto);
+    return true;
+  } catch (error) {
+    if (copiarConExecCommand(texto)) return true;
+    throw error;
+  }
+}
+
+/** Fallback viejo pero universal: un `<textarea>` fuera de pantalla, seleccionado y copiado con
+ * `execCommand`. Sigue funcionando en WebViews/navegadores donde la Clipboard API async no anda.
+ * Devuelve `false` (nunca lanza) si tampoco esto funciona, para que `copiarTexto` decida qué hacer. */
+function copiarConExecCommand(texto) {
+  if (typeof document === 'undefined' || typeof document.execCommand !== 'function') return false;
+  const area = document.createElement('textarea');
+  area.value = texto;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.top = '0';
+  area.style.left = '-9999px';
+  document.body.append(area);
+  area.select();
+  area.setSelectionRange(0, texto.length);
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  area.remove();
+  return ok;
 }
 
 /**
@@ -54,6 +86,29 @@ export async function copiarTexto(texto) {
  */
 export function guardarArchivoApk({ nombre, mime, contenido }) {
   window.Android.guardarArchivo(nombre, mime, contenido);
+}
+
+// Copia automática diaria (ronda "copia automática", Respaldo → "Preferencias de respaldo"): a
+// diferencia de `guardarArchivoApk` (SAF, el usuario elige carpeta con un picker), esta va SOLA a
+// Documents/EstadosRapidos/ vía MediaStore, sin picker ni gesto — por eso no puede pasar por
+// `guardarArchivo` (ese contrato es un solo Uri elegido por persona). Con 50 productos con foto el
+// JSON pesa varios MB de base64: se manda en partes (streaming) para no tenerlo entero de los 2
+// lados de memoria a la vez ni pegarle una string gigante al puente de un saque (mismo criterio que
+// `compartirImagenesApk`, que ya manda una imagen por vez en vez de juntarlas).
+const TAMANO_PARTE_COPIA_AUTOMATICA = 2_000_000; // caracteres por parte (~2 MB de texto UTF-16 en JS)
+
+/**
+ * @param {{nombre: string, contenido: string}} datos - `contenido` es el JSON ya serializado
+ * (mismo formato que exportarRespaldo/JSON.stringify). El puente nativo escribe en streaming a un
+ * único hilo (orden garantizado: abrir → N partes → cerrar), así que no hace falta esperar cada
+ * llamada — igual se expone como función async para no atarse a esa garantía interna.
+ */
+export async function guardarCopiaAutomaticaApk({ nombre, contenido }) {
+  window.Android.copiaAutomaticaAbrir(nombre);
+  for (let i = 0; i < contenido.length; i += TAMANO_PARTE_COPIA_AUTOMATICA) {
+    window.Android.copiaAutomaticaEscribir(contenido.slice(i, i + TAMANO_PARTE_COPIA_AUTOMATICA));
+  }
+  window.Android.copiaAutomaticaCerrar();
 }
 
 /** El número de versión que muestra Ajustes → "La app" cuando corre empaquetada. */

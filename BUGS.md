@@ -3,6 +3,200 @@
 Registro de fallos encontrados durante la construcción, con causa y arreglo (regla de cierre.md /
 seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos resueltos.
 
+### 52. Reskin Plantilla, ronda 3 (Capas con formato del mock): `editor.spec.js` "el ojo de una capa la oculta" esperaba el texto viejo "(oculto)"
+- **Paso:** `npx playwright test test/e2e/editor.spec.js test/e2e/tactil.spec.js test/e2e/responsive.spec.js test/e2e/ajustes.spec.js test/e2e/presets.spec.js` tras rediseñar las filas de "Capas y visibilidad" (ícono en cuadrito + nombre en negrita + subtexto de estado real, editar_plantilla_natural).
+- **Error exacto:**
+  ```
+  Error: expect(locator).toContainText(expected) failed
+  Expected substring: "(oculto)"
+  Received string:    "NombreOculto en este estilo"
+  ```
+- **Reproducir:** `npx playwright test test/e2e/editor.spec.js -g "el ojo de una capa"`.
+- **Causa:** del TEST, no de la app — la fila de Capas cambió su subtexto de `"Nombre (oculto)"` a
+  `"Oculto en este estilo"` (mismo cambio de copy pedido por Bruno para acercar la fila al mock), y
+  el test seguía buscando la cadena vieja `(oculto)`.
+- **Arreglo:** `test/e2e/editor.spec.js` — el `toContainText` pasa a buscar `'Oculto en este estilo'`.
+- **Resuelto:** sí — confirmado, `npx playwright test test/e2e/editor.spec.js` → 21/21.
+- ¿Se repetiría en otro proyecto? Sí — cualquier test que ancle un `toContainText` a un copy literal se rompe apenas ese copy cambia a propósito; conviene anclarlo a un estado (clase/atributo) cuando el texto es probable que cambie por diseño.
+
+### 50. `sw.spec.js` fallaba de forma consistente (recurrencia de #10/#39/#45/#46/#47), diagnosticado y arreglado — no era ajeno al código
+- **Paso:** Fase final del reskin. `npx playwright test -c test/e2e/playwright.config.js test/e2e/sw.spec.js` — fallaba 3/3 (intento + 2 retries) de forma determinística en esta máquina, aislado y dentro de la suite completa.
+- **Error exacto:**
+  ```
+  Error: page.goto: net::ERR_FAILED at http://127.0.0.1:8991/
+  Call log:
+    - navigating to "http://127.0.0.1:8991/", waiting until "load"
+    > await page.goto('/');   (después de page.route('**/*', route.abort()))
+  ```
+- **Reproducir (antes del arreglo):** `npx playwright test -c test/e2e/playwright.config.js test/e2e/sw.spec.js --retries=0` — fallaba siempre, no era intermitente en esta máquina.
+- **Causa (confirmada con un spec de diagnóstico en scratchpad que agregaba listeners de `response`/`console` y volvía a leer el registro):** el test esperaba `registration.active.state === 'activated'` y a continuación, en el mismo tick, activaba `page.route('**/*', abort)` y navegaba de nuevo esperando que el SW sirviera desde caché. Pero `active.state === 'activated'` es un flag que el **renderer** ve por el lado de JS; el proceso del **navegador** (donde vive el ruteo real "esta navegación va al fetch handler del SW, no a la red") sincroniza el estado de "cliente controlado" en un paso aparte, con su propia latencia. Si la navegación que corta la red llega antes de que esa sincronización termine, el navegador trata la navegación como NO controlada, nunca dispara el fetch handler del SW, y el `route.abort()` mata la petición de verdad — de ahí el `net::ERR_FAILED`. Confirmado agregando una navegación intermedia CON red + polling extra: pasaba 5/5; quitando esos milisegundos de más, volvía a fallar 3/3.
+- **Arreglo:** `test/e2e/sw.spec.js` — después de confirmar `active.state === 'activated'`, se agrega una navegación real (`page.goto('/')`, con red todavía permitida) seguida de `page.waitForFunction(() => !!navigator.serviceWorker.controller)`. Esa espera es una condición determinística (no un `timeout`/`sleep` a ciegas): confirma que ESTA página ya está controlada por el SW antes de cortar la red y navegar por tercera vez. Se sacó el `test.describe.configure({ retries: 2 })` (BUGS.md #10) porque ya no hace falta — 5/5 corridas limpias con `--retries=0`, y 92/92 en la suite completa.
+- **NUCLEO restaurado en `sw.js` (v13→v14):** con la causa real resuelta (no tenía que ver con la cantidad de archivos precacheados), se vuelven a meter en `NUCLEO` los 3 archivos que la Fase 1 había sacado para "bajar el flake" sin diagnóstico (`./fonts/newsreader-400.woff2`, `./fonts/manrope-400.woff2`, `./fonts/manrope-600.woff2`, más `./js/utils/iconos.js`) — estaban afuera del precache y por lo tanto la PWA no abría con las fuentes/íconos nuevos en la primera carga sin red. De paso se sumó `./js/utils/plataforma.js`, que faltaba en `NUCLEO` desde la ronda APK 1.1 (`d4c513b`) y lo importan `respaldo.js`/`compartir.js`/`ajustes-la-app.js`, ya en el núcleo — mismo criterio: sin él, esas pantallas podían quedar rotas offline en la primera carga.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — cualquier E2E que mida `registration.active.state` y corte la red en la MISMA navegación tiene esta carrera. Agregado a `recetas/e2e.md` (sección "Service Worker: verificarlo aparte de los E2E mockeados"): la sincronización correcta es esperar `navigator.serviceWorker.controller` después de una navegación real con red, no un timeout.
+
+### 49. Fase 4: el botón "Deshacer preset" quedaba visible con `hidden` puesto (pisado por `.fila{display:flex}`)
+- **Paso:** verificación manual con agent-browser a 412×915 en `/#/plantilla?estilo=editorial` — el
+  botón "Deshacer preset" (nuevo, galería de presets) aparecía en el snapshot de accesibilidad y
+  `agent-browser is visible` lo confirmaba visible aun con `filaDeshacerPreset.hidden = true` recién
+  entrado al editor (nadie aplicó ningún preset todavía).
+- **Error exacto:** ninguna excepción — bug visual/de estado: `hidden` (atributo HTML) no ocultaba
+  el elemento.
+- **Reproducir:** abrir `/#/plantilla?estilo=<cualquiera>` sin haber tocado la galería de presets;
+  `agent-browser is visible "[data-accion='deshacer-preset']"` daba `true`.
+- **Causa:** el contenedor del botón usa `class="fila"`, y `.fila { display: flex; }` (css/estilos.css)
+  es una regla de AUTOR con la misma especificidad que el `[hidden] { display: none }` que trae el
+  navegador por defecto — una regla de autor siempre gana contra la hoja de estilos por defecto del
+  navegador, sin importar el orden. Es la MISMA trampa que ya resolvían `.tarjeta-estilo__badge[hidden]`
+  y `.editor-plantilla__badge[hidden]` (ya existian en el CSS antes de esta ronda) -- pero esas dos
+  son puntuales por clase, y no había una regla genérica para `.fila`.
+- **Arreglo:** agregar `.fila[hidden] { display: none; }` junto a la definición de `.fila`
+  (`css/estilos.css`), en vez de una clase puntual — cubre este caso Y cualquier `.fila` oculta que
+  se agregue después.
+- **Resuelto:** sí, mismo commit de Fase 4.
+- ¿Se repetiría en otro proyecto? Sí — cualquier proyecto con clases utilitarias que fijan `display`
+  (`.fila`, `.flex`, `.grid`, etc.) tiene esta misma trampa con el atributo `hidden`: conviene una
+  regla genérica `[hidden] { display: none !important; }` (o, como acá, una por clase utilitaria)
+  desde el arranque del proyecto, no descubrirla bug por bug.
+
+### 48. Fase 4: la galería de presets arriba del lienzo rompía el arrastre con mouse/touch en 412×915
+- **Paso:** `npm run test:e2e` con la galería de presets de composición (`js/vistas/plantilla.js`)
+  insertada ANTES de `previaContenedor` (lienzo + overlay), entre el selector de estilo y la barra
+  de deshacer/rehacer.
+- **Error exacto:** `test/e2e/editor.spec.js:163` (`deshacer devuelve el elemento a donde estaba…`),
+  `editor.spec.js:300` (badge "Personalizado" al mover) y `test/e2e/tactil.spec.js:36` (arrastrar con
+  el dedo) fallaban con `expect(movido.top).not.toBe(inicial.top)` — el elemento "nombre" quedaba
+  EXACTAMENTE en la misma posición después de arrastrarlo (`76.0417%` en ambos casos).
+- **Reproducir:** `npx playwright test test/e2e/editor.spec.js -g "deshacer devuelve el elemento"`
+  con la galería antes del lienzo en el DOM.
+- **Causa:** la galería (título + tira de 4 tarjetas 148×263px aprox.) sumaba suficiente alto como
+  para empujar el lienzo/overlay hacia abajo y sacar el elemento "nombre" (que ya está cerca del
+  75% inferior de un lienzo lógico 1080×1920) del viewport visible en 412×915. Los tests arrastran
+  con coordenadas de pantalla reales (`page.mouse`/emulación táctil por CDP), no por selector: el
+  `pointerdown` caía fuera del viewport y nunca llegaba al elemento, así que `ajustes.nombre` nunca
+  cambiaba.
+- **Arreglo:** mover la galería de presets al FINAL de `wrap.append(...)` (después de
+  `previaContenedor`/`capas`/`panel`, no antes) — es una sección para "probar otra composición", no
+  la edición principal, así que no debía competir por el espacio de arriba con el lienzo (regla de
+  UI 6, móvil primero: la acción principal accesible sin scroll extra). `js/vistas/plantilla.js`.
+- **Resuelto:** sí, mismo commit de Fase 4.
+- ¿Se repetiría en otro proyecto? Sí — cualquier pantalla que agregue una sección nueva ARRIBA de
+  una superficie interactiva ya testeada con coordenadas de pantalla reales (no por selector) puede
+  romper el mismo tipo de test sin que el test en sí tenga nada mal. Vale la pena, al agregar
+  contenido nuevo a una pantalla con drag/touch, revisar primero si va antes o después de la
+  superficie interactiva en el DOM.
+
+### 47. `sw.spec.js` sigue fallando en esta máquina (recurrencia de #46/#45/#39), confirmado ajeno a Fase 4
+- **Paso:** `npm run test:e2e` completo al cerrar Fase 4 (catálogo de presets de composición: banner
+  inferior/editorial/polaroid/story inmersiva). Único fallo, 84/85 specs pasan.
+- **Error exacto:** igual que #46/#45/#39 — `page.goto: net::ERR_FAILED at http://127.0.0.1:8991/`
+  con `page.route('**/*', route.abort())` activo, los 3 intentos (intento + 2 retries).
+- **Reproducir:** `npx playwright test test/e2e/sw.spec.js`.
+- **Causa:** la misma de #39/#45/#46 (pendiente de investigar, fuera de alcance).
+- **Arreglo:** ninguno en esta ronda (mismo criterio que #39/#45/#46).
+- **Resuelto:** no (fuera de alcance, igual que #39/#45/#46).
+- ¿Se repetiría en otro proyecto? No aplica — sigue sin diagnóstico (ver #39).
+
+### 46. `sw.spec.js` sigue fallando en esta máquina (recurrencia de #45/#39), confirmado ajeno a Fase 3
+- **Paso:** `npm run test:e2e` completo al cerrar Fase 3 (3 funcionalidades "M" del reskin: reordenar
+  con drag/teclado, editar precio en modal desde la grilla, acciones visibles en la grilla). Único
+  fallo, 84/85 specs pasan.
+- **Error exacto:** igual que #45/#39 — `page.goto: net::ERR_FAILED at http://127.0.0.1:8991/` con
+  `page.route('**/*', route.abort())` activo, los 3 intentos (intento + 2 retries).
+- **Reproducir:** `npx playwright test test/e2e/sw.spec.js`. Confirmado con `git stash` (vuelve todo
+  el árbol de trabajo al commit base `786adac`, ANTES de Fase 3) → el mismo test falla IGUAL, 3/3,
+  con el código viejo — cero relación con los cambios de esta ronda (`sw.js` VERSION `v11`→`v12` +
+  `./js/reordenar.js` nuevo en `NUCLEO`).
+- **Causa:** la misma de #39/#45 (pendiente de investigar, fuera de alcance).
+- **Arreglo:** ninguno en esta ronda (mismo criterio que #39/#45).
+- **Resuelto:** no (fuera de alcance, igual que #39/#45).
+- ¿Se repetiría en otro proyecto? No aplica — sigue sin diagnóstico (ver #39).
+
+### 45. `sw.spec.js` sigue fallando en esta máquina (recurrencia de #39), confirmado ajeno a Fase 2
+- **Paso:** `npm run test:e2e` completo al cerrar Fase 2 (5 funcionalidades "S" del reskin). Único
+  fallo restante además de #44 (ya resuelto).
+- **Error exacto:** igual que #39 — `page.goto: net::ERR_FAILED at http://127.0.0.1:8991/` con
+  `page.route('**/*', route.abort())` activo, los 3 intentos (intento + 2 retries), tanto en la
+  suite completa como aislado (`npx playwright test test/e2e/sw.spec.js`).
+- **Reproducir:** `npx playwright test test/e2e/sw.spec.js`. Confirmado con `git stash push -- sw.js`
+  (vuelve `sw.js` a como estaba ANTES de Fase 2, VERSION `v10` sin `secciones.js` en `NUCLEO`) → el
+  mismo test falla IGUAL, 3/3, con el `sw.js` viejo — cero relación con los cambios de esta ronda
+  (subir `VERSION` a `v11` + sumar `./js/vistas/secciones.js` a `NUCLEO`, que faltaba desde la ronda
+  "secciones" original).
+- **Causa:** la misma de #39 (pendiente de investigar, marcada ahí como fuera de alcance — probable
+  cosa de esta máquina/versión de Chromium con `page.route abort` + Service Worker, no del código).
+- **Arreglo:** ninguno en esta ronda (mismo criterio que #39: no corresponde diagnosticar/arreglar
+  acá un fallo que ya existía antes de tocar nada de Fase 2).
+- **Resuelto:** no (fuera de alcance, igual que #39).
+- ¿Se repetiría en otro proyecto? No aplica — sigue sin diagnóstico (ver #39).
+
+### 44. Fase 2 "S" #5 (calidad de imagen): "Alta" (JPEG 0.95) no pesa más que "Estándar" (JPEG 0.85) en el test nuevo
+- **Paso:** `npm run test:e2e`, test nuevo `revision.spec.js` `"Calidad de imagen": Estándar por
+  defecto, "Alta" pesa más y se recuerda entre hojas` (Fase 2, implementando el selector de calidad
+  en la hoja de revisión, `js/vistas/revision.js` + `js/modelo.js` `resolverOpcionesExportacion`).
+- **Error exacto:**
+  ```
+  Error: expect(received).toBeGreaterThan(expected)
+  Expected: > 43313
+  Received:   43313
+  ```
+  (`pesoAlta` y `pesoEstandar`, tamaño en bytes del archivo final compartido, salen exactamente
+  iguales — no solo "parecidos": el mismo número.)
+- **Reproducir:** `npx playwright test test/e2e/revision.spec.js -g "Calidad de imagen"`.
+- **Causa:** del TEST, no de la app — se agregó `window.__revisionDebug` (mismo criterio que
+  `window.__editorDebugPlantilla` en `plantilla.js`) para verificar `calidadImagen`/tamaños reales
+  en cada `generarFinales`, y mostró que la app SÍ generaba los tamaños correctos (43313 con
+  "Estándar", 79169 con "Alta"). El test sincronizaba el segundo "Compartir" esperando el TEXTO del
+  toast (`/Mi estado/`), pero ese mismo texto ya estaba en pantalla desde el PRIMER compartir (dura
+  3.2s, `js/utils/toast.js`) — `expect(...).toHaveText(...)` pasaba de inmediato, sin esperar a que
+  el segundo `navigator.share` (mockeado) terminara de verdad, y el test leía `window.__compartir.
+  llamadas.at(-1)` con la llamada VIEJA (todavía 1 sola en el array).
+- **Arreglo:** `test/e2e/revision.spec.js` — la espera pasa a ser `expect.poll(() =>
+  window.__compartir.llamadas.length).toBe(2)` (una señal real: sumó una SEGUNDA llamada), en vez
+  de confiar en el texto del toast cuando se comparte dos veces en el mismo test. De paso queda
+  `window.__revisionDebug` en `js/vistas/revision.js` (calidad usada + tamaños de los archivos
+  finales), reusable en otros tests sin mockear `navigator.share`.
+- **Resuelto:** sí — `npx playwright test test/e2e/revision.spec.js` → 14/14.
+- **Paso:** `npm run test:e2e` completo, rama `rediseno-organic`, después de reescribir `css/estilos.css`
+  (tokens + 2 fuentes nuevas autoalojadas) y sumar `js/utils/iconos.js` (íconos SVG inline
+  reemplazando emojis/glifos en `lista.js`/`plantilla.js`/`secciones.js`/`detalle.js`).
+- **Error exacto (1, `revision.spec.js` "el selector de estilo de la hoja regenera las imágenes"):**
+  ```
+  Error: expect(received).not.toBe(expected) // Object.is equality
+  Expected: not null
+  ```
+  (`primeraImagen` y `segundaImagen` llegaban `null` — el `<img class="hoja-revision__miniatura">`
+  se crea SIN `src` y lo recibe recién cuando termina de componerse en canvas; `toHaveCount(1)` ya
+  pasa con el `<img>` recién creado y vacío, y el test leía `getAttribute('src')` inmediatamente.)
+- **Causa (1):** carrera preexistente en el test (no en la app): dependía de que, por timing
+  accidental, `img.src` ya estuviera puesto para cuando se leía. El reskin agrega 2 fuentes
+  (`@font-face` en `css/estilos.css`) que el navegador carga antes del primer paint, corriendo lo
+  bastante el reloj como para que la carrera, antes favorable, empezara a perder.
+- **Arreglo (1):** `test/e2e/revision.spec.js` — se agregó `esperarMiniaturaLista(page)` que espera
+  con `page.waitForFunction` a que el `<img>` tenga `src` de verdad antes de leerlo, en las dos
+  capturas (antes y después de cambiar de estilo). No se tocó ningún selector ni `data-*`.
+- **Resuelto (1):** sí — `npx playwright test test/e2e/revision.spec.js` → 10/10.
+- **Error exacto (2, `sw.spec.js`, ya registrado como #10):** mismo `net::ERR_FAILED at
+  http://127.0.0.1:8991/`, pero ahora falló las 3 veces (intento + 2 retries) tanto en la suite
+  completa como aislado, cuando antes del reskin (mismo commit base, verificado con `git stash`)
+  fallaba 1 de 2 intentos ("1 flaky", se recuperaba con el retry).
+- **Causa (2):** confirmada por A/B — sumar 2 fuentes nuevas + `js/utils/iconos.js` a `NUCLEO`
+  (`sw.js`, 39 → 42 entradas) alargó el `cache.addAll` del `install` lo bastante como para que la
+  carrera de #10 (ya intermitente en el baseline: 1 de 2 intentos) pasara a fallar los 3 intentos
+  seguidos (intento + 2 retries), tanto en la suite completa como aislado. La lógica de ruteo del SW
+  no cambió (`test/sw-estrategia.test.js` determinístico sigue en verde) — es la misma carrera de
+  #10, más frecuente con más peso en `NUCLEO`, no una carrera nueva.
+- **Arreglo (2):** `sw.js` — se sacaron `./js/utils/iconos.js`, `./fonts/newsreader-400.woff2`,
+  `./fonts/manrope-400.woff2` y `./fonts/manrope-600.woff2` del array `NUCLEO` (precache atómico del
+  `install`). No hace falta que estén ahí: las fuentes ya son `cache-first` por patrón
+  (`js/sw-estrategia.js`, `/\/fonts\/.+\.woff2$/`) y `iconos.js` es `network-first` como cualquier
+  otro `.js` — ambos quedan cacheados solos en la primera visita online real (mismo criterio que
+  `js/vistas/secciones.js`, que tampoco está en `NUCLEO` desde antes de este reskin). `VERSION` se
+  mantuvo en `v10` igual (cambió `css/estilos.css`, que sí está en `NUCLEO`).
+- **Resuelto (2):** sí — reproducido el A/B (con las 3 entradas de más: 3/3 fallos; sin ellas: vuelve
+  a "1 flaky", igual que el baseline) y `npm run test:e2e` → 76 passed + `sw.spec.js` en verde con
+  el retry existente, igual que antes del reskin.
+
 ### 23. Ronda "vista previa en vivo + distribución": el editor de plantilla no cargaba (TDZ) y 2 tests nuevos leían el canvas antes de que se redibujara
 - **Paso:** `npx playwright test -c test/e2e/playwright.config.js test/e2e/editor.spec.js` después de cambiar la vista previa del editor de un `<img>` regenerado por Blob a un `<canvas>` dibujado en vivo con `requestAnimationFrame`.
 - **Error exacto:** las 14 pruebas de `editor.spec.js` fallaban por timeout esperando `[data-elemento="nombre"]`; la captura de página mostraba `Ocurrió un error al mostrar esta pantalla: Cannot access 'rafPendiente' before initialization`.
@@ -452,3 +646,229 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `css/estilos.css` -- `.chips-secciones .chip { white-space: normal; text-align: center; }` (más específico que `.chip`, sin tocar el comportamiento de `.filtro-secciones`, que sigue con scroll horizontal y `nowrap`).
 - **Resuelto:** sí -- confirmado corriendo las 6 combinaciones de `overflow-fuente-grande.spec.js` despues del cambio: 6/6 verdes.
 - ¿Se repetiría en otro proyecto? Sí -- un chip/pill con `white-space: nowrap` es seguro solo dentro de un contenedor con scroll horizontal propio; en cualquier `flex-wrap` normal (chips seleccionables, tags), un solo chip con texto largo + letra grande del sistema puede desbordar igual que una fila sin `flex-wrap` (mismo espíritu que bug #35/#42 de la skill `crear-apk`).
+
+### 43. `overflow-fuente-grande.spec.js`: el ícono del CTA "Publicar N" se salía de la pantalla (izquierda) a fuente grande, en la vista grilla
+- **Paso:** reskin de productos_lista_natural/productos_vista_grilla_natural (comparación contra Interfaz/comparacion/), corrida completa de `overflow-fuente-grande.spec.js` tras sumar el badge decorativo "WhatsApp →" al CTA "Publicar N productos" de la grilla.
+- **Error exacto:**
+  ```
+  Productos (Todas, agrupado por sección, grilla): scrollOverflow=false
+  svg right=2 left=-18 ""
+  circle right=-1 left=-5 ""
+  circle right=-11 left=-15 ""
+  circle right=-1 left=-5 ""
+  line right=-5 left=-11 ""
+  line right=-5 left=-11 ""
+  ```
+  (el `svg`/`circle`/`line` son el ícono "compartir" del botón `[data-accion="publicar-seleccionados"]`; a 320-412px con fuente 130-160% aparecía con `left` negativo, es decir, dibujado a la izquierda del borde de la pantalla).
+- **Reproducir:** vista grilla, algún producto seleccionado (aparece la barra `.barra-publicar`), fuente del sistema al 130% o más, viewport 320-412px.
+- **Causa:** `.barra-publicar .boton--primario` tenía `justify-content: center` y el texto `white-space: nowrap` (agregado para evitar que "Publicar N productos" se partiera en 2 líneas). Con el badge "WhatsApp →" sumado al ancho, el contenido total del botón (ícono + texto sin poder achicarse + badge) pasaba a medir más que el botón; `justify-content: center` en un flex que desborda no recorta: empuja los hijos por igual hacia afuera de la caja, y a fuente grande ese sobrante alcanzaba para mandar el ícono a la izquierda del viewport (`left` negativo).
+- **Arreglo:** `js/vistas/lista.js` (`barraPublicarFija`) — ícono + texto ahora van en un `<span class="barra-publicar__contenido">` que SÍ se puede achicar (`min-width:0`, `flex-shrink:1`); el texto vive en su propio `<span class="barra-publicar__texto">` con `overflow:hidden; text-overflow:ellipsis; white-space:nowrap` (trunca en vez de desbordar — `el.textContent` del botón sigue siendo exacto "Publicar N producto(s)" para los tests, la ellipsis es puramente visual). `css/estilos.css` — el botón usa `justify-content: space-between` solo cuando lleva badge (`.boton--publicar-grilla`) y `center` si no; ícono y badge llevan `flex-shrink: 0`.
+- **Resuelto:** sí — confirmado con `overflow-fuente-grande.spec.js` (6/6 verdes) y la suite completa (100/100 e2e).
+- ¿Se repetiría en otro proyecto? Sí — mismo espíritu que #35/#42: un botón con contenido variable (ícono + texto + badge opcional) necesita que el elemento que puede crecer sea el que se achica (`min-width:0` + ellipsis en el texto), nunca `justify-content: center`/`nowrap` a ciegas en el contenedor entero, porque eso empuja los elementos de ancho fijo (íconos, badges) fuera de la pantalla en vez de recortar el texto.
+
+### 44. Reskin editar_producto_natural: `#campo-nombre`/`#campo-precio` se pasan del viewport a 320-360px + letra grande del sistema
+- **Paso:** suite completa de e2e tras envolver nombre/precio en `.campo__envoltorio` (Fase 5, prefijo "$" del precio) en `js/vistas/detalle.js`.
+- **Error exacto:**
+  ```
+  Alta de producto: scrollOverflow=false
+  INPUT#campo-nombre right=348 left=33 ""
+  INPUT#campo-precio right=364 left=33 ""
+  ```
+- **Reproducir:** `#/producto/nuevo`, viewport 320-360px, `document.documentElement.style.fontSize` al 160%.
+- **Causa:** `.campo input[type='text']` nunca necesitó un `width` explícito porque `.campo` es `display:flex; flex-direction:column`, y el `align-items: stretch` por defecto estira a los HIJOS DIRECTOS a todo el ancho. Al envolver el `<input>` en `.campo__envoltorio` (un `<div>` normal, no flex) para el prefijo "$", el input dejó de ser hijo directo de `.campo` — quedó con su ancho intrínseco de navegador (el de `size` por defecto, ~20 caracteres), que crece con la fuente y a 160% + viewport chico se pasa del borde.
+- **Arreglo:** `css/estilos.css` — `.campo__envoltorio input { width: 100%; min-width: 0; }`.
+- **Resuelto:** sí — confirmado con las 6 combinaciones de `overflow-fuente-grande.spec.js` en verde.
+- ¿Se repetiría en otro proyecto? Sí — cualquier `<input>` que deje de ser hijo directo de un flex-column con `stretch` (por ej. al agregarle un ícono/prefijo con un wrapper) necesita su propio `width: 100%` explícito; el estiramiento del flex padre no "atraviesa" un div intermedio.
+
+### 45. Reskin editar_producto_natural: el selector de `.campo__error` del precio en `botones.spec.js` dejó de encontrarlo
+- **Paso:** suite completa de e2e, mismo cambio que #44 (envoltorio `.campo__envoltorio` para el prefijo "$" del precio).
+- **Error exacto:**
+  ```
+  Error: expect(locator).toHaveText(expected) failed
+  Locator: locator('#campo-precio').locator('..').locator('.campo__error')
+  Expected pattern: /mayor a cero/i
+  Error: element(s) not found
+  ```
+- **Reproducir:** `test/e2e/botones.spec.js`, test "precio vacío es válido... negativo sigue siendo error".
+- **Causa:** no es un bug de la app — el test asumía que `.campo__error` es HERMANO directo del `<input>` (`#campo-precio` → `..` → buscar `.campo__error` ahí mismo). Desde Fase 5, el precio envuelve el input en `.campo__envoltorio` (prefijo "$"): el padre inmediato del input ahora es ese envoltorio, no `.campo`, y `.campo__error` sigue siendo hijo de `.campo` (un nivel más arriba).
+- **Arreglo:** `test/e2e/botones.spec.js` — `'..'` → `'../..'` para subir hasta `.campo` antes de buscar `.campo__error`.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí, es el mismo punto que #44: un test que asume una estructura de DOM exacta (en vez de un `data-*`/rol estable) se rompe apenas se agrega un wrapper intermedio: preferible pero no bloqueante para este cambio puntual.
+
+### 46. Ronda 2 de Fase 5 (header=marca, H1 en contenido): `botones.spec.js` y `overflow-fuente-grande.spec.js` rompen
+- **Paso:** suite completa de e2e tras mover el H1 de Secciones/Respaldo al contenido (el header compartido ahora muestra "Estados Rápidos") y agregar la barra "Volver a Productos"/"Descartar" de Editar Producto.
+- **Error exacto (1/2):**
+  ```
+  Error: expect(locator).toHaveText(expected) failed
+  Locator: locator('#titulo-pantalla')
+  Expected: "Respaldo"
+  Received: "Estados Rápidos"
+  ```
+- **Error exacto (2/2):**
+  ```
+  Edición (nombre largo): scrollOverflow=false
+  BUTTON.barra-volver__descartar right=325 left=194 "Descartar"
+  ```
+- **Reproducir:** (1) `#/respaldo`, chequeo de `#titulo-pantalla`. (2) `#/producto/<id>`, viewport 320-360px + fuente 130-160%.
+- **Causa:** (1) no es un bug — el test asumía el comportamiento VIEJO (header = título de pantalla), que Bruno pidió cambiar a propósito en la revisión de las 3 comparaciones (el header ahora es la marca, el H1 real vive en el contenido). (2) `.barra-volver` (flex, `justify-content: space-between`) tiene 2 botones sin `min-width: 0`: un `<button>` flex-item por defecto no se encoge por debajo de su contenido (`min-width: auto`), así que a 320px + fuente grande "Volver a Productos" + "Descartar" juntos no entran y "Descartar" se sale del viewport.
+- **Arreglo:** `test/e2e/botones.spec.js` — chequea `#titulo-pantalla` = "Estados Rápidos" y agrega el chequeo del H1 real (`h1.pagina__titulo` = "Respaldo"). `css/estilos.css` — `.barra-volver > *` con `min-width: 0`, y el texto de ambos botones envuelto en `<span>` con `overflow: hidden; text-overflow: ellipsis; white-space: nowrap` (trunca en vez de desbordar).
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — mismo punto que #44: cualquier fila flex con 2+ botones de texto variable necesita `min-width: 0` en los flex-items + ellipsis en el texto, nunca confiar en que "total de textos < ancho de pantalla" a fuente por defecto.
+
+### 47. Ronda 3 de Fase 5 (header serif, "Volver" sin pill): `.enlace-volver` se salía 2px por la izquierda del viewport
+- **Paso:** suite completa de e2e tras cambiar "← Volver a Productos" de Editar Producto de pastilla a enlace de texto plano (`.enlace-volver`), con un `margin-left: -6px` "óptico" (imitando el `-ml-2` del mock).
+- **Error exacto:**
+  ```
+  Alta de producto: scrollOverflow=false
+  BUTTON.enlace-volver right=228 left=-2 "Volver a Productos"
+  ```
+- **Reproducir:** `#/producto/nuevo`, cualquier viewport 320-412px, fuente 130% o más.
+- **Causa:** el `-ml-2` del mock compensa el padding horizontal DEL HEADER (`px-margin-sm`, ~16px) para que el ícono quede visualmente pegado al borde de la pantalla. `.barra-volver` (esta app) ya es full-bleed por su cuenta (`margin: 0 -16px`, cancela el padding de `.vista`) y encima solo tiene 4px de padding propio — restarle otros 6px de margin-left empujaba el botón 2px más allá del borde real del viewport.
+- **Arreglo:** `css/estilos.css` — se saca el `margin-left: -6px` de `.enlace-volver` (el padding de 6px del propio botón ya alcanza para el respiro visual, sin necesidad del ajuste óptico).
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — un `margin` negativo "óptico" copiado de un mock nunca es seguro sin verificar el padding real del contenedor donde termina viviendo: si el contenedor ya es full-bleed, ese mismo negativo lo manda fuera del viewport.
+
+### 48. Reskin Ajustes/Confirmar Publicación: `casillaDecimales` de `botones.spec.js` no encuentra el checkbox
+- **Paso:** suite e2e completa tras reskinear Ajustes (`ajustes_de_publicaci_n_natural`) con `.casilla-fila` (checkbox + `<div>` con título y ayuda, igual que el mock).
+- **Error exacto:**
+  ```
+  Test timeout of 30000ms exceeded.
+  Error: locator.check: Test timeout of 30000ms exceeded.
+  Call log:
+    - waiting for locator('text=Mostrar decimales').locator('..').locator('input[type="checkbox"]')
+  ```
+- **Reproducir:** `test/e2e/botones.spec.js`, test "formato de precio con decimales (configurado en Ajustes) se refleja en la lista".
+- **Causa:** no es un bug de la app — el test asumía que el `<span>` con el texto "Mostrar decimales" es HERMANO directo del checkbox (`text=... → '..' → input`). El nuevo `.casilla-fila` (mismo layout que el mock: checkbox + columna con título+ayuda) mete el título un nivel más adentro, en un `<div class="casilla-fila__textos">` — el `'..'` del test ya no llega al padre que tiene el input.
+- **Arreglo:** `test/e2e/botones.spec.js` — el locator ahora sube por `.casilla-fila` completa (`page.locator('.casilla-fila', { hasText: ... })`) en vez de por el texto + un solo `'..'`.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí, mismo punto que #44/#45: un test que camina el DOM con `'..'` en vez de anclarse a un contenedor con clase/rol estable se rompe apenas se agrega un wrapper intermedio.
+
+### 49. Ronda "orden del diseño" (mover "Estilo de las imágenes" de Ajustes a Plantilla): `ajustes.spec.js`/`presets.spec.js`/`minimo.spec.js` rompen en cadena
+- **Paso:** suite e2e completa tras sacar la galería "Estilo de las imágenes" (8 tarjetas) de Ajustes (el mock `ajustes_de_publicaci_n_natural` no la tiene ahí) y reconstruirla entera dentro de Plantilla, para no perder la función de elegir el estilo general de los 8.
+- **Error exacto (uno de varios, mismo patrón):**
+  ```
+  Error: locator.click: Test timeout of 30000ms exceeded.
+  Call log:
+    - waiting for locator('[data-accion="estilo-mi-plantilla"]')
+  ```
+- **Reproducir:** cualquier test que hiciera `page.goto('/#/ajustes')` y después clickeaba `[data-accion="estilo-<valor>"]` o `[data-accion="editar-estilo-<valor>"]` (`ajustes.spec.js`, `presets.spec.js`, `minimo.spec.js`).
+- **Causa:** no es un bug de la app — es un cambio de pantalla a propósito (CREAR-BRIEF.md 2026-09-29). La galería completa (8 estilos, con "Editar" + badge "Personalizado" por tarjeta) se movió de `ajustes.js` a `plantilla.js`, con un namespace nuevo en `tarjetaEstilo()` (`prefijo: 'estilo-general'` → `data-accion="estilo-general-<valor>"`/`"editar-estilo-general-<valor>"`) para no chocar con los `estilo-<preset>` sin prefijo de la galería "Presets de composición" (4 tarjetas), que YA vivía en Plantilla con otra semántica (selecciona-y-navega-y-permite-deshacer, en vez de solo marcar el general).
+- **Arreglo:** `test/e2e/ajustes.spec.js`, `test/e2e/presets.spec.js`, `test/e2e/minimo.spec.js` — todos los `goto('/#/ajustes')` de estos flujos pasan a `goto('/#/plantilla')`, y los selectores `estilo-<valor>`/`editar-estilo-<valor>` pasan a `estilo-general-<valor>`/`editar-estilo-general-<valor>`. En Ajustes queda un test nuevo para la fila compacta `[data-accion="ir-plantilla-estilo"]` que reemplaza a la galería.
+- **Resuelto:** sí — confirmado con la suite completa (101/101 e2e, 163/163 unit).
+- ¿Se repetiría en otro proyecto? Sí — mover un componente de una pantalla a otra sin cambiarle el `data-accion` puede generar colisiones silenciosas de selector si la pantalla de destino ya tenía algo parecido; namespacear (`prefijo` configurable en el componente compartido) es más seguro que confiar en que nunca van a convivir dos instancias.
+
+### 50. Reskin Plantilla: sumar la galería "Estilo de las imágenes" ARRIBA del lienzo rompió el arrastre (mouse y dedo) y el badge "Personalizado"
+- **Paso:** al mover controles del editor (selector de estilo + subir fondo + deshacer/rehacer/acomodar/restablecer) dentro de una tarjeta `.panel` nueva para acercar el visual al mock `editar_plantilla_natural`.
+- **Error exacto:**
+  ```
+  expect(movido.top).not.toBe(inicial.top)   // tactil.spec.js — no se movió nada
+  Expected: not "76.0417%"
+  ```
+  y, con `elementFromPoint` en el punto donde debería estar `[data-elemento="nombre"]`, aparecía `<button class="nav-inferior__item" data-accion="ir-ajustes">` (la nav inferior fija, tapando el lienzo).
+- **Reproducir:** `#/plantilla?estilo=foto-precio` (nombre/precio arrancan pegados abajo del lienzo por default), viewport 412×915, arrastrar `[data-elemento="nombre"]`.
+- **Causa:** cualquier alto de más ANTES de `previaContenedor` empuja el lienzo hacia abajo — con nombre/precio ya pegados al borde inferior por default, ese empujón extra los manda detrás de la nav inferior `position:fixed`. Ya estaba documentado para `galeriaPresets` (comentario existente en `plantilla.js`, "va al final a propósito"), pero se repitió igual al envolver el resto de los controles en una tarjeta `.panel` (padding + margin de la tarjeta) y al agrandar los botones de la barra deshacer/rehacer a un layout vertical (`min-height: 56px`, antes ~36px). Además, meter la barra `filaHistorial` (que es `position: sticky`) DENTRO de esa misma tarjeta le acortaba el "contenedor de bloque": se despegaba (dejaba de seguir a la vista) apenas se scrolleaba más allá de la tarjeta chica, en vez de seguir toda la pantalla.
+- **Arreglo:** `js/vistas/plantilla.js`/`css/estilos.css` — se revirtió el envoltorio `.panel` de `selectorEstilo`/`grupoSubida`/`filaHistorial` y el alto extra de los botones de la barra; quedan sueltos, como antes, con solo el color de fondo actualizado. `filaHistorial` sigue siendo hermano directo de `wrap`, no anidado. La galería nueva "Estilo de las imágenes" y `galeriaPresets` se mantienen al final, después del lienzo.
+- **Resuelto:** sí — confirmado con `editor.spec.js`, `tactil.spec.js`, `responsive.spec.js` y la suite completa en verde.
+- ¿Se repetiría en otro proyecto? Sí — en cualquier pantalla con un elemento posicionado por default cerca de un borde (o detrás de una barra fija), agregar contenido/padding ANTES en el DOM puede taparlo sin que se note a simple vista; conviene medir con `elementFromPoint` en el punto exacto del drag antes de dar por buena una reordenación visual.
+
+### 51. Same-route re-render (Plantilla → Plantilla): `boundingBox()` devuelve `null` justo después de `toHaveURL`/`toBeVisible`
+- **Paso:** `ajustes.spec.js`, test del badge "Personalizado", tras mover el flujo de Ajustes→Plantilla a Plantilla→Plantilla (ver #49): clic en "Editar" navega con el MISMO módulo ya montado (`#/plantilla` → `#/plantilla?estilo=foto-precio`), no con una carga de pantalla nueva.
+- **Error exacto:**
+  ```
+  TypeError: Cannot read properties of null (reading 'x')
+  > const caja = await page.locator('[data-elemento="nombre"]').boundingBox();
+  >              await page.mouse.move(caja.x + ...)
+  ```
+  y, en otra corrida, `Error: locator.scrollIntoViewIfNeeded: Element is not attached to the DOM`.
+- **Reproducir:** en Plantilla, click en un "Editar" que navega a `?estilo=<mismo o distinto>` y leer `boundingBox()` de un elemento del overlay inmediatamente después de `expect(page).toHaveURL(...)`.
+- **Causa:** no es un bug de la app — `location.hash = ...` cambia la URL de forma síncrona, ANTES de que `plantilla.js` termine de vaciar (`contenedor.textContent = ''`) y volver a construir el DOM (varios `await` de por medio: `repo.obtenerPlantillaConfig()`, `cargarFuentes()`, etc.), y el overlay se redibuja más de una vez mientras se estabiliza (`ResizeObserver`, `requestAnimationFrame`). `boundingBox()` (a diferencia de `expect(locator).toBeVisible()`) no reintenta solo: cae justo en una de esas ventanas donde el elemento no existe todavía o ya no existe más.
+- **Arreglo:** `test/e2e/ajustes.spec.js` — en vez de una sola lectura de `boundingBox()`, se usa `expect.poll(() => page.locator(...).boundingBox().catch(() => null)).toBeTruthy()` (reintenta y vuelve a resolver el locator en cada intento, nunca un handle guardado) antes de leer las coordenadas de verdad.
+- **Resuelto:** sí — confirmado con 6/6 corridas repetidas (`--repeat-each=6`) sin fallos.
+- ¿Se repetiría en otro proyecto? Sí — cualquier test que dependa de `boundingBox()`/`elementHandle` justo después de un cambio de ruta en la MISMA pantalla (sin recarga completa) es candidato a esta carrera; conviene envolver la lectura en `expect.poll` en vez de confiar en que el render ya terminó.
+
+### 52. Ronda "copia automática": `plataforma.test.js` — la última parte del streaming no mide lo que decía el comentario
+- **Paso:** `npm test`, test nuevo `guardarCopiaAutomaticaApk: contenido grande se manda en varias partes...`.
+- **Error exacto:**
+  ```
+  Expected values to be strictly equal:
+  1000001 !== 1
+  ```
+- **Reproducir:** `node --test test/plataforma.test.js` con el test de streaming de `guardarCopiaAutomaticaApk` (contenido de 5.000.001 caracteres, partes de 2.000.000).
+- **Causa:** error de cuentas en el test, no de la función: 5.000.001 = 2.000.000 + 2.000.000 + 1.000.001 (el resto de la división), no "+1" como decía el comentario.
+- **Arreglo:** `test/plataforma.test.js` — la aserción de la tercera parte pasa a `1_000_001`.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? No especialmente — es aritmética de test, no un patrón reutilizable.
+
+### 53. Ronda "reordenar arrastrando": `reordenar-secciones.spec.js` — el `pointerup` sintético de CDP no cierra el arrastre
+- **Paso:** `npx playwright test reordenar-secciones.spec.js`, test "arrastrar la manija con el dedo cambia el orden y se persiste".
+- **Error exacto:**
+  ```
+  Error: expect(locator).toContainText(expected) failed
+  Locator: locator('.panel-secciones__progreso-orden')
+  Expected substring: "posición 3 de 3"
+  Received string:    ""
+  ```
+  (el orden en el DOM SÍ cambiaba bien — el fallo era solo el aria-live, que se escribe en `pointerup`/`pointercancel`).
+- **Reproducir:** arrastrar con `cdp.send('Input.dispatchTouchEvent', ...)` (mismo patrón que `revision-reordenar.spec.js`) sobre la manija de Secciones y esperar el texto de `progresoOrden` tras el `touchEnd`.
+- **Causa:** no es un bug de la app — confirmado agregando un `console.log` temporal en `terminar()` (secciones.js): nunca se imprimía, es decir el `pointerup` real jamás llegaba al listener. `Input.dispatchTouchEvent` con `type: 'touchEnd'` no siempre se traduce en Chromium en un evento `pointerup` de verdad sobre el elemento que tiene `setPointerCapture()` — limitación conocida del harness de CDP, no del gesto en un dispositivo físico (en un celu real, levantar el dedo SÍ dispara `pointerup`). `revision-reordenar.spec.js` tiene el mismo patrón de arrastre y nunca lo notó porque su test solo verifica el ORDEN final (que se fija en cada `pointermove`, no en el `pointerup`), nunca el texto de `progreso` después de soltar.
+- **Arreglo:** `test/e2e/reordenar-secciones.spec.js` — después de la secuencia de `touchStart/touchMove/touchEnd` por CDP, se dispara a mano `locator.dispatchEvent('pointerup', {...})` sobre la manija (localizada por `data-id`, no por posición, porque la fila se mueve durante el propio arrastre) para cerrar el gesto de forma determinista.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — cualquier E2E que simule un arrastre por pointer events con CDP `Input.dispatchTouchEvent` y verifique algo que dependa del `pointerup`/`pointercancel` (no solo del `pointermove`) puede necesitar el mismo `dispatchEvent('pointerup', ...)` manual de cierre. Vale la pena revisar si `revision-reordenar.spec.js` también debería cerrarlo así en vez de confiar en que CDP lo haga solo, aunque hoy no le hace falta porque no verifica nada post-soltar.
+
+### 54. Ronda "reordenar arrastrando": `reordenar-secciones.spec.js` (teclado) — flaky por una carrera `reload()` vs. la escritura a IndexedDB
+- **Paso:** suite completa (`npx playwright test`, no al correr el archivo solo): test "flechas arriba/abajo con foco en la manija reordenan y anuncian la posición (teclado)", última aserción tras `page.reload()`.
+- **Error exacto:**
+  ```
+  Error: expect(received).toEqual(expected) // deep equality
+  Array [
+  -   "743aab52-...",
+      "e8e33036-...",
+  +   "743aab52-...",
+  ]
+  ```
+  (el orden en pantalla, ANTES de recargar, ya estaba bien — lo que volvía mal era lo persistido).
+- **Reproducir:** presionar ArrowDown (o ArrowUp) en la manija y llamar `page.reload()` inmediatamente después, sin esperar ninguna señal de que `repo.reordenarSecciones(...)` ya escribió en IndexedDB.
+- **Causa:** no es un bug de la app — `moverPorTeclado` (secciones.js) hace `moverSeccionEnPantalla` (síncrono, ya se ve en el DOM) y DESPUÉS `await persistirOrdenSecciones()` (async, IndexedDB) antes de escribir el aria-live. El test comprobaba el DOM (ya actualizado) y recargaba enseguida, sin esperar a que la escritura async terminara — carrera clásica entre "se ve bien en pantalla" y "ya se guardó", más fácil de gatillar corriendo la suite entera (más contención de I/O) que el archivo solo.
+- **Arreglo:** `test/e2e/reordenar-secciones.spec.js` — esperar `.panel-secciones__progreso-orden` con el texto del paso ANTES de `page.reload()`: como el aria-live se escribe recién después del `await` de persistencia, es la señal de que ya se guardó.
+- **Resuelto:** sí.
+- ¿Se repetiría en otro proyecto? Sí — cualquier E2E que recargue la página justo después de una acción cuya persistencia es async y no está atada a nada visible (spinner, toast, aria-live) es candidato a esta carrera; conviene esperar una señal post-escritura antes de recargar, no asumir que terminó.
+### 59. `npm test` rojo al remedir la geometría/tipografía de los 4 presets contra los mocks Stitch (ronda "calzan con los mocks", 2026-09-29)
+- **Paso:** `node --test test/geometria-presets.test.js test/modelo.test.js`, después de reescribir `js/geometria-presets.js` (constantes MEDIDAS de cada mock, no estimadas) y la tipografía de fábrica de `js/modelo.js` (Newsreader/Manrope en vez de Montserrat/Playfair, tamaños 2-3× más grandes).
+- **Error exacto (5 tests, resumen):**
+  ```
+  geometriaBannerInferior: sin precio... → 984 !== 968 (margen viejo hardcodeado en el test: 56, el real ahora es 48)
+  geometriaEditorial: sin precio ni descripción... → esperaba null, la línea "$precio • SECCIÓN" seguía con conSeccion:true por defecto
+  geometriaStoryInmersiva: ...anclado abajo → assert.ok(precio.y < descripcion.y) — ahora van EN LA MISMA FILA (lado a lado, como el mock), no apilados
+  geometriaStoryInmersiva: sin precio, el nombre baja... → nombre.y no se mueve (la fila conserva su alto haya o no precio, solo cambia el ancho de la descripción)
+  AJUSTES_POR_DEFECTO_POR_ESTILO: ...solo las 6 tipografías OFL → los presets ahora usan Newsreader/Manrope (fijas, no elegibles) a propósito
+  ```
+- **Causa:** ninguna es una regresión real — todas son tests con la geometría/tipografía VIEJA hardcodeada, desactualizados por un cambio de diseño intencional (la geometría vieja tenía números "a ojo" que rendían el texto a menos de la mitad del tamaño real del mock, causa raíz reportada en el brief de esta ronda).
+- **Arreglo:**
+  - `test/geometria-presets.test.js` — valores de margen actualizados (56→48), tests de `geometriaEditorial`/`geometriaStoryInmersiva` reescritos para el nuevo comportamiento (línea combinada precio+sección, precio+descripción en la misma fila) + casos borde nuevos (sin sección, sin nombre del negocio).
+  - `test/modelo.test.js` — el test de tipografía pasa a verificar contra `REGISTRO_FUENTES` (fuentes.js, el registro REAL de canvas) en vez de `FUENTES_DISPONIBLES` (las 6 elegibles a mano), y además confirma que los presets NO usan una de esas 6 (es tipografía fija de diseño).
+- **Resuelto:** sí — `npm test` en verde (168/168).
+- ¿Se repetiría en otro proyecto? Sí, en general — el mismo punto que BUGS.md #44 de otra ronda: medir el valor real (`node -e`) antes de fijar una aserción de geometría, en vez de asumir la dirección/magnitud "porque suena lógico".
+
+### 60. Sesión completa en la rama base EQUIVOCADA — el trabajo de esta ronda se rehizo desde cero sobre `rediseno-organic`
+- **Paso:** arranque de la tarea "que los 4 presets calcen con los mocks Stitch" — el brief pedía verificar `git log --oneline -3` contra `rediseno-organic` ANTES de tocar nada, y hacer `checkout -b` desde ahí si no coincidía.
+- **Error exacto:** no hubo error de comando — el worktree ya estaba parado en un commit (`17db5e4`, "APK 1.3") que resultó ser un ANCESTRO común de `main` y `rediseno-organic`, no la punta de `rediseno-organic` (`ace4e15` al momento de arrancar). El chequeo pedido explícitamente en el brief se pasó por alto al principio de la sesión, y se construyó una implementación entera de los 4 presets (geometría, componer.js, modelo.js, plantilla.js, tests, script de comparación) sobre una base sin el reskin "Organic Minimalist" ni el catálogo de presets que YA existía en `rediseno-organic` desde la "Fase 4" (commit `2fa739a`) — es decir, se reinventó desde cero algo que ya estaba construido (aunque con la misma geometría "a ojo" que había que corregir).
+- **Reproducir:** `git log --oneline -3` al arrancar mostraba `17db5e4`, no un commit de `rediseno-organic`; `git merge-base --is-ancestor 17db5e4 rediseno-organic` da `true` (es ancestro común, no la rama pedida).
+- **Causa:** el chequeo de rama del brief se leyó pero no se ejecutó como primer paso real — se pasó directo a explorar archivos, y como el árbol de archivos SÍ tenía `js/modelo.js`/`js/componer.js` con contenido plausible (versión vieja, pre-reskin, de antes incluso de la Fase 4 de presets), no saltó ninguna señal de alarma hasta mucho más tarde, cuando `git checkout -b ... rediseno-organic` mostró un `CLAUDE.md` completamente distinto (8 fuentes, "Organic Minimalist", `PRESETS_COMPOSICION` ya documentado).
+- **Arreglo:** se hizo `git stash push -u` de TODO el trabajo hecho sobre la base equivocada, `git checkout -b presets-composicion rediseno-organic` (rama nueva, correcta), y se reaplicó el mismo diseño (geometría medida, tipografía Newsreader/Manrope, nombre del negocio/texto del botón, sección/N° de tanda) A MANO sobre los archivos REALES de `rediseno-organic` — que ya tenían el catálogo de 8 estilos, la galería de presets en `plantilla.js`, `test/geometria-presets.test.js` y `test/e2e/presets.spec.js` existentes. El trabajo conceptual (medir los mocks, elegir colores/tipografía) no se perdió; el trabajo de integración sí se rehizo.
+- **Resuelto:** sí — confirmado que `git log --oneline -3` ahora corre sobre `presets-composicion` (rama nueva desde `rediseno-organic`).
+- ¿Se repetiría en otro proyecto? Sí, siempre que un brief pida verificar la rama base ANTES de empezar — es un chequeo de UN comando (`git log --oneline -3` + comparar) que hay que ejecutar literal como PRIMER paso de la sesión, no asumir que el worktree ya está bien parado porque "los archivos se ven razonables". Vale la pena llevarlo a una regla dura: cualquier brief que mencione una rama base específica, el primer tool call de la sesión (antes de leer ningún archivo) tiene que ser el chequeo de esa rama.
+
+### 61. `#campo-texto-boton` (y `#campo-nombre-negocio`) quedan VISIBLES con `hidden` puesto — `.campo{display:flex}` pisa el `display:none` del atributo
+- **Paso:** `test/e2e/presets.spec.js` nuevo, "Datos del negocio solo aparece en los presets que los dibujan" — `#campo-texto-boton.hidden = true` en `editorial` (`ESTILOS_CON_TEXTO_BOTON` no lo incluye), pero el input seguía visible.
+- **Error exacto:**
+  ```
+  Error: expect(locator).toBeHidden() failed
+  Locator: locator('#campo-texto-boton')
+  Expected: hidden
+  Received: visible
+  ```
+- **Reproducir:** `js/vistas/plantilla.js`, `campoTextoBoton.hidden = !ESTILOS_CON_TEXTO_BOTON.includes(estiloEditando)` puesto en `true` sobre un `<div class="campo">`.
+- **Causa:** `css/estilos.css` define `.campo { display: flex; ... }` sin excepción para `[hidden]` — como la regla de autor (`.campo`, clase) y la regla del navegador (`[hidden]`, atributo) tienen la MISMA especificidad y la del navegador es de la hoja de estilos de USER AGENT (menor prioridad que cualquier regla de autor), `display:flex` gana siempre y el atributo `hidden` queda sin efecto visual. Es EXACTAMENTE la misma trampa que ya está documentada y resuelta para `.fila[hidden]`/`.tarjeta-estilo__badge[hidden]` (comentario en `css/estilos.css` línea ~2131) — pero nadie había puesto `hidden` sobre un `.campo` hasta esta ronda.
+- **Arreglo:** `css/estilos.css` — se agrega `.campo[hidden] { display: none; }` justo después de la definición de `.campo` (mismo patrón que las otras 2 excepciones ya existentes).
+- **Resuelto:** sí — `test/e2e/presets.spec.js` (9/9) y la suite completa (101/101) en verde.
+- ¿Se repetiría en otro proyecto? Sí — es un patrón de bug recurrente EN ESTE proyecto específico (van 3 clases distintas con el mismo problema: `.fila`, `.tarjeta-estilo__badge`, ahora `.campo`): cualquier clase con `display` propio (flex/grid/block) necesita su propio `[hidden]{display:none}` si algún componente la oculta con el atributo `hidden` en vez de una clase `.oculto`. Vale la pena una regla general en `patrones.md`: toda clase de layout con `display` explícito debe traer su par `.clase[hidden]{display:none}`, o usar `:where([hidden])` una sola vez con máxima especificidad baja para cubrir TODAS las clases de una — evitaría repetir este bug una 4ª vez.

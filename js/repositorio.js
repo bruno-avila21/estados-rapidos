@@ -6,6 +6,9 @@ import {
   ESTILO_POR_DEFECTO,
   DESCRIPCION_MODELO_POR_DEFECTO,
   ENCUADRE_FOTO_POR_DEFECTO,
+  CALIDAD_IMAGEN_POR_DEFECTO,
+  NOMBRE_NEGOCIO_POR_DEFECTO,
+  TEXTO_BOTON_POR_DEFECTO,
   construirRespaldo,
   migrarAjustesPorEstilo,
   normalizarAjustesPorEstilo,
@@ -127,6 +130,25 @@ export async function reordenarSeccion(id, direccion) {
   b.orden = ordenA;
   await db.guardar('secciones', a);
   await db.guardar('secciones', b);
+  return await listarSecciones();
+}
+
+/** Reordenamiento COMPLETO (arrastre con el dedo, reskin "gesti_n_de_secciones_natural"): recibe
+ * los ids YA en el orden final y reasigna `orden` = índice para cada uno — mismo campo que
+ * `reordenarSeccion`, pero de un saque, porque un drag puede soltar varias posiciones más allá del
+ * vecino inmediato (que es lo único que `reordenarSeccion` sabe mover). Ids que no existan más se
+ * ignoran (no rompe si la base y la lista en pantalla quedaron un instante desincronizadas). */
+export async function reordenarSecciones(nuevoOrdenIds) {
+  const secciones = await listarSecciones();
+  const porId = new Map(secciones.map((s) => [s.id, s]));
+  let indice = 0;
+  for (const id of nuevoOrdenIds) {
+    const seccion = porId.get(id);
+    if (!seccion) continue;
+    seccion.orden = indice;
+    indice += 1;
+    await db.guardar('secciones', seccion);
+  }
   return await listarSecciones();
 }
 
@@ -271,6 +293,18 @@ export async function obtenerAjustesGenerales() {
     // "Incluir texto" de la hoja de revisión (ronda "compartir sin texto", 2026-09-28): se recuerda
     // la última elección; por defecto encendido (copiar/mandar el texto es lo de siempre).
     incluirTextoAlCompartir: true,
+    // Calidad de imagen al exportar (Fase 2, "S" #5): se recuerda la última elección de la hoja de
+    // revisión; por defecto 'estandar' (mismo criterio que los campos de arriba: un registro de
+    // antes de esta ronda no lo trae y queda con el valor por defecto).
+    calidadImagen: CALIDAD_IMAGEN_POR_DEFECTO,
+    // Copia automática diaria (ronda "copia automática", Respaldo → "Preferencias de respaldo"):
+    // apagada por defecto — un respaldo/uso de antes de esta ronda no la trae y arranca sin
+    // escribir nada solo hasta que la persona la prenda a propósito.
+    copiaAutomaticaHabilitada: false,
+    // Datos de marca de los 4 presets de composición (ronda 2026-09-29): un registro de antes de
+    // esta ronda no los trae, quedan en sus defaults (nombre vacío = no se dibuja).
+    nombreNegocio: NOMBRE_NEGOCIO_POR_DEFECTO,
+    textoBoton: TEXTO_BOTON_POR_DEFECTO,
   };
   return guardado ? { ...base, ...guardado } : base;
 }
@@ -306,6 +340,40 @@ export async function guardarIncluirTextoAlCompartir(incluirTextoAlCompartir) {
   return config;
 }
 
+/** Calidad de imagen ('estandar'/'alta') elegida en la hoja de revisión: se recuerda entre hojas,
+ * igual que "Incluir texto" (Fase 2, "S" #5). */
+export async function guardarCalidadImagen(calidadImagen) {
+  const config = await obtenerAjustesGenerales();
+  config.calidadImagen = calidadImagen;
+  await db.guardar('config', config);
+  return config;
+}
+
+/** Interruptor "Copia automática diaria" de Respaldo → "Preferencias de respaldo". */
+export async function guardarCopiaAutomaticaHabilitada(habilitada) {
+  const config = await obtenerAjustesGenerales();
+  config.copiaAutomaticaHabilitada = !!habilitada;
+  await db.guardar('config', config);
+  return config;
+}
+
+/** "Nombre del negocio" de los 4 presets de composición (editable en Plantilla): vacío = no se
+ * dibuja en ningún preset. */
+export async function guardarNombreNegocio(nombreNegocio) {
+  const config = await obtenerAjustesGenerales();
+  config.nombreNegocio = String(nombreNegocio ?? '').slice(0, 60);
+  await db.guardar('config', config);
+  return config;
+}
+
+/** "Texto del botón/llamado" del preset "Banner inferior" (editable en Plantilla). */
+export async function guardarTextoBoton(textoBoton) {
+  const config = await obtenerAjustesGenerales();
+  config.textoBoton = String(textoBoton ?? '').slice(0, 40) || TEXTO_BOTON_POR_DEFECTO;
+  await db.guardar('config', config);
+  return config;
+}
+
 export async function exportarRespaldo() {
   const productos = await listarProductos();
   const productosConFoto = await Promise.all(
@@ -329,6 +397,9 @@ export async function exportarRespaldo() {
       descripcionModelo: general.descripcionModelo,
       encuadreFoto: general.encuadreFoto,
       incluirTextoAlCompartir: general.incluirTextoAlCompartir,
+      calidadImagen: general.calidadImagen,
+      nombreNegocio: general.nombreNegocio,
+      textoBoton: general.textoBoton,
     },
     secciones,
   });
@@ -400,5 +471,8 @@ export async function importarRespaldo(respaldo) {
     descripcionModelo: respaldo.general?.descripcionModelo || DESCRIPCION_MODELO_POR_DEFECTO,
     encuadreFoto: respaldo.general?.encuadreFoto || ENCUADRE_FOTO_POR_DEFECTO,
     incluirTextoAlCompartir: respaldo.general?.incluirTextoAlCompartir ?? true,
+    calidadImagen: respaldo.general?.calidadImagen || CALIDAD_IMAGEN_POR_DEFECTO,
+    nombreNegocio: respaldo.general?.nombreNegocio ?? NOMBRE_NEGOCIO_POR_DEFECTO,
+    textoBoton: respaldo.general?.textoBoton || TEXTO_BOTON_POR_DEFECTO,
   });
 }

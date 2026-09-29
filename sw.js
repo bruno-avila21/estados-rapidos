@@ -2,7 +2,7 @@
 // cache-first solo para los íconos. Receta pwa.md. `VERSION` sube en cada release.
 import { tipoDeCache } from './js/sw-estrategia.js';
 
-const VERSION = 'v9';
+const VERSION = 'v25';
 const CACHE = `estados-rapidos-${VERSION}`;
 const NUCLEO = [
   './',
@@ -17,13 +17,21 @@ const NUCLEO = [
   './js/componer.js',
   './js/fuentes.js',
   './js/editor-geometria.js',
+  './js/geometria-presets.js',
   './js/plantilla-defecto.js',
+  './js/reordenar.js',
+  './js/respaldo-automatico.js',
   './js/utils/imagen.js',
   './js/utils/toast.js',
   './js/utils/confirmar.js',
   './js/utils/compartir.js',
   './js/utils/qr.js',
   './js/utils/instalacion.js',
+  './js/utils/iconos.js',
+  './js/utils/plataforma.js',
+  './js/utils/foto-ejemplo.js',
+  './js/utils/respaldo-estado.js',
+  './js/utils/respaldo-copia.js',
   './js/vistas/lista.js',
   './js/vistas/detalle.js',
   './js/vistas/ajustes.js',
@@ -31,6 +39,7 @@ const NUCLEO = [
   './js/vistas/plantilla.js',
   './js/vistas/respaldo.js',
   './js/vistas/revision.js',
+  './js/vistas/secciones.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './assets/ejemplo.jpg',
@@ -43,6 +52,14 @@ const NUCLEO = [
   './fonts/playfair-700.woff2',
   './fonts/bebas-neue-400.woff2',
   './fonts/pacifico-400.woff2',
+  './fonts/newsreader-400.woff2',
+  './fonts/newsreader-500.woff2',
+  './fonts/newsreader-700.woff2',
+  './fonts/newsreader-400-italic.woff2',
+  './fonts/manrope-400.woff2',
+  './fonts/manrope-500.woff2',
+  './fonts/manrope-600.woff2',
+  './fonts/manrope-700.woff2',
 ];
 
 self.addEventListener('install', (evento) => {

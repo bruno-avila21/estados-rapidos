@@ -68,10 +68,13 @@ test('mínimo del día 1: cargar producto, precio en línea, plantilla y publica
   await page.reload();
   await expect(page.locator('[data-accion="precio"]').first()).toHaveValue('$ 39.990');
 
-  // Ajustes → "Mi plantilla": pantalla Plantilla con vista previa en vivo
+  // Ajustes → Plantilla → "Mi plantilla": vista previa en vivo (ronda "orden del diseño"
+  // 2026-09-29: la galería de estilos se mudó de Ajustes a Plantilla, namespace `estilo-general-*`).
   await page.locator('[data-accion="ir-ajustes"]').first().click();
-  await page.locator('[data-accion="estilo-mi-plantilla"]').click();
   await page.locator('[data-accion="ir-plantilla"]').click();
+  await page.locator('[data-accion="estilo-general-mi-plantilla"]').click(); // fija el estilo general (para "Publicar" más abajo)
+  await page.locator('[data-accion="editar-estilo-general-mi-plantilla"]').click(); // entra a verla en vivo
+  await expect(page).toHaveURL(/estilo=mi-plantilla/);
   await expect(page.locator('.previa-plantilla')).toBeVisible();
   // La vista previa es un <canvas> dibujado en vivo (sin src): "listo" es que ya se dibujó.
   await expect

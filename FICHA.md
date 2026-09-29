@@ -67,3 +67,52 @@
 - Performance (150 productos, CREAR-BRIEF.md): medido en Chromium real (proxy de escritorio, no el emulador — mismo criterio de limitación que PERF.md) con 150 productos + 8 secciones importados por respaldo: render de Productos en 36-47 ms (5 corridas), muy por debajo del objetivo de 300 ms. Fotos de las 150 tarjetas se traen todas en paralelo (`Promise.all`, antes era secuencial) y el checkbox ya no recompone toda la lista al tocarlo.
 - Emulador restaurado al terminar: `font_scale` vuelto a 1.0, app desinstalada, fotos de prueba borradas de `/sdcard/Pictures`.
 - No verificado en esta ronda: cronometrado real en el emulador/celu físico con exactamente 150 productos (la medición de performance fue en Chromium de escritorio, no en el WebView del APK).
+
+## APK 1.4 — 2026-09-28 (fase final del reskin "Organic Minimalist": sw.spec.js diagnosticado, E2E de Fase 3 completos, logo/íconos en la paleta nueva)
+- `versionCode` 5, `versionName` "1.4" (`movil/version.properties`). Build con `movil/build-apk.ps1`: `estados-rapidos-1.4.apk`, 2.91 MB.
+- `sw.spec.js` (BUGS.md #10/#39/#45/#46/#47) diagnosticado y arreglado de verdad, no mitigado con timeouts: la carrera era entre `registration.active.state === 'activated'` (flag JS) y que el proceso del navegador termine de enrutar la SIGUIENTE navegación a través del SW — arreglo determinístico en `test/e2e/sw.spec.js` (esperar `navigator.serviceWorker.controller` tras una navegación real con red). Con la causa resuelta, `sw.js` (v13→v14) recupera en `NUCLEO` las fuentes `newsreader-400`/`manrope-400`/`manrope-600` y `js/utils/iconos.js` que la Fase 1 había sacado del precache sin diagnóstico, más `js/utils/plataforma.js` (faltaba desde APK 1.1). Detalle completo en BUGS.md #50.
+- 8 E2E nuevos de Fase 3 que faltaban: reordenar el carrusel de la hoja de revisión con los botones accesibles y con arrastre táctil real (`test/e2e/revision-reordenar.spec.js`), y el modal de editar precio + acciones de la grilla — válido, vacío, negativo con error, Escape, "Subir a Estado" sin alterar la selección (`test/e2e/grilla.spec.js`).
+- `assets/logo.svg` recoloreado a la paleta "Organic Minimalist" (anillo verde ciprés + rayo umber, sin degradé), íconos PWA regenerados (`npm run iconos`, fondo alabastro `#fbf9f5`) y adaptive icon del APK (`movil/app/src/main/res/drawable/fondo_lanzador.xml` + `mipmap-*/ic_launcher.png`) recoloreado a verde ciprés plano, sin degradé.
+- `npm test`: 163/163. `npm run test:e2e`: 100/100 (92 previos + 8 nuevos), sw.spec.js incluido y estable (5/5 corridas sueltas con `--retries=0`).
+- **Verificado en emulador (AVD `docuvoz`) instalando 1.4 ENCIMA de un 1.3 "de verdad" con datos cargados** (reconstruido desde el commit `17db5e4` con `git worktree`, mismo criterio que rondas anteriores): se cargó 1 producto con foto real ("Veri", $1.234) en el 1.3 recién instalado, se subió a 1.4 con `adb install -r` y **el producto siguió ahí** con nombre/precio/foto intactos; la 1.4 abre con la identidad visual nueva (verde ciprés/oliva en modo oscuro, Newsreader/Manrope).
+- Firma verificada con `apksigner verify --print-certs` sobre ambos APKs (1.4 y el 1.3 reconstruido): mismo DN (`CN=Estados rapidos, O=Bruno Avila, C=AR`) y mismo SHA-256 (`5d043d0f7642a77aa6469c3e9106780cfc57f97a97aa49da5c004efa0b27dfb4`) — misma llave. `aapt dump badging`: `versionCode='5' versionName='1.4'`.
+- Emulador restaurado al terminar: app desinstalada, foto de prueba borrada de `/sdcard/Pictures`.
+- No verificado en esta ronda: cámara física (limitación del emulador, ya conocida de rondas anteriores).
+
+### Re-build 2026-09-29 (mismo `versionCode` 5 / `1.4`, ahora con los 4 presets de composición, la
+copia automática de respaldo y el reordenamiento de secciones — commits `a791848`..`f20562c` de
+`rediseno-organic`)
+- Clean build real: `_sitio/` y `movil/app/build/` borrados antes de correr `movil/build-apk.ps1`
+  (que reconstruye `_sitio/` con `armar-sitio.mjs` y dispara `copiarApp`/`armarSitio` en Gradle), para
+  garantizar que no quedara nada cacheado del build de `cc7eb96`. `estados-rapidos-1.4.apk` quedó en
+  3.07 MB (antes 2.91 MB, por las 4 fuentes Newsreader + `geometria-presets.js` + los módulos de
+  copia automática/reordenamiento).
+- Verificado que el `.apk` contiene los archivos de la rama actual y no versiones viejas: comparación
+  byte a byte entre `assets/app/js/geometria-presets.js` y `assets/app/js/respaldo-automatico.js`
+  dentro del `.apk` contra los fuente del repo (`diff`, sin diferencias); presentes también los 4
+  `fonts/newsreader-*.woff2`/`manrope-*.woff2` y `js/utils/respaldo-copia.js`.
+- Firma: `apksigner verify --print-certs` → mismo DN y mismo SHA-256
+  (`5d043d0f7642a77aa6469c3e9106780cfc57f97a97aa49da5c004efa0b27dfb4`, misma llave que la 1.3).
+  `aapt dump badging`: `versionCode='5' versionName='1.4'`.
+- **Verificado en emulador (AVD `docuvoz`), 1.3 → 1.4 con datos cargados**: `estados-rapidos-1.3.apk`
+  (copia archivada en `_INSTALABLES`, no había quedado en la raíz por el `.gitignore`) instalado
+  limpio (uninstall real primero — quedaba data vieja de una ronda anterior en el mismo AVD, contaminando
+  la primera prueba), se cargó 1 producto ("Veri", foto de la cámara del emulador — el PNG fixture de
+  los E2E no lo pudo decodificar el `BitmapFactory` nativo, la cámara sí), se subió a 1.4 con
+  `adb install -r` y **el producto sobrevivió** (nombre y foto intactos, agrupado en "Sin sección");
+  la 1.4 abre con el rediseño "Organic Minimalist" completo (header "Estados Rápidos" + tagline,
+  tarjeta "Consejo de publicación", toggle Lista/Grilla).
+- Publicar con el preset **Editorial** desde la hoja de revisión: generó la imagen (`image/jpeg` en el
+  intent de `ACTION_CHOOSER`, confirma que `componer.js` ahora exporta JPEG y no PNG) y abrió el
+  selector de WhatsApp sin errores en `logcat` (sin `FATAL`/`AndroidRuntime`/`chromium ERROR`).
+  Verificación por `uiautomator dump` + `logcat` (no CDP contra el WebView: `agent-browser`/CDP contra
+  este WebView de release rompió la app al intentar `DOM.setFileInputFiles`, ver BUGS.md/nota abajo).
+- Emulador restaurado al terminar: app desinstalada, foto de prueba borrada de `/sdcard/Pictures`,
+  emulador apagado (`adb emu kill`).
+- **Nota para la próxima ronda**: conectar `agent-browser`/CDP contra el WebView de este APK (release,
+  sin `BuildConfig.DEBUG`) vía `adb forward` a `webview_devtools_remote_<pid>` funciona para navegar y
+  leer (`snapshot`, `get text`), pero el comando `upload` (`DOM.setFileInputFiles`) sobre el `<input
+  type=file>` terminó el proceso renderer con "bad IPC message" y mató la app entera (WebView Android,
+  no pasa en Chrome de escritorio). Para adjuntar fotos en este WebView conviene UI nativa (galería o
+  cámara reales vía `adb shell input tap` + `uiautomator dump` para ubicar botones) en vez de
+  `agent-browser upload`.

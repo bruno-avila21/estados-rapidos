@@ -1,5 +1,11 @@
 // Funciones puras del modelo: formato de precio, validación de producto y de ajustes de plantilla.
 // Sin DOM, sin IndexedDB — testeables con node:test.
+import {
+  geometriaBannerInferior,
+  geometriaEditorial,
+  geometriaPolaroid,
+  geometriaStoryInmersiva,
+} from './geometria-presets.js';
 
 export const VERSION_RESPALDO = 1;
 
@@ -81,19 +87,156 @@ function ajustesConVisibilidad(clavesVisibles) {
 }
 
 // --- Ajustes POR ESTILO (ronda 2026-09-28: "configuración por estilo") ---
-// Los 3 estilos con texto dejan de compartir un único juego de ajustes: cada uno tiene su propia
+// Los estilos con texto no comparten un único juego de ajustes: cada uno tiene su propia
 // configuración (posición/tipografía/color/fondo/visibilidad), con estos defaults de fábrica:
 //   - foto-precio: nombre + precio visibles, descripción oculta.
 //   - foto-descripcion: descripción visible, nombre y precio ocultos (la descripción ya suele
 //     incluirlos, vía {nombre}/{precio} en el modelo de texto).
 //   - mi-plantilla: foto + nombre + precio visibles, descripción oculta.
+//   - los 4 presets de composición (Fase 4, ver más abajo): nombre + precio + descripción
+//     visibles, foto SIEMPRE oculta acá (su foto va a una zona de geometría fija propia del
+//     preset — franja/marco/tarjeta/scrim en componer.js —, no es una caja que el usuario mueva).
 // "Solo la foto" no tiene ajustes propios (nunca dibuja texto ni plantilla) y no aparece acá.
-export const ESTILOS_CON_AJUSTES = Object.freeze(['foto-precio', 'foto-descripcion', 'mi-plantilla']);
+export const ESTILOS_CON_AJUSTES = Object.freeze([
+  'foto-precio',
+  'foto-descripcion',
+  'mi-plantilla',
+  'banner-inferior',
+  'editorial',
+  'polaroid',
+  'story-inmersiva',
+]);
+
+/** Caja de texto de partida para uno de los 4 presets de composición: geometría (x/y/w/h) de las
+ * funciones puras de geometria-presets.js + estilo tipográfico propio de cada preset. Reusa el
+ * mismo mecanismo de `ajustes` que los demás estilos con texto (tamaño/color/tipografía/fondo/
+ * visibilidad, editables en el editor de plantilla) — la única diferencia real con `cajaTexto()`
+ * es que acá la posición de partida sale de un cálculo, no de un número fijo a mano, y que puede
+ * llevar `elipsis:true` (ver dibujarCajaTexto en componer.js). */
+function cajaPreset(rect, extra) {
+  return {
+    x: rect.x,
+    y: rect.y,
+    w: rect.w,
+    h: rect.h,
+    tamano: 48,
+    color: '#ffffff',
+    peso: 700,
+    alineacion: 'center',
+    familia: FUENTE_POR_DEFECTO,
+    fondoColor: null,
+    fondoOpacidad: 0,
+    fondoRadio: 0,
+    maxLineas: 2,
+    visible: true,
+    elipsis: true,
+    ...extra,
+  };
+}
+
+// Geometría de PARTIDA de los 4 presets, con precio y descripción visibles (el máximo de
+// contenido) — es la que arma la posición inicial de cada caja; en el dibujo real (componer.js)
+// la zona decorativa (franja/marco/tarjeta/scrim) se recalcula con la visibilidad VIGENTE.
+const GEO_BANNER_INFERIOR = geometriaBannerInferior({ conPrecio: true, conDescripcion: true });
+const GEO_EDITORIAL = geometriaEditorial({ conPrecio: true, conDescripcion: true });
+const GEO_POLAROID = geometriaPolaroid({ conPrecio: true, conDescripcion: true });
+const GEO_STORY_INMERSIVA = geometriaStoryInmersiva({ conPrecio: true, conDescripcion: true });
+
+// Tipografía de fábrica de los 4 presets (ronda 2026-09-29, "presets calzan con los mocks"): serif
+// Newsreader para nombre/precio (títulos, igual que los 4 mocks Stitch) + sans Manrope para
+// descripción/etiquetas — NO son elegibles en el editor de plantilla (no están en
+// `FUENTES_DISPONIBLES`: son fijas por diseño, cada preset con la suya, igual que la franja/marco/
+// tarjeta/scrim que tampoco es editable). Antes de esta ronda usaban Montserrat/Playfair a un
+// tamaño mucho más chico (~la mitad) que el de los mocks — el bug que esta ronda corrige.
+function ajustesBannerInferior() {
+  return {
+    foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
+    nombre: cajaPreset(GEO_BANNER_INFERIOR.nombre, { tamano: 68, alineacion: 'left', familia: 'newsreader', peso: 500, color: '#fdf8f5' }),
+    precio: cajaPreset(GEO_BANNER_INFERIOR.precio, {
+      tamano: 58,
+      peso: 700,
+      alineacion: 'right',
+      familia: 'manrope',
+      color: '#f9dec7',
+      maxLineas: 1,
+    }),
+    descripcion: cajaPreset(GEO_BANNER_INFERIOR.descripcion, {
+      tamano: 32,
+      peso: 400,
+      alineacion: 'left',
+      familia: 'manrope',
+      color: 'rgba(253,248,245,0.85)',
+      maxLineas: 2,
+    }),
+  };
+}
+
+function ajustesEditorial() {
+  return {
+    foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
+    nombre: cajaPreset(GEO_EDITORIAL.nombre, { tamano: 76, alineacion: 'left', familia: 'newsreader', peso: 500, color: '#1c1b1a', maxLineas: 2 }),
+    precio: cajaPreset(GEO_EDITORIAL.precio, { tamano: 30, alineacion: 'left', familia: 'manrope', peso: 600, color: '#3a4d39', maxLineas: 1 }),
+    descripcion: cajaPreset(GEO_EDITORIAL.descripcion, {
+      tamano: 28,
+      peso: 400,
+      alineacion: 'left',
+      familia: 'manrope',
+      color: '#5c584f',
+      maxLineas: 3,
+    }),
+  };
+}
+
+function ajustesPolaroid() {
+  return {
+    foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
+    nombre: cajaPreset(GEO_POLAROID.nombre, { tamano: 84, alineacion: 'center', familia: 'newsreader', peso: 500, color: '#242220', maxLineas: 2 }),
+    precio: cajaPreset(GEO_POLAROID.precio, { tamano: 78, alineacion: 'center', familia: 'newsreader', peso: 700, color: '#3a4d39', maxLineas: 1 }),
+    descripcion: cajaPreset(GEO_POLAROID.descripcion, {
+      tamano: 30,
+      peso: 400,
+      alineacion: 'center',
+      familia: 'newsreader-italica',
+      color: '#6e5b49',
+      maxLineas: 2,
+    }),
+  };
+}
+
+function ajustesStoryInmersiva() {
+  return {
+    foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
+    nombre: cajaPreset(GEO_STORY_INMERSIVA.nombre, { tamano: 88, alineacion: 'left', familia: 'newsreader', peso: 400, color: '#ffffff', maxLineas: 2 }),
+    precio: cajaPreset(GEO_STORY_INMERSIVA.precio, {
+      tamano: 30,
+      alineacion: 'center',
+      familia: 'manrope',
+      peso: 700,
+      color: '#ffffff',
+      fondoColor: '#ffffff',
+      fondoOpacidad: 0.2,
+      fondoRadio: 40,
+      maxLineas: 1,
+    }),
+    descripcion: cajaPreset(GEO_STORY_INMERSIVA.descripcion, {
+      tamano: 26,
+      peso: 400,
+      alineacion: 'left',
+      familia: 'manrope',
+      color: 'rgba(255,255,255,0.88)',
+      maxLineas: 1,
+    }),
+  };
+}
 
 export const AJUSTES_POR_DEFECTO_POR_ESTILO = Object.freeze({
   'foto-precio': Object.freeze(ajustesConVisibilidad(['nombre', 'precio'])),
   'foto-descripcion': Object.freeze(ajustesConVisibilidad(['descripcion'])),
   'mi-plantilla': Object.freeze(ajustesConVisibilidad(['foto', 'nombre', 'precio'])),
+  'banner-inferior': Object.freeze(ajustesBannerInferior()),
+  editorial: Object.freeze(ajustesEditorial()),
+  polaroid: Object.freeze(ajustesPolaroid()),
+  'story-inmersiva': Object.freeze(ajustesStoryInmersiva()),
 });
 
 /** Normaliza los ajustes de UN estilo contra sus propios defaults (completa cajas parciales o
@@ -141,7 +284,11 @@ export function migrarAjustesPorEstilo(configGuardada) {
   if (configGuardada.ajustesPorEstilo) return normalizarAjustesPorEstilo(configGuardada.ajustesPorEstilo);
   if (esFormatoAjustesCompartidoViejo(configGuardada.ajustes)) {
     const compartido = normalizarAjustes(configGuardada.ajustes);
+    // Los 4 presets de composición (Fase 4) no existían cuando se guardó este respaldo VIEJO: no
+    // hay nada del usuario para copiarles, así que arrancan con sus propios defaults de fábrica en
+    // vez de quedar ausentes (`normalizarAjustesPorEstilo` ya los completa a todos).
     return {
+      ...normalizarAjustesPorEstilo(null),
       'foto-precio': clonar(compartido),
       'foto-descripcion': clonar(compartido),
       'mi-plantilla': clonar(compartido),
@@ -165,15 +312,98 @@ export const FORMATO_PRECIO_POR_DEFECTO = Object.freeze({
   decimales: false,
 });
 
-// --- Estilo de imagen (2026-09-27: 4 modos, ver CREAR-BRIEF.md) ---
-export const ESTILOS_IMAGEN = Object.freeze(['solo-foto', 'foto-precio', 'foto-descripcion', 'mi-plantilla']);
+// --- Fondos de texto PREDEFINIDOS (Fase 2, "S" #3): unos pocos presets de fondo/etiqueta
+// (color + opacidad + radio) aplicables con un toque en el editor de plantilla, además del color
+// libre que ya existía. Colores tomados de los tokens de la piel "Organic Minimalist"
+// (css/estilos.css: --color-texto, --color-primario, --color-acento) para que calcen con el resto
+// de la app en vez de inventar una paleta aparte. */
+export const PRESETS_FONDO_TEXTO = Object.freeze([
+  { id: 'sin-fondo', nombre: 'Sin fondo', fondoColor: '#242220', fondoOpacidad: 0, fondoRadio: 0 },
+  { id: 'tinta-suave', nombre: 'Tinta suave', fondoColor: '#242220', fondoOpacidad: 0.55, fondoRadio: 18 },
+  { id: 'lino-claro', nombre: 'Lino claro', fondoColor: '#f3efea', fondoOpacidad: 0.9, fondoRadio: 12 },
+  { id: 'contraste-alto', nombre: 'Contraste alto', fondoColor: '#242220', fondoOpacidad: 0.9, fondoRadio: 4 },
+  { id: 'acento', nombre: 'Acento', fondoColor: '#3a4d39', fondoOpacidad: 0.7, fondoRadio: 24 },
+]);
+
+/** Aplica un preset de fondo/etiqueta (por `id` de PRESETS_FONDO_TEXTO) a una caja de texto: pura,
+ * no muta `caja`. Un id que no existe devuelve `caja` sin cambios (defensivo, mismo criterio que
+ * `crearIcono` con un nombre desconocido). */
+export function aplicarPresetFondo(caja, presetId) {
+  const preset = PRESETS_FONDO_TEXTO.find((p) => p.id === presetId);
+  if (!preset || !caja) return caja;
+  return { ...caja, fondoColor: preset.fondoColor, fondoOpacidad: preset.fondoOpacidad, fondoRadio: preset.fondoRadio };
+}
+
+// --- Calidad de imagen al exportar (Fase 2, "S" #5): "Estándar" vs "Alta", elegible en la hoja de
+// revisión y recordada en los ajustes generales. Medido contra una foto real (900×900) compuesta a
+// 1080×1920 con texto ("Foto con precio"): JPEG 0.85 ≈ 59KB, 0.9 (el fijo de antes) ≈ 73KB, 0.95 ≈
+// 102KB, PNG ≈ 230KB. PNG queda descartado para "Alta": es 2-3× más pesado que JPEG 0.95 sin
+// beneficio real, porque WhatsApp recomprime la imagen que reciba de todos modos (ver componer.js)
+// — más peso solo alarga la espera para compartir. "Alta" es JPEG 0.95 (mejor calidad visible,
+// sigue liviano); "Estándar" baja a JPEG 0.85 (antes 0.9 fijo): más rápida de armar y compartir,
+// con una pérdida de nitidez que no se nota en la pantalla de un celular.
+export const CALIDADES_IMAGEN = Object.freeze(['estandar', 'alta']);
+export const CALIDAD_IMAGEN_POR_DEFECTO = 'estandar';
+export const ETIQUETA_CALIDAD_IMAGEN = Object.freeze({ estandar: 'Estándar', alta: 'Alta' });
+export const OPCIONES_EXPORTACION_POR_CALIDAD = Object.freeze({
+  estandar: Object.freeze({ formato: 'image/jpeg', calidad: 0.85 }),
+  alta: Object.freeze({ formato: 'image/jpeg', calidad: 0.95 }),
+});
+
+/** {formato, calidad} para `componerSegunEstilo` según la calidad elegida ('estandar'/'alta'); un
+ * valor inválido o ausente cae a la calidad por defecto. */
+export function resolverOpcionesExportacion(calidadImagen) {
+  return OPCIONES_EXPORTACION_POR_CALIDAD[calidadImagen] ?? OPCIONES_EXPORTACION_POR_CALIDAD[CALIDAD_IMAGEN_POR_DEFECTO];
+}
+
+// --- Estilo de imagen (2026-09-27: 4 modos, ver CREAR-BRIEF.md; Fase 4 2026-09-28: + 4 presets de
+// composición — banner inferior/editorial/polaroid/story inmersiva, catálogo de presets) ---
+export const ESTILOS_IMAGEN = Object.freeze([
+  'solo-foto',
+  'foto-precio',
+  'foto-descripcion',
+  'mi-plantilla',
+  'banner-inferior',
+  'editorial',
+  'polaroid',
+  'story-inmersiva',
+]);
 export const ESTILO_POR_DEFECTO = 'solo-foto';
 export const ETIQUETA_ESTILO = Object.freeze({
   'solo-foto': 'Solo la foto',
   'foto-precio': 'Foto con precio',
   'foto-descripcion': 'Foto con descripción',
   'mi-plantilla': 'Mi plantilla',
+  'banner-inferior': 'Banner inferior',
+  editorial: 'Editorial',
+  polaroid: 'Polaroid',
+  'story-inmersiva': 'Story inmersiva',
 });
+
+// Los 4 presets de composición son un subconjunto de ESTILOS_IMAGEN (Fase 4): un "preset" es,
+// para el modelo, un estilo de imagen más — misma resolución (resolverEstilo), mismo mecanismo de
+// ajustes por estilo, mismo override por producto en "Opciones avanzadas". Esta lista solo existe
+// para la galería de presets del editor de plantilla (js/vistas/plantilla.js): son los que tiene
+// sentido mostrar ahí como "composiciones prediseñadas" en vez de mezclarlos con foto-precio/
+// foto-descripcion/mi-plantilla, que son configuraciones más libres, no una composición fija.
+export const PRESETS_COMPOSICION = Object.freeze(['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva']);
+
+// --- Datos de marca de los 4 presets (ronda 2026-09-29): "Nombre del negocio" (vacío = no se
+// dibuja) y "Texto del botón/llamado" de "Banner inferior", editables en Ajustes generales (pantalla
+// Plantilla). Son ajustes GENERALES (uno solo para toda la app), no por estilo: los 4 mocks los usan
+// fijos para todos los presets, no tiene sentido pedirlos 4 veces. ---
+export const NOMBRE_NEGOCIO_POR_DEFECTO = '';
+export const TEXTO_BOTON_POR_DEFECTO = 'Pedir por privado';
+
+/** Nombre de la PRIMERA sección del producto (la que sirve de "etiqueta/colección" en los 4
+ * presets), o `''` si no tiene ninguna o la/s que tiene ya no existen. Pura: recibe la colección de
+ * secciones ya cargada (id→nombre), no toca IndexedDB. */
+export function resolverSeccionNombre(producto, secciones) {
+  const ids = seccionesDelProducto(producto);
+  if (!ids.length) return '';
+  const porId = new Map((secciones ?? []).map((s) => [s.id, s.nombre]));
+  return porId.get(ids[0]) ?? '';
+}
 
 export const DESCRIPCION_MODELO_POR_DEFECTO = '{nombre} a {precio} 🔥 Pedilo por privado';
 
@@ -355,6 +585,18 @@ export function validarRespaldo(objeto) {
       return { ok: false, error: 'Encuadre de foto inválido en el respaldo.' };
     if (objeto.general.incluirTextoAlCompartir != null && typeof objeto.general.incluirTextoAlCompartir !== 'boolean')
       return { ok: false, error: '"Incluir texto" inválido en el respaldo.' };
+    // Campo agregado en la ronda "calidad de imagen" (Fase 2): opcional, un respaldo viejo no lo
+    // trae y queda en el valor por defecto ('estandar') al importar.
+    if (objeto.general.calidadImagen != null && !CALIDADES_IMAGEN.includes(objeto.general.calidadImagen))
+      return { ok: false, error: 'Calidad de imagen inválida en el respaldo.' };
+    if (objeto.general.nombreNegocio != null && typeof objeto.general.nombreNegocio !== 'string')
+      return { ok: false, error: 'Nombre del negocio inválido en el respaldo.' };
+    if (typeof objeto.general.nombreNegocio === 'string' && objeto.general.nombreNegocio.length > 60)
+      return { ok: false, error: 'Nombre del negocio demasiado largo (máx. 60).' };
+    if (objeto.general.textoBoton != null && typeof objeto.general.textoBoton !== 'string')
+      return { ok: false, error: 'Texto del botón inválido en el respaldo.' };
+    if (typeof objeto.general.textoBoton === 'string' && objeto.general.textoBoton.length > 40)
+      return { ok: false, error: 'Texto del botón demasiado largo (máx. 40).' };
   }
 
   if (objeto.plantilla != null) {
@@ -404,6 +646,9 @@ export function construirRespaldo({ productos, plantilla, general, secciones }) 
           descripcionModelo: general.descripcionModelo ?? DESCRIPCION_MODELO_POR_DEFECTO,
           encuadreFoto: general.encuadreFoto ?? ENCUADRE_FOTO_POR_DEFECTO,
           incluirTextoAlCompartir: general.incluirTextoAlCompartir ?? true,
+          calidadImagen: general.calidadImagen ?? CALIDAD_IMAGEN_POR_DEFECTO,
+          nombreNegocio: general.nombreNegocio ?? NOMBRE_NEGOCIO_POR_DEFECTO,
+          textoBoton: general.textoBoton ?? TEXTO_BOTON_POR_DEFECTO,
         }
       : null,
   };

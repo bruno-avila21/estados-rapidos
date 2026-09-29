@@ -27,7 +27,8 @@ async function mockearCompartir(page) {
         dimensiones.push({ w: bitmap.width, h: bitmap.height, tipo: archivo.type });
         bitmap.close?.();
       }
-      window.__compartir.llamadas.push({ text: datos.text, cantidad: datos.files?.length ?? 0, dimensiones });
+      const tamanos = (datos.files ?? []).map((archivo) => archivo.size);
+      window.__compartir.llamadas.push({ text: datos.text, cantidad: datos.files?.length ?? 0, dimensiones, tamanos });
       return Promise.resolve();
     };
   });
@@ -50,7 +51,7 @@ test('la selección de cada producto persiste tras recargar', async ({ page }) =
   await checks.nth(0).uncheck();
   // esperar la confirmación visible de que la escritura async en IndexedDB terminó, antes de
   // recargar: uncheck() resuelve al despachar el evento, no al terminar el handler (BUGS.md #12).
-  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1');
+  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1 producto');
   await page.reload();
   await expect(page.locator('[data-accion="seleccionar"]').nth(0)).not.toBeChecked();
   await expect(page.locator('[data-accion="seleccionar"]').nth(1)).toBeChecked();
@@ -71,7 +72,7 @@ test('marcar todos / desmarcar afectan a todos los productos', async ({ page }) 
   for (const check of await page.locator('[data-accion="seleccionar"]').all()) {
     await expect(check).toBeChecked();
   }
-  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 2');
+  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 2 productos');
 });
 
 test('hoja de revisión con 3 productos: arma 3 imágenes 1080x1920, texto editable, comparte todo junto', async ({ page }) => {
@@ -121,16 +122,28 @@ test('Publicar de una tarjeta abre la hoja con 1 sola imagen', async ({ page }) 
   expect(llamadas[0].cantidad).toBe(1);
 });
 
+// La miniatura se crea SIN `src` y recién lo recibe cuando termina de componerse en canvas (async):
+// `toHaveCount(1)` ya pasa con el <img> recién creado y todavía vacío, así que hay que esperar a
+// que el atributo tenga un blob: real antes de leerlo (si no, se lee "" en una carrera — más
+// visible con el reskin "Organic Minimalist", que carga 2 fuentes más antes del primer paint).
+async function esperarMiniaturaLista(page) {
+  await page.waitForFunction(() => {
+    const img = document.querySelector('.hoja-revision__miniatura');
+    return !!img?.getAttribute('src');
+  }, null, { timeout: 10_000 });
+  return page.locator('.hoja-revision__miniatura').first().getAttribute('src');
+}
+
 test('el selector de estilo de la hoja regenera las imágenes', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page, { nombre: 'Reversible', precio: '3000' });
   await page.locator('[data-accion="publicar"]').first().click();
   await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
-  const primeraImagen = await page.locator('.hoja-revision__miniatura').first().getAttribute('src');
+  const primeraImagen = await esperarMiniaturaLista(page);
 
   await page.locator('#revision-estilo').selectOption('foto-precio');
   await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
-  const segundaImagen = await page.locator('.hoja-revision__miniatura').first().getAttribute('src');
+  const segundaImagen = await esperarMiniaturaLista(page);
   expect(segundaImagen).not.toBe(primeraImagen);
 });
 
@@ -140,11 +153,13 @@ test('el selector de estilo de la hoja tiene etiqueta en todas sus opciones', as
   await page.goto('/');
   await crearProducto(page, { nombre: 'Etiquetas', precio: '1000' });
   await page.locator('[data-accion="publicar"]').first().click();
-  await expect(page.locator('#revision-estilo option')).toHaveCount(5); // la hoja se arma async
+  await expect(page.locator('#revision-estilo option')).toHaveCount(9); // la hoja se arma async
   const textos = await page.locator('#revision-estilo option').allTextContents();
-  expect(textos).toHaveLength(5); // "El de cada producto" + los 4 estilos
+  expect(textos).toHaveLength(9); // "El de cada producto" + los 8 estilos (4 de siempre + 4 presets de composición, Fase 4)
   for (const t of textos) expect(t.trim()).not.toBe('');
   expect(textos).toContain('Foto con descripción');
+  expect(textos).toContain('Banner inferior');
+  expect(textos).toContain('Story inmersiva');
 });
 
 // Atrás (el botón de Android) cierra la hoja y deja la lista usable; antes la hoja quedaba encima
@@ -216,4 +231,107 @@ test('cerrar la hoja con la X no deja un paso de más en el historial', async ({
   await expect(page.locator('.hoja-revision')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => history.state?.hojaRevision ?? null)).toBeNull();
   expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(largo);
+});
+
+// --- Fase 2, "S" #1: "Subir a Estado" individual no toca la selección múltiple persistente ---
+
+test('Publicar de una tarjeta no toca la selección múltiple persistente', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Selección Uno', precio: '1000' });
+  await crearProducto(page, { nombre: 'Selección Dos', precio: '2000' });
+
+  const filaUno = page.locator('.fila-compacta', { hasText: 'Selección Uno' });
+  const filaDos = page.locator('.fila-compacta', { hasText: 'Selección Dos' });
+
+  // ambos arrancan seleccionados (CREAR-BRIEF.md); se desmarca uno para tener un estado no trivial
+  await filaUno.locator('[data-accion="seleccionar"]').uncheck();
+  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1 producto');
+
+  await filaDos.locator('[data-accion="publicar"]').click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+  // Reskin "Organic Minimalist" (confirmar_publicaci_n_natural): título fijo "Confirmar
+  // Publicación" (la cantidad va en el subtítulo, no en el título).
+  await expect(page.locator('.dialogo__titulo')).toHaveText('Confirmar Publicación');
+  await page.locator('[data-accion="revision-cerrar"]').click();
+  await expect(page.locator('.hoja-revision')).toHaveCount(0);
+
+  // la selección múltiple queda EXACTAMENTE como estaba antes de publicar de a una
+  await expect(filaUno.locator('[data-accion="seleccionar"]')).not.toBeChecked();
+  await expect(filaDos.locator('[data-accion="seleccionar"]')).toBeChecked();
+  await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveText('Publicar 1 producto');
+});
+
+// --- Fase 2, "S" #4: "Copiar descripción" ---
+
+test('"Copiar descripción" copia el texto al portapapeles con toast, sin depender de "Incluir texto"', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Copiable', precio: '1500' });
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+
+  await page.locator('#revision-descripcion').fill('Texto a mano para copiar');
+  // "Incluir texto" apagado: el botón sigue andando igual (copia manual explícita, no depende del
+  // interruptor que solo controla lo que se manda AL COMPARTIR).
+  await page.locator('[data-accion="revision-incluir-texto"]').uncheck();
+  await page.locator('[data-accion="revision-copiar-descripcion"]').click();
+  await expect(page.locator('#toast')).toHaveText('Descripción copiada');
+
+  const portapapeles = await page.evaluate(() => navigator.clipboard.readText());
+  expect(portapapeles).toBe('Texto a mano para copiar');
+});
+
+test('"Copiar descripción" con el campo vacío avisa en vez de copiar nada', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Vacía', precio: '100' });
+  await page.evaluate(() => navigator.clipboard.writeText('placeholder-previo'));
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+
+  await page.locator('#revision-descripcion').fill('   ');
+  await page.locator('[data-accion="revision-copiar-descripcion"]').click();
+  await expect(page.locator('#toast')).toHaveText('No hay descripción para copiar');
+
+  const portapapeles = await page.evaluate(() => navigator.clipboard.readText());
+  expect(portapapeles).toBe('placeholder-previo'); // no se tocó el portapapeles
+});
+
+// --- Fase 2, "S" #5: selector de calidad de imagen ---
+
+test('"Calidad de imagen": Estándar por defecto, "Alta" pesa más y se recuerda entre hojas', async ({ page }) => {
+  await mockearCompartir(page);
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Calidad', precio: '3000' });
+
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+  await expect(page.locator('[data-accion="revision-calidad-estandar"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-accion="revision-calidad-alta"]')).toHaveAttribute('aria-pressed', 'false');
+
+  await page.locator('[data-accion="revision-compartir"]').click();
+  await expect(page.locator('#toast')).toHaveText(/Mi estado/);
+  const llamadasEstandar = await page.evaluate(() => window.__compartir.llamadas);
+  const pesoEstandar = llamadasEstandar.at(-1).tamanos[0];
+
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+  await page.locator('[data-accion="revision-calidad-alta"]').click();
+  await expect(page.locator('[data-accion="revision-calidad-alta"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-accion="revision-compartir"]').click();
+  // El toast "¡Listo! ... Mi estado" del PRIMER compartir sigue en pantalla (dura 3.2s): esperar el
+  // TEXTO no alcanza como señal de que este segundo share ya terminó. La señal real es que
+  // `navigator.share` (mockeado) sumó una SEGUNDA llamada.
+  await expect.poll(() => page.evaluate(() => window.__compartir.llamadas.length)).toBe(2);
+  const llamadasAlta = await page.evaluate(() => window.__compartir.llamadas);
+  const pesoAlta = llamadasAlta.at(-1).tamanos[0];
+
+  expect(pesoAlta).toBeGreaterThan(pesoEstandar); // JPEG 0.95 pesa más que 0.85 (medido en modelo.js)
+
+  // se recuerda: otra hoja en la MISMA sesión, y de nuevo después de recargar (ajustes generales)
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('[data-accion="revision-calidad-alta"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-accion="revision-cerrar"]').click();
+
+  await page.reload();
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('[data-accion="revision-calidad-alta"]')).toHaveAttribute('aria-pressed', 'true');
 });

@@ -26,7 +26,23 @@ async function crearProducto(page, { nombre, precio }) {
   await expect(page.locator('[data-accion="editar"]').last()).toBeVisible();
 }
 
-/** Deja "Foto con precio" en estado "Personalizado" (badge visible en Ajustes) moviendo el
+// Ronda "reskin plantilla": la tarjeta de controles + "Presets de diseño rápidos" van ARRIBA del
+// lienzo, así que ya no está visible al cargar sin más — mismo helper que editor.spec.js (BUGS.md
+// #48/#50: scrollIntoViewIfNeeded solo no alcanza porque no sabe que la nav inferior es fixed).
+async function asegurarLienzoVisible(page) {
+  await page.locator('.editor-plantilla__lienzo').scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const el = document.querySelector('.editor-plantilla__lienzo');
+    const nav = document.querySelector('.nav-inferior');
+    if (!el) return;
+    const limite = nav ? nav.getBoundingClientRect().top : window.innerHeight;
+    const rect = el.getBoundingClientRect();
+    const exceso = rect.bottom - limite + 16;
+    if (exceso > 0) window.scrollBy(0, exceso);
+  });
+}
+
+/** Deja "Foto con precio" en estado "Personalizado" (badge de la barra superior) moviendo el
  * elemento "nombre" en el editor — mismo gesto que ajustes.spec.js. Necesario porque el badge +
  * "Editar" en la misma fila es justo lo que hacía overflow (grid 1fr sin minmax(0, ...)). */
 async function personalizarEstiloFotoPrecio(page) {
@@ -35,12 +51,13 @@ async function personalizarEstiloFotoPrecio(page) {
   // a que el elemento esté visible antes de leer su boundingBox() (mismo patrón que BUGS.md #24).
   const elementoNombre = page.locator('[data-elemento="nombre"]');
   await expect(elementoNombre).toBeVisible();
+  await asegurarLienzoVisible(page);
   const caja = await elementoNombre.boundingBox();
   await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2);
   await page.mouse.down();
   await page.mouse.move(caja.x + caja.width / 2, caja.y + caja.height / 2 + 60, { steps: 5 });
   await page.mouse.up();
-  await expect(page.locator('.editor-plantilla__badge')).toBeVisible();
+  await expect(page.locator('.editor-plantilla__badge')).toHaveText('Personalizado');
   await page.waitForTimeout(100);
 }
 

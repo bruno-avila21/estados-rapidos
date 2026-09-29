@@ -28,6 +28,37 @@ cuentas), A.5.23 servicios en la nube (el único proveedor es GitHub Pages, ya d
 A.8.24 criptografía (no hay datos que cifrar en reposo más allá de lo que el propio navegador decida
 para IndexedDB — HTTPS lo da GitHub Pages en tránsito).
 
+## Contraste AA — paleta "Organic Minimalist" (reskin 2026-09-28)
+
+Reemplaza el registro anterior (índigo/violeta, ronda 2026-09-27). Verificado con la fórmula de
+contraste relativo de WCAG 2.1 sobre los pares texto/fondo reales de `css/estilos.css`. Umbral AA:
+4.5:1 texto normal, 3:1 componentes de UI/texto grande.
+
+**Claro (`:root`, por defecto)**
+| Par | Contraste |
+|---|---|
+| `--color-texto` `#242220` / `--color-fondo` `#fbf9f5` | 15.08:1 |
+| `--color-texto-tenue` `#5c584f` / `--color-fondo` `#fbf9f5` | 6.74:1 |
+| `--color-texto` `#242220` / `--color-superficie` `#f3efea` | 13.85:1 |
+| `--color-texto` `#242220` / `--color-superficie-alta` `#ebe5dd` | 12.67:1 |
+| `--color-primario-texto` `#fbf9f5` / `--color-primario` `#3a4d39` (botón primario, FAB, chip activo) | 8.68:1 |
+| `--color-acento` `#6e5b49` / `--color-fondo` `#fbf9f5` (nav activa) | 6.13:1 |
+| `--color-peligro` `#ba1a1a` / `--color-fondo` `#fbf9f5` (`[role=alert]`) | 6.14:1 |
+| `--color-peligro-texto` `#fbf9f5` / `--color-peligro` `#ba1a1a` (botón peligro) | 6.14:1 |
+
+**Oscuro (`prefers-color-scheme: dark` / `[data-theme=dark]`)**
+| Par | Contraste |
+|---|---|
+| `--color-texto` `#efe9e0` / `--color-fondo` `#201e1a` | 13.79:1 |
+| `--color-texto-tenue` `#b8b1a4` / `--color-fondo` `#201e1a` | 7.82:1 |
+| `--color-primario-texto` `#16210f` / `--color-primario` `#a7bda4` | 8.31:1 |
+| `--color-acento` `#dcc2ac` / `--color-fondo` `#201e1a` | 9.79:1 |
+| `--color-peligro` `#ffb4a9` / `--color-fondo` `#201e1a` | 9.79:1 |
+| `--color-peligro-texto` `#201e1a` / `--color-peligro` `#ffb4a9` | 9.79:1 |
+
+Todos los pares superan 4.5:1 (varios llegan a AAA, 7:1). Calculado con un script Node de una vez
+(fórmula estándar de luminancia relativa), no a ojo.
+
 ## Cómo se verificó (para que el próximo que lea esto sepa que no es de palabra)
 - `npm test` → 67/67 (`test/*.test.js`: modelo, layout, respaldo, estrategia del SW, compartir, geometría del editor).
 - `npm run test:e2e` → 33/33 (`test/e2e/*.spec.js`, viewport 412×915, Chromium).

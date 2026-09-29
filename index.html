@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#0d0f1a" />
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbf9f5" />
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#201e1a" />
 <meta name="color-scheme" content="dark light" />
 <meta name="description" content="Estados de WhatsApp de tus productos en 3 segundos." />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob: data:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; worker-src 'self'" />
@@ -16,18 +17,20 @@
 <body class="cargando">
   <div class="app">
     <header class="encabezado">
-      <svg class="encabezado__logo" viewBox="0 0 64 64" aria-hidden="true">
-        <defs>
-          <linearGradient id="ergrad" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#3b82f6" />
-            <stop offset="1" stop-color="#8b5cf6" />
-          </linearGradient>
-        </defs>
-        <circle cx="32" cy="32" r="26" fill="none" stroke="url(#ergrad)" stroke-width="6"
-          stroke-linecap="round" stroke-dasharray="27 14" transform="rotate(-90 32 32)" />
-        <path d="M34 12 L18 34 L28 34 L26 52 L46 28 L35 28 Z" fill="url(#ergrad)" />
-      </svg>
-      <h1 class="encabezado__titulo" id="titulo-pantalla">Productos</h1>
+      <button type="button" class="encabezado__menu" data-accion="ir-inicio" aria-label="Ir al inicio">
+        <span class="encabezado__menu-icono" data-icono="lista"></span>
+      </button>
+      <div class="encabezado__textos">
+        <!-- Ya NO es <h1>: en Secciones/Respaldo el header muestra la MARCA ("Estados Rápidos"),
+             no el título de la pantalla — el H1 real vive en el contenido de cada vista (patrones.md
+             regla 3, "un H1 por pantalla"). Productos/Ajustes/Plantilla siguen mostrando su propio
+             título acá (no tienen H1 propio en el contenido). -->
+        <p class="encabezado__titulo" id="titulo-pantalla">Productos</p>
+        <p class="encabezado__subtitulo" id="subtitulo-pantalla" hidden></p>
+      </div>
+      <button type="button" class="encabezado__accion" data-accion="agregar-header" aria-label="Nuevo producto">
+        <span data-icono="agregar"></span>
+      </button>
     </header>
 
     <main id="vista" class="vista" aria-live="polite"></main>
@@ -41,19 +44,33 @@
       Sin conexión — tus productos siguen acá, se guardan en el celular.
     </div>
 
+    <!-- Copia automática diaria, SOLO PWA (ronda "copia automática"): el navegador no deja escribir
+         un archivo sin un gesto de la persona, así que en vez de la copia silenciosa del APK esto es
+         un recordatorio de un toque — main.js lo muestra cuando pasaron 24h o más de la última copia
+         y la preferencia está activada (Respaldo → "Preferencias de respaldo"). -->
+    <div id="aviso-respaldo" class="aviso-respaldo aviso-respaldo--oculto" role="status">
+      <span class="aviso-respaldo__texto">Hace más de un día que no guardás una copia</span>
+      <div class="aviso-respaldo__acciones">
+        <button type="button" data-accion="descargar-respaldo-aviso" class="boton boton--chico">Descargar</button>
+        <button type="button" data-accion="descartar-aviso-respaldo" class="boton-icono-mini" aria-label="Descartar aviso">
+          <span data-icono="equis"></span>
+        </button>
+      </div>
+    </div>
+
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <nav class="nav-inferior" aria-label="Secciones">
       <button type="button" class="nav-inferior__item" data-ruta="#/" data-accion="ir-lista">
-        <span class="nav-inferior__icono" aria-hidden="true">▤</span>
+        <span class="nav-inferior__icono" data-icono="inventario"></span>
         <span>Productos</span>
       </button>
       <button type="button" class="nav-inferior__item" data-ruta="#/ajustes" data-accion="ir-ajustes">
-        <span class="nav-inferior__icono" aria-hidden="true">▧</span>
+        <span class="nav-inferior__icono" data-icono="ajustes"></span>
         <span>Ajustes</span>
       </button>
       <button type="button" class="nav-inferior__item" data-ruta="#/respaldo" data-accion="ir-respaldo">
-        <span class="nav-inferior__icono" aria-hidden="true">⇅</span>
+        <span class="nav-inferior__icono" data-icono="respaldo"></span>
         <span>Respaldo</span>
       </button>
     </nav>

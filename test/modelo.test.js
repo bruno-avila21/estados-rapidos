@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { REGISTRO_FUENTES } from '../js/fuentes.js';
 import {
   formatearPrecio,
   parsearPrecio,
@@ -19,6 +20,14 @@ import {
   normalizarAjustesPorEstilo,
   migrarAjustesPorEstilo,
   esAjustePersonalizado,
+  PRESETS_FONDO_TEXTO,
+  aplicarPresetFondo,
+  CALIDADES_IMAGEN,
+  CALIDAD_IMAGEN_POR_DEFECTO,
+  resolverOpcionesExportacion,
+  ETIQUETA_ESTILO,
+  PRESETS_COMPOSICION,
+  FUENTES_DISPONIBLES,
 } from '../js/modelo.js';
 
 test('formatearPrecio: miles es-AR, sin decimales por defecto', () => {
@@ -157,8 +166,8 @@ test('resolverEstilo: ignora un override u estiloGeneral inválido (dato corrupt
   assert.equal(resolverEstilo({}, { estiloGeneral: 'tampoco-existe' }), ESTILO_POR_DEFECTO);
 });
 
-test('resolverEstilo: los 4 estilos declarados son válidos', () => {
-  assert.equal(ESTILOS_IMAGEN.length, 4);
+test('resolverEstilo: los 8 estilos declarados son válidos (4 de siempre + 4 presets de composición, Fase 4)', () => {
+  assert.equal(ESTILOS_IMAGEN.length, 8);
   for (const estilo of ESTILOS_IMAGEN) {
     assert.equal(resolverEstilo({ estilo }, {}), estilo);
   }
@@ -272,7 +281,7 @@ test('AJUSTES_POR_DEFECTO_POR_ESTILO: mi-plantilla arranca con foto, nombre y pr
   assert.equal(d.descripcion.visible, false);
 });
 
-test('AJUSTES_POR_DEFECTO_POR_ESTILO: tiene exactamente los 3 estilos con texto, no "solo-foto"', () => {
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: tiene exactamente los estilos con texto (los 3 de siempre + los 4 presets de composición), no "solo-foto"', () => {
   assert.deepEqual(Object.keys(AJUSTES_POR_DEFECTO_POR_ESTILO).sort(), [...ESTILOS_CON_AJUSTES].sort());
   assert.equal(ESTILOS_CON_AJUSTES.includes('solo-foto'), false);
 });
@@ -302,19 +311,24 @@ test('migrarAjustesPorEstilo: ya viene en formato nuevo (ajustesPorEstilo), se n
   assert.equal(resultado['mi-plantilla'].nombre.x, 77);
 });
 
-test('migrarAjustesPorEstilo: formato VIEJO (ajustes compartido) se copia a los 3 estilos, conservando lo hecho', () => {
+test('migrarAjustesPorEstilo: formato VIEJO (ajustes compartido) se copia a los 3 estilos de siempre, conservando lo hecho', () => {
   const ajustesViejos = {
     foto: { x: 10, y: 10, w: 500, h: 500, modo: 'cover' },
     nombre: { x: 321, y: 900, w: 900, h: 100, tamano: 60, color: '#fff', peso: 700, alineacion: 'center' },
     precio: { x: 60, y: 1000, w: 900, h: 100, tamano: 80, color: '#f5a623', peso: 800, alineacion: 'center' },
   };
   const resultado = migrarAjustesPorEstilo({ ajustes: ajustesViejos });
-  for (const estilo of ESTILOS_CON_AJUSTES) {
+  for (const estilo of ['foto-precio', 'foto-descripcion', 'mi-plantilla']) {
     assert.equal(resultado[estilo].nombre.x, 321); // lo que el usuario ya había movido, conservado
   }
   // los 3 quedan IGUALES entre sí justo después de migrar (recién divergen si el usuario edita).
   assert.deepEqual(resultado['foto-precio'], resultado['foto-descripcion']);
   assert.deepEqual(resultado['foto-precio'], resultado['mi-plantilla']);
+  // los 4 presets de composición (Fase 4) no existían en este respaldo viejo: no hay nada que
+  // copiarles, arrancan con sus propios defaults de fábrica (no quedan ausentes).
+  for (const preset of ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva']) {
+    assert.deepEqual(resultado[preset], AJUSTES_POR_DEFECTO_POR_ESTILO[preset]);
+  }
 });
 
 test('esAjustePersonalizado: false contra los defaults de fábrica, true apenas se cambia algo', () => {
@@ -326,4 +340,134 @@ test('esAjustePersonalizado: false contra los defaults de fábrica, true apenas 
 test('esAjustePersonalizado: estilo desconocido o ajustes ausentes no revienta, da false', () => {
   assert.equal(esAjustePersonalizado('no-existe', {}), false);
   assert.equal(esAjustePersonalizado('foto-precio', null), false);
+});
+
+// --- Presets de fondo de texto (Fase 2, "S" #3) ---
+
+test('PRESETS_FONDO_TEXTO: hay más de uno y cada uno trae color, opacidad y radio', () => {
+  assert.ok(PRESETS_FONDO_TEXTO.length >= 3);
+  for (const preset of PRESETS_FONDO_TEXTO) {
+    assert.equal(typeof preset.id, 'string');
+    assert.equal(typeof preset.nombre, 'string');
+    assert.match(preset.fondoColor, /^#[0-9a-f]{6}$/i);
+    assert.ok(preset.fondoOpacidad >= 0 && preset.fondoOpacidad <= 1);
+    assert.ok(preset.fondoRadio >= 0);
+  }
+});
+
+test('aplicarPresetFondo: pisa color/opacidad/radio de la caja, sin tocar posición/tipografía', () => {
+  const caja = { x: 60, y: 1460, w: 960, h: 120, tamano: 58, familia: 'inter', fondoColor: '#111111', fondoOpacidad: 0.2, fondoRadio: 2 };
+  const preset = PRESETS_FONDO_TEXTO.find((p) => p.id === 'lino-claro');
+  const resultado = aplicarPresetFondo(caja, 'lino-claro');
+  assert.equal(resultado.fondoColor, preset.fondoColor);
+  assert.equal(resultado.fondoOpacidad, preset.fondoOpacidad);
+  assert.equal(resultado.fondoRadio, preset.fondoRadio);
+  // el resto de la caja no se toca
+  assert.equal(resultado.x, 60);
+  assert.equal(resultado.tamano, 58);
+  assert.equal(resultado.familia, 'inter');
+});
+
+test('aplicarPresetFondo: pura (no muta la caja recibida) y devuelve un objeto nuevo', () => {
+  const caja = { fondoColor: '#000000', fondoOpacidad: 1, fondoRadio: 0 };
+  const resultado = aplicarPresetFondo(caja, 'acento');
+  assert.notEqual(resultado, caja);
+  assert.equal(caja.fondoColor, '#000000'); // el original queda intacto
+});
+
+test('aplicarPresetFondo: id desconocido o caja ausente no revienta, devuelve la caja tal cual', () => {
+  const caja = { fondoColor: '#abcdef' };
+  assert.equal(aplicarPresetFondo(caja, 'no-existe'), caja);
+  assert.equal(aplicarPresetFondo(null, 'acento'), null);
+});
+
+// --- Calidad de imagen al exportar (Fase 2, "S" #5) ---
+
+test('resolverOpcionesExportacion: "estandar" es JPEG 0.85, "alta" es JPEG 0.95', () => {
+  assert.deepEqual(resolverOpcionesExportacion('estandar'), { formato: 'image/jpeg', calidad: 0.85 });
+  assert.deepEqual(resolverOpcionesExportacion('alta'), { formato: 'image/jpeg', calidad: 0.95 });
+});
+
+test('resolverOpcionesExportacion: valor inválido o ausente cae a la calidad por defecto (estandar)', () => {
+  assert.deepEqual(resolverOpcionesExportacion(undefined), resolverOpcionesExportacion(CALIDAD_IMAGEN_POR_DEFECTO));
+  assert.deepEqual(resolverOpcionesExportacion('ultra'), resolverOpcionesExportacion(CALIDAD_IMAGEN_POR_DEFECTO));
+  assert.equal(CALIDAD_IMAGEN_POR_DEFECTO, 'estandar');
+});
+
+test('CALIDADES_IMAGEN: exactamente "estandar" y "alta"', () => {
+  assert.deepEqual([...CALIDADES_IMAGEN].sort(), ['alta', 'estandar']);
+});
+
+test('validarRespaldo: acepta calidadImagen válida y rechaza un valor inventado', () => {
+  const base = construirRespaldo({ productos: [], plantilla: null, general: { calidadImagen: 'alta' } });
+  assert.equal(validarRespaldo(base).ok, true);
+  const corrupto = { ...base, general: { ...base.general, calidadImagen: 'ultra-hd' } };
+  const { ok, error } = validarRespaldo(corrupto);
+  assert.equal(ok, false);
+  assert.match(error, /calidad/i);
+});
+
+test('construirRespaldo: sin calidadImagen explícita, guarda el valor por defecto (compatibilidad con respaldos viejos)', () => {
+  const respaldo = construirRespaldo({ productos: [], plantilla: null, general: {} });
+  assert.equal(respaldo.general.calidadImagen, CALIDAD_IMAGEN_POR_DEFECTO);
+});
+
+// --- Presets de composición (Fase 4, "catálogo de presets"): banner inferior/editorial/polaroid/
+// story inmersiva. Mismo mecanismo de siempre (ESTILOS_IMAGEN/ESTILOS_CON_AJUSTES/
+// AJUSTES_POR_DEFECTO_POR_ESTILO), solo que la posición de partida de sus cajas sale de las
+// funciones puras de geometria-presets.js en vez de un número fijo a mano.
+
+test('PRESETS_COMPOSICION: los 4 presets son también estilos de imagen editables', () => {
+  assert.deepEqual([...PRESETS_COMPOSICION].sort(), ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva'].sort());
+  for (const preset of PRESETS_COMPOSICION) {
+    assert.ok(ESTILOS_IMAGEN.includes(preset));
+    assert.ok(ESTILOS_CON_AJUSTES.includes(preset));
+    assert.equal(typeof ETIQUETA_ESTILO[preset], 'string');
+  }
+});
+
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: los 4 presets de composición arrancan con nombre+precio+descripción visibles y la foto oculta (va a una zona fija propia)', () => {
+  for (const preset of PRESETS_COMPOSICION) {
+    const d = AJUSTES_POR_DEFECTO_POR_ESTILO[preset];
+    assert.equal(d.nombre.visible, true, preset);
+    assert.equal(d.precio.visible, true, preset);
+    assert.equal(d.descripcion.visible, true, preset);
+    assert.equal(d.foto.visible, false, preset);
+  }
+});
+
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: los 4 presets de composición truncan con elipsis (geometría fija, no clip)', () => {
+  for (const preset of PRESETS_COMPOSICION) {
+    const d = AJUSTES_POR_DEFECTO_POR_ESTILO[preset];
+    assert.equal(d.nombre.elipsis, true, preset);
+    assert.equal(d.descripcion.elipsis, true, preset);
+  }
+});
+
+// Ronda 2026-09-29 ("presets calzan con los mocks"): los 4 presets de composición dejan de usar
+// las 6 tipografías OFL ELEGIBLES a mano en el editor (`FUENTES_DISPONIBLES`) — cada mock Stitch usa
+// Newsreader (serif de títulos/precio) + Manrope (sans de cuerpo/etiquetas), FIJAS por diseño, igual
+// que la franja/marco/tarjeta/scrim tampoco son editables. El test verifica contra el registro REAL
+// de fuentes cargables en canvas (`fuentes.js`), no contra la lista de elegibles: así sigue
+// detectando un typo de familia inexistente, solo que ya no exige que sea una de las 6 de siempre.
+test('AJUSTES_POR_DEFECTO_POR_ESTILO: los 4 presets de composición usan tipografía real (Newsreader/Manrope fijos, no elegibles)', () => {
+  for (const preset of PRESETS_COMPOSICION) {
+    const d = AJUSTES_POR_DEFECTO_POR_ESTILO[preset];
+    for (const clave of ['nombre', 'precio', 'descripcion']) {
+      const familia = d[clave].familia;
+      assert.ok(REGISTRO_FUENTES[familia], `${preset}.${clave}.familia ("${familia}") no está en el registro de fuentes de canvas`);
+      assert.ok(!FUENTES_DISPONIBLES.includes(familia), `${preset}.${clave}.familia ("${familia}") debería ser Newsreader/Manrope, no una de las 6 elegibles`);
+    }
+  }
+});
+
+test('esAjustePersonalizado: también funciona con los 4 presets de composición', () => {
+  for (const preset of PRESETS_COMPOSICION) {
+    assert.equal(esAjustePersonalizado(preset, AJUSTES_POR_DEFECTO_POR_ESTILO[preset]), false);
+    const modificado = {
+      ...AJUSTES_POR_DEFECTO_POR_ESTILO[preset],
+      nombre: { ...AJUSTES_POR_DEFECTO_POR_ESTILO[preset].nombre, tamano: 999 },
+    };
+    assert.equal(esAjustePersonalizado(preset, modificado), true);
+  }
 });

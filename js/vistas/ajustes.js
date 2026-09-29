@@ -1,162 +1,209 @@
-// Pantalla "Ajustes": 4 secciones con título + explicación (estilo de imagen con tarjetas de
-// miniatura en vivo, texto que acompaña, tu plantilla, datos). CREAR-BRIEF.md, ronda 2026-09-27;
-// ronda "ajustes por estilo" 2026-09-28 (badge "Personalizado" + botón "Editar" por tarjeta).
+// Pantalla "Ajustes": encuadre de la foto, texto que acompaña (plantilla de descripción + formato
+// de precio), tu plantilla y datos. CREAR-BRIEF.md, ronda 2026-09-27; ronda "ajustes por estilo"
+// 2026-09-28; reskin "Organic Minimalist" 2026-09-28 (Interfaz/stitch_.../
+// ajustes_de_publicaci_n_natural): tarjetas `.panel` con ícono+título (igual que Secciones/
+// Respaldo), encuadre como selector segmentado, chips de variable que insertan en el editor,
+// editor de plantilla con contador de carácteres real y vista previa de copia. El mock no modela
+// "Tu plantilla" ni "Datos" — se mantienen con el mismo lenguaje visual (`.panel` + ícono) porque
+// son funciones reales de la app.
+// Ronda "orden del diseño" (CREAR-BRIEF.md 2026-09-29): la galería "Estilo de las imágenes" (8
+// tarjetas con miniatura en vivo) se saca de acá — el mock no la tiene entre Encuadre y Texto que
+// acompaña, y la elección de estilo/preset pasa a vivir en la pantalla Plantilla (`tarjetaEstilo`/
+// `mostrarMiniatura` siguen acá, exportadas, porque plantilla.js las reusa para su propia galería
+// de presets). Queda una fila compacta al final ("Estilo de las imágenes: <actual> ›") que abre
+// Plantilla, para no perder el acceso.
 import * as repo from '../repositorio.js';
-import {
-  ESTILOS_IMAGEN,
-  ESTILOS_CON_AJUSTES,
-  ETIQUETA_ESTILO,
-  ENCUADRES_FOTO,
-  ETIQUETA_ENCUADRE_FOTO,
-  aplicarPlantillaDescripcion,
-  resolverDescripcion,
-  esAjustePersonalizado,
-} from '../modelo.js';
-import { componerMiniatura } from '../componer.js';
+import { ETIQUETA_ESTILO, ENCUADRES_FOTO, ETIQUETA_ENCUADRE_FOTO, aplicarPlantillaDescripcion } from '../modelo.js';
 import { mostrarToast } from '../utils/toast.js';
+import { crearIcono } from '../utils/iconos.js';
 import { seccionLaApp } from './ajustes-la-app.js';
 
 let debounce = null;
-let urlsMiniaturas = [];
 
-// Cache en memoria de miniaturas por (estilo, hash de lo que puede cambiar el dibujo, producto):
-// evita rehacer el canvas/JPEG en cada entrada a Ajustes o cambio de un ajuste que no afecta a
-// ESTE estilo (ronda "miniaturas con placeholder", 2026-09-28). Vive mientras dure la pestaña —
-// se guarda el Blob (no la URL: esa se crea/revoca en cada render de la pantalla).
-const cacheMiniaturas = new Map();
-
-function hashCadena(texto) {
-  let h = 0;
-  for (let i = 0; i < texto.length; i += 1) h = (Math.imul(31, h) + texto.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(36);
-}
+// Íconos del encuadre (Material "aspect_ratio"/"fullscreen"): mismo orden que ENCUADRES_FOTO.
+const ICONO_ENCUADRE = { contain: 'encuadre-entero', cover: 'pantalla-completa' };
 
 export async function render(contenedor, { navegar }) {
   contenedor.textContent = '';
-  limpiarUrls();
 
   const general = await repo.obtenerAjustesGenerales();
   const plantillaConfig = await repo.obtenerPlantillaConfig();
   const formatoPrecio = { ...plantillaConfig.formatoPrecio };
   const productos = await repo.listarProductos();
-  const productoEjemplo = productos[0] || { nombre: 'Remera básica', precio: 12500, descripcion: '' };
-  const fotoEjemploBlob = productos[0]?.fotoId ? await repo.obtenerFotoBlob(productos[0].fotoId) : null;
 
   const wrap = document.createElement('div');
   wrap.className = 'pila';
 
-  // --- 1) Estilo de las imágenes: tarjetas seleccionables con miniatura en vivo ---
-  const seccionEstilo = seccion(
-    'Estilo de las imágenes',
-    'Elegís cómo se ve el estado de cada producto. Podés cambiarlo por producto en "Opciones avanzadas" del alta/edición.'
-  );
-  const grillaEstilos = document.createElement('div');
-  grillaEstilos.className = 'grilla-estilos';
-  const tarjetasPorEstilo = {};
-  for (const valor of ESTILOS_IMAGEN) {
-    const editable = ESTILOS_CON_AJUSTES.includes(valor);
-    const tarjeta = tarjetaEstilo(valor, general.estiloGeneral === valor, {
-      editable,
-      onSeleccionar: async () => {
-        await repo.guardarEstiloGeneral(valor);
-        general.estiloGeneral = valor;
-        for (const v of ESTILOS_IMAGEN) {
-          tarjetasPorEstilo[v].raiz.classList.toggle('tarjeta-estilo--activa', v === valor);
-          tarjetasPorEstilo[v].btnSeleccionar.setAttribute('aria-pressed', String(v === valor));
-        }
-        mostrarToast(`Estilo general: ${ETIQUETA_ESTILO[valor]}`);
-      },
-      onEditar: editable ? () => navegar(`#/plantilla?estilo=${valor}`) : null,
-    });
-    tarjetasPorEstilo[valor] = tarjeta;
-    grillaEstilos.append(tarjeta.raiz);
-  }
-  seccionEstilo.append(grillaEstilos);
+  // --- H1 real de la pantalla (el header compartido muestra la marca "Estados Rápidos" + el
+  // subtítulo "Ajustes de Publicación" — ver main.js). ---
+  const cabeceraPagina = document.createElement('div');
+  cabeceraPagina.className = 'pagina__cabecera';
+  const h1Pagina = document.createElement('h1');
+  h1Pagina.className = 'pagina__titulo pagina__titulo--medio';
+  h1Pagina.textContent = 'Ajustes';
+  const subtituloPagina = document.createElement('p');
+  subtituloPagina.className = 'pagina__subtitulo';
+  subtituloPagina.textContent =
+    'Configurá la composición visual, las leyendas de portapapeles y los estándares numéricos para tus publicaciones.';
+  const textosPagina = document.createElement('div');
+  textosPagina.append(h1Pagina, subtituloPagina);
+  cabeceraPagina.append(textosPagina);
+  wrap.append(cabeceraPagina);
 
-  // --- Encuadre de la foto (solo afecta "Foto con precio"/"Foto con descripción": "Solo la foto"
-  // y "Mi plantilla" no lo usan) ---
-  const campoEncuadre = document.createElement('div');
-  campoEncuadre.className = 'campo';
-  const labelEncuadre = document.createElement('span');
-  labelEncuadre.className = 'campo__etiqueta';
-  labelEncuadre.textContent = 'Encuadre de la foto';
-  const filaEncuadre = document.createElement('div');
-  filaEncuadre.className = 'fila';
+  // --- 1) Encuadre de la foto: selector segmentado (2 opciones) ---
+  const panelEncuadre = panel('recortar', 'Encuadre de la foto', { badge: 'Relación de aspecto' });
+  const segmentado = document.createElement('div');
+  segmentado.className = 'segmentado';
+  segmentado.setAttribute('role', 'radiogroup');
+  segmentado.setAttribute('aria-label', 'Tipo de encuadre');
   for (const valor of ENCUADRES_FOTO) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'boton boton--chico' + (general.encuadreFoto === valor ? ' tarjeta-estilo--activa' : '');
+    btn.setAttribute('role', 'radio');
+    btn.className = 'segmentado__opcion' + (general.encuadreFoto === valor ? ' segmentado__opcion--activa' : '');
     btn.setAttribute('data-accion', `encuadre-${valor}`);
+    btn.setAttribute('aria-checked', String(general.encuadreFoto === valor));
     btn.setAttribute('aria-pressed', String(general.encuadreFoto === valor));
-    btn.textContent = ETIQUETA_ENCUADRE_FOTO[valor] + (valor === 'contain' ? ' (defecto)' : '');
+    btn.append(
+      crearIcono(ICONO_ENCUADRE[valor]),
+      document.createTextNode(ETIQUETA_ENCUADRE_FOTO[valor] + (valor === 'contain' ? ' (defecto)' : ''))
+    );
     btn.addEventListener('click', async () => {
       await repo.guardarEncuadreFoto(valor);
       general.encuadreFoto = valor;
-      filaEncuadre.querySelectorAll('button').forEach((b) => {
+      segmentado.querySelectorAll('.segmentado__opcion').forEach((b) => {
         const esEste = b === btn;
-        b.classList.toggle('tarjeta-estilo--activa', esEste);
+        b.classList.toggle('segmentado__opcion--activa', esEste);
+        b.setAttribute('aria-checked', String(esEste));
         b.setAttribute('aria-pressed', String(esEste));
       });
       mostrarToast(`Encuadre: ${ETIQUETA_ENCUADRE_FOTO[valor]}`);
-      regenerarMiniaturas();
     });
-    filaEncuadre.append(btn);
+    segmentado.append(btn);
   }
-  campoEncuadre.append(labelEncuadre, filaEncuadre);
-  seccionEstilo.append(campoEncuadre);
+  const explicacionEncuadre = document.createElement('p');
+  explicacionEncuadre.className = 'panel__subtitulo panel__subtitulo--pie';
+  explicacionEncuadre.textContent =
+    'Preserva las proporciones originales del artículo sin recortes perimetrales al generar el lienzo para el estado.';
+  panelEncuadre.append(segmentado, explicacionEncuadre);
+  wrap.append(panelEncuadre);
 
-  // --- 2) Texto que acompaña: modelo de descripción + formato de precio ---
-  const seccionTexto = seccion(
-    'Texto que acompaña',
-    'La leyenda que se copia al portapapeles y se ve en los estilos "Foto con descripción". Se usa si el producto no tiene su propia descripción cargada.'
-  );
-  const ayudaModelo = document.createElement('p');
-  ayudaModelo.className = 'texto-tenue';
-  ayudaModelo.textContent = 'Marcadores disponibles: {nombre} {precio} {descripcion}. Sin precio cargado, {precio} se saca solo (sin dejar "a $" colgando).';
+  // --- 2) Texto que acompaña: chips de variable (insertan en el editor), plantilla de
+  // descripción con contador real y vista previa de copia, + formato de precio. ---
+  const panelTexto = panel('portapapeles', 'TEXTO QUE ACOMPAÑA', {
+    subtitulo:
+      'La leyenda que se copia al portapapeles y se ve en los estilos con descripción. Se usa si el producto no tiene su propia descripción cargada.',
+  });
+
+  const variableChips = document.createElement('div');
+  variableChips.className = 'variable-chips';
+  const etiquetaChips = document.createElement('span');
+  etiquetaChips.className = 'variable-chips__etiqueta';
+  etiquetaChips.textContent = 'Variables dinámicas disponibles:';
+  variableChips.append(etiquetaChips);
+  const filaChips = document.createElement('div');
+  filaChips.style.display = 'flex';
+  filaChips.style.flexWrap = 'wrap';
+  filaChips.style.gap = '8px';
+  variableChips.append(filaChips);
+
+  const editorTexto = document.createElement('div');
+  editorTexto.className = 'editor-texto';
+  const labelModelo = document.createElement('label');
+  labelModelo.className = 'campo__etiqueta';
+  labelModelo.htmlFor = 'campo-descripcion-modelo';
+  labelModelo.textContent = 'Plantilla de descripción';
   const textareaModelo = document.createElement('textarea');
   textareaModelo.id = 'campo-descripcion-modelo';
   textareaModelo.maxLength = 300;
   textareaModelo.value = general.descripcionModelo;
+  textareaModelo.rows = 3;
+
+  for (const variable of ['{nombre}', '{precio}', '{descripcion}']) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'variable-chip';
+    chip.append(document.createTextNode(variable), crearIcono('agregar'));
+    chip.addEventListener('click', () => {
+      const inicio = textareaModelo.selectionStart ?? textareaModelo.value.length;
+      const fin = textareaModelo.selectionEnd ?? textareaModelo.value.length;
+      const valor = textareaModelo.value;
+      textareaModelo.value = `${valor.slice(0, inicio)}${variable} ${valor.slice(fin)}`;
+      textareaModelo.focus();
+      textareaModelo.dispatchEvent(new Event('input'));
+    });
+    filaChips.append(chip);
+  }
+
+  const pieEditor = document.createElement('div');
+  pieEditor.className = 'editor-texto__pie';
+  const notaSinPrecio = document.createElement('span');
+  notaSinPrecio.append(crearIcono('info'), document.createTextNode('Sin precio, se omite automáticamente'));
+  const contador = document.createElement('span');
+  const actualizarContador = () => {
+    contador.textContent = `${textareaModelo.value.length} carácteres`;
+  };
+  pieEditor.append(notaSinPrecio, contador);
+  editorTexto.append(labelModelo, textareaModelo, pieEditor);
+
+  const previaCaja = document.createElement('div');
+  previaCaja.className = 'vista-previa-copia';
+  const cabeceraPrevia = document.createElement('div');
+  cabeceraPrevia.className = 'vista-previa-copia__cabecera';
+  const etiquetaPrevia = document.createElement('span');
+  etiquetaPrevia.className = 'vista-previa-copia__etiqueta';
+  etiquetaPrevia.textContent = 'Vista previa de copia';
+  cabeceraPrevia.append(etiquetaPrevia, crearIcono('ojo'));
   const previaModelo = document.createElement('p');
-  previaModelo.className = 'texto-tenue';
+  previaModelo.className = 'vista-previa-copia__texto';
   previaModelo.setAttribute('role', 'status');
   const actualizarPreviaModelo = () => {
-    previaModelo.textContent =
-      'Ejemplo: ' +
-      aplicarPlantillaDescripcion(textareaModelo.value, { nombre: 'Remera básica', precio: '$ 12.500', descripcion: '' });
+    previaModelo.textContent = aplicarPlantillaDescripcion(textareaModelo.value, {
+      nombre: 'Remera básica',
+      precio: '$ 12.500',
+      descripcion: '',
+    });
   };
+  previaCaja.append(cabeceraPrevia, previaModelo);
+
+  actualizarContador();
   actualizarPreviaModelo();
   textareaModelo.addEventListener('input', () => {
+    actualizarContador();
     actualizarPreviaModelo();
     clearTimeout(debounce);
     debounce = setTimeout(async () => {
       await repo.guardarDescripcionModelo(textareaModelo.value);
       general.descripcionModelo = textareaModelo.value;
-      regenerarMiniaturas();
     }, 350);
   });
 
   const grupoFormato = document.createElement('div');
-  grupoFormato.className = 'subgrupo';
   const campoPrefijo = document.createElement('div');
   campoPrefijo.className = 'campo';
   const labelPrefijo = document.createElement('label');
   labelPrefijo.className = 'campo__etiqueta';
+  labelPrefijo.htmlFor = 'campo-prefijo-precio';
   labelPrefijo.textContent = 'Prefijo del precio';
   const inputPrefijo = document.createElement('input');
   inputPrefijo.type = 'text';
+  inputPrefijo.id = 'campo-prefijo-precio';
   inputPrefijo.maxLength = 6;
   inputPrefijo.value = formatoPrecio.prefijo;
   inputPrefijo.addEventListener('input', () => {
     formatoPrecio.prefijo = inputPrefijo.value;
     guardarFormatoDebounced();
   });
-  campoPrefijo.append(labelPrefijo, inputPrefijo);
+  const ejemploPrefijo = document.createElement('span');
+  ejemploPrefijo.className = 'ajustes__ejemplo';
+  ejemploPrefijo.textContent = 'Ejemplos: $, USD, ARS, €';
+  campoPrefijo.append(labelPrefijo, inputPrefijo, ejemploPrefijo);
 
-  const casilla = (etiqueta, clave) => {
-    const div = document.createElement('label');
-    div.className = 'fila';
-    div.style.alignItems = 'center';
+  const casillasPrecision = document.createElement('div');
+  casillasPrecision.className = 'casillas-precision';
+  const casilla = (etiqueta, ayuda, clave) => {
+    const fila = document.createElement('label');
+    fila.className = 'casilla-fila';
     const check = document.createElement('input');
     check.type = 'checkbox';
     check.checked = !!formatoPrecio[clave];
@@ -164,37 +211,55 @@ export async function render(contenedor, { navegar }) {
       formatoPrecio[clave] = check.checked;
       guardarFormatoDebounced();
     });
-    const span = document.createElement('span');
-    span.textContent = etiqueta;
-    div.append(check, span);
-    return div;
+    const textos = document.createElement('div');
+    textos.className = 'casilla-fila__textos';
+    const titulo = document.createElement('span');
+    titulo.className = 'casilla-fila__titulo';
+    titulo.textContent = etiqueta;
+    const sub = document.createElement('span');
+    sub.className = 'casilla-fila__ayuda';
+    sub.textContent = ayuda;
+    textos.append(titulo, sub);
+    fila.append(check, textos);
+    return fila;
   };
   function guardarFormatoDebounced() {
     clearTimeout(debounce);
     debounce = setTimeout(async () => {
       await repo.guardarFormatoPrecio(formatoPrecio);
-      regenerarMiniaturas();
     }, 300);
   }
-  grupoFormato.append(campoPrefijo, casilla('Separador de miles (es-AR)', 'separadorMiles'), casilla('Mostrar decimales', 'decimales'));
-
-  seccionTexto.append(ayudaModelo, textareaModelo, previaModelo, grupoFormato);
-
-  // --- 3) Tu plantilla: editor visual (posición, tipografía, color, fondo/etiqueta) ---
-  const seccionPlantilla = seccion(
-    'Tu plantilla',
-    'Ajustá a mano dónde va el nombre, el precio y la descripción, con qué tipografía y color, y (si elegís "Mi plantilla") subí tu propio fondo.'
+  casillasPrecision.append(
+    casilla('Separador de miles (es-AR)', 'Formatea valores como 12.500 en lugar de 12500', 'separadorMiles'),
+    casilla('Mostrar decimales', 'Incluye centavos al final (ej: $ 12.500,00)', 'decimales')
   );
+  grupoFormato.append(campoPrefijo, casillasPrecision);
+
+  panelTexto.append(variableChips, editorTexto, previaCaja);
+  wrap.append(panelTexto);
+
+  // --- 4) Prefijo y puntuación monetaria: panel propio (mismo orden que el mock). ---
+  const panelMoneda = panel('moneda', 'Prefijo y puntuación monetaria');
+  panelMoneda.append(grupoFormato);
+  wrap.append(panelMoneda);
+
+  // --- 5) Tu plantilla: editor visual (no está en el mock — se mantiene igual que arriba). ---
+  const panelPlantilla = panel('lapiz', 'Tu plantilla', {
+    subtitulo: 'Ajustá a mano dónde va el nombre, el precio y la descripción, con qué tipografía y color, y (si elegís "Mi plantilla") subí tu propio fondo.',
+  });
   const enlacePlantilla = document.createElement('button');
   enlacePlantilla.type = 'button';
   enlacePlantilla.className = 'boton boton--primario boton--ancho';
   enlacePlantilla.setAttribute('data-accion', 'ir-plantilla');
   enlacePlantilla.textContent = 'Abrir editor de plantilla';
   enlacePlantilla.addEventListener('click', () => navegar('#/plantilla'));
-  seccionPlantilla.append(enlacePlantilla);
+  panelPlantilla.append(enlacePlantilla);
+  wrap.append(panelPlantilla);
 
-  // --- 4) Datos: cuántos productos hay y adónde ir para respaldar/borrar ---
-  const seccionDatos = seccion('Datos', 'Todo vive en este celular. Para exportar, importar o borrar todo, andá a Respaldo.');
+  // --- 6) Datos (no está en el mock — se mantiene igual que arriba). ---
+  const panelDatos = panel('carpeta', 'Datos', {
+    subtitulo: 'Todo vive en este celular. Para exportar, importar o borrar todo, andá a Respaldo.',
+  });
   const resumenDatos = document.createElement('p');
   resumenDatos.className = 'texto-tenue';
   resumenDatos.textContent = `${productos.length} producto${productos.length === 1 ? '' : 's'} cargado${productos.length === 1 ? '' : 's'}.`;
@@ -204,95 +269,61 @@ export async function render(contenedor, { navegar }) {
   btnRespaldo.setAttribute('data-accion', 'ir-respaldo');
   btnRespaldo.textContent = 'Ir a Respaldo';
   btnRespaldo.addEventListener('click', () => navegar('#/respaldo'));
-  seccionDatos.append(resumenDatos, btnRespaldo);
+  panelDatos.append(resumenDatos, btnRespaldo);
+  wrap.append(panelDatos);
 
-  wrap.append(seccionEstilo, seccionTexto, seccionPlantilla, seccionDatos, seccionLaApp());
+  // --- Acceso compacto a "Estilo de las imágenes" (ronda "orden del diseño"): la elección de
+  // estilo/preset vive en Plantilla — acá queda solo una fila chica al final, "<estilo actual> ›",
+  // para no perder el acceso directo desde Ajustes. Mismo componente `fila-acceso` que usa la fila
+  // "Estilo para esta tanda" de la hoja de revisión (js/vistas/revision.js). ---
+  const filaAccesoEstilo = document.createElement('button');
+  filaAccesoEstilo.type = 'button';
+  filaAccesoEstilo.className = 'fila-acceso';
+  filaAccesoEstilo.setAttribute('data-accion', 'ir-plantilla-estilo');
+  const textosAccesoEstilo = document.createElement('span');
+  textosAccesoEstilo.className = 'fila-acceso__textos';
+  const tituloAccesoEstilo = document.createElement('span');
+  tituloAccesoEstilo.className = 'fila-acceso__titulo';
+  tituloAccesoEstilo.textContent = 'Estilo de las imágenes';
+  const valorAccesoEstilo = document.createElement('span');
+  valorAccesoEstilo.className = 'fila-acceso__valor';
+  valorAccesoEstilo.textContent = ETIQUETA_ESTILO[general.estiloGeneral] ?? ETIQUETA_ESTILO['solo-foto'];
+  textosAccesoEstilo.append(tituloAccesoEstilo, valorAccesoEstilo);
+  filaAccesoEstilo.append(textosAccesoEstilo, crearIcono('chevron-derecha'));
+  filaAccesoEstilo.addEventListener('click', () => navegar('#/plantilla'));
+  wrap.append(filaAccesoEstilo);
+
+  wrap.append(seccionLaApp());
   contenedor.append(wrap);
-
-  function claveProducto(p) {
-    return { id: p.id ?? null, nombre: p.nombre, precio: p.precio, descripcion: p.descripcion ?? '', fotoId: p.fotoId ?? null };
-  }
-
-  async function regenerarMiniaturas() {
-    const config = await repo.obtenerPlantillaConfig();
-    // siempre se busca: la tarjeta "Mi plantilla" necesita su miniatura aunque no sea el estilo activo.
-    const plantillaBlob = await repo.obtenerImagenPlantillaBlob();
-    const plantillaImagen = await createImageBitmap(plantillaBlob);
-    const fotoImagen = fotoEjemploBlob ? await createImageBitmap(fotoEjemploBlob) : await fotoDeEjemploPorDefecto();
-    const descripcionResuelta = resolverDescripcion(productoEjemplo, { ...general, formatoPrecio: config.formatoPrecio });
-
-    await Promise.all(
-      ESTILOS_IMAGEN.map(async (valor) => {
-        try {
-          const ajustesEstilo = config.ajustesPorEstilo[valor] ?? null;
-          const clave = `${valor}:${hashCadena(
-            JSON.stringify({
-              ajustesEstilo,
-              imagenId: config.imagenId,
-              formatoPrecio: config.formatoPrecio,
-              encuadreFoto: general.encuadreFoto,
-              producto: claveProducto(productoEjemplo),
-              tieneFoto: !!fotoImagen,
-            })
-          )}`;
-          let blob = cacheMiniaturas.get(clave);
-          if (!blob) {
-            blob = await componerMiniatura({
-              estilo: valor,
-              plantillaImagen,
-              fotoImagen,
-              producto: productoEjemplo,
-              ajustes: ajustesEstilo ?? {},
-              formatoPrecio: config.formatoPrecio,
-              descripcion: descripcionResuelta,
-              encuadreFoto: general.encuadreFoto,
-            });
-            cacheMiniaturas.set(clave, blob);
-          }
-          const url = URL.createObjectURL(blob);
-          urlsMiniaturas.push(url);
-          mostrarMiniatura(tarjetasPorEstilo[valor].marco, url, `Vista previa del estilo ${ETIQUETA_ESTILO[valor]}`);
-          if (tarjetasPorEstilo[valor].badge) {
-            const personalizado = ajustesEstilo ? esAjustePersonalizado(valor, ajustesEstilo) : false;
-            tarjetasPorEstilo[valor].badge.hidden = !personalizado;
-          }
-        } catch {
-          // una miniatura que falla no rompe el resto de la pantalla
-        }
-      })
-    );
-  }
-
-  await regenerarMiniaturas();
 }
 
-let bitmapEjemploPorDefecto = null;
-/** Sin ningún producto cargado (recién instalada), las miniaturas usan una foto de ejemplo propia
- * del proyecto en vez de quedar sin foto — assets/ejemplo.jpg (ronda "miniaturas con placeholder",
- * CREAR-BRIEF.md 2026-09-28). Decodificada una sola vez y reusada. */
-async function fotoDeEjemploPorDefecto() {
-  if (bitmapEjemploPorDefecto) return bitmapEjemploPorDefecto;
-  try {
-    const respuesta = await fetch('assets/ejemplo.jpg');
-    const blob = await respuesta.blob();
-    bitmapEjemploPorDefecto = await createImageBitmap(blob);
-  } catch {
-    bitmapEjemploPorDefecto = null;
+/** Tarjeta `.panel` con ícono + título (igual que Secciones/Respaldo), badge opcional a la derecha
+ * y párrafo de subtítulo opcional — mismo componente que main.js/secciones.js ya establecieron. */
+function panel(icono, titulo, { badge, subtitulo } = {}) {
+  const sec = document.createElement('section');
+  sec.className = 'panel';
+  const rotulo = document.createElement('span');
+  rotulo.className = 'panel__rotulo';
+  rotulo.append(crearIcono(icono), document.createTextNode(titulo));
+  if (badge) {
+    const cabecera = document.createElement('div');
+    cabecera.className = 'panel__cabecera';
+    rotulo.style.marginBottom = '0';
+    const b = document.createElement('span');
+    b.className = 'panel__badge';
+    b.textContent = badge;
+    cabecera.append(rotulo, b);
+    sec.append(cabecera);
+  } else {
+    sec.append(rotulo);
   }
-  return bitmapEjemploPorDefecto;
-}
-
-function seccion(titulo, explicacion) {
-  const div = document.createElement('div');
-  div.className = 'grupo';
-  const h = document.createElement('div');
-  h.className = 'grupo__titulo';
-  h.textContent = titulo;
-  const p = document.createElement('p');
-  p.className = 'grupo__explicacion';
-  p.textContent = explicacion;
-  div.append(h, p);
-  return div;
+  if (subtitulo) {
+    const p = document.createElement('p');
+    p.className = 'panel__subtitulo';
+    p.textContent = subtitulo;
+    sec.append(p);
+  }
+  return sec;
 }
 
 /**
@@ -301,14 +332,29 @@ function seccion(titulo, explicacion) {
  * miniatura, BUGS.md ronda "miniaturas con placeholder") + etiqueta, y si `editable` un pie con
  * badge "Personalizado" (oculto hasta que corresponda) y botón "Editar".
  */
-function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar }) {
+/** Exportada para reusarla en las 2 galerías del editor de plantilla (js/vistas/plantilla.js): la
+ * misma tarjeta con miniatura en vivo, sin duplicar el componente. `prefijo` namespacea el
+ * `data-accion` (default `'estilo'`, igual que siempre) — plantilla.js pasa `'estilo-general'`
+ * para su galería "Estilo de las imágenes" (los 8, mueve-y-queda) y así no choca con los
+ * `estilo-<preset>` de su galería "Presets de composición" (los 4, selecciona-y-navega-y-deshace),
+ * que puede convivir en la misma pantalla (ronda "orden del diseño", CREAR-BRIEF.md 2026-09-29).
+ *
+ * `subtitulo`/`mostrarActivoPill` (ronda "reskin plantilla"): opcionales, solo los usa la galería
+ * "Presets de diseño rápidos" de plantilla.js para acercarse a editar_plantilla_natural (nombre +
+ * subtítulo corto + pill "Activo" en la tarjeta elegida) — la galería "Estilo de las imágenes" de
+ * Ajustes/Plantilla (`editable: true`) no los pasa y queda IGUAL que antes. */
+export function tarjetaEstilo(
+  valor,
+  activa,
+  { editable, onSeleccionar, onEditar, prefijo = 'estilo', subtitulo = null, mostrarActivoPill = false }
+) {
   const raiz = document.createElement('div');
   raiz.className = 'tarjeta-estilo' + (activa ? ' tarjeta-estilo--activa' : '');
 
   const btnSeleccionar = document.createElement('button');
   btnSeleccionar.type = 'button';
   btnSeleccionar.className = 'tarjeta-estilo__seleccionar';
-  btnSeleccionar.setAttribute('data-accion', `estilo-${valor}`);
+  btnSeleccionar.setAttribute('data-accion', `${prefijo}-${valor}`);
   btnSeleccionar.setAttribute('aria-pressed', String(activa));
 
   const marco = document.createElement('div');
@@ -327,11 +373,34 @@ function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar }) {
   etiqueta.textContent = ETIQUETA_ESTILO[valor];
 
   btnSeleccionar.append(marco, etiqueta);
+
+  let subtituloEl = null;
+  if (subtitulo) {
+    subtituloEl = document.createElement('span');
+    subtituloEl.className = 'tarjeta-estilo__subtitulo';
+    subtituloEl.textContent = subtitulo;
+    btnSeleccionar.append(subtituloEl);
+  }
+
+  let pillActivo = null;
+  if (mostrarActivoPill) {
+    pillActivo = document.createElement('span');
+    pillActivo.className = 'tarjeta-estilo__pill-activo';
+    pillActivo.textContent = 'Activo';
+    pillActivo.hidden = !activa;
+    btnSeleccionar.append(pillActivo);
+  }
+
   btnSeleccionar.addEventListener('click', async () => {
-    document.querySelectorAll('.tarjeta-estilo').forEach((t) => t.classList.remove('tarjeta-estilo--activa'));
+    document.querySelectorAll('.tarjeta-estilo').forEach((t) => {
+      t.classList.remove('tarjeta-estilo--activa');
+      const p = t.querySelector('.tarjeta-estilo__pill-activo');
+      if (p) p.hidden = true;
+    });
     document.querySelectorAll('.tarjeta-estilo__seleccionar').forEach((b) => b.setAttribute('aria-pressed', 'false'));
     raiz.classList.add('tarjeta-estilo--activa');
     btnSeleccionar.setAttribute('aria-pressed', 'true');
+    if (pillActivo) pillActivo.hidden = false;
     await onSeleccionar();
   });
   raiz.append(btnSeleccionar);
@@ -347,7 +416,7 @@ function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar }) {
     const btnEditar = document.createElement('button');
     btnEditar.type = 'button';
     btnEditar.className = 'boton boton--chico boton--fantasma';
-    btnEditar.setAttribute('data-accion', `editar-estilo-${valor}`);
+    btnEditar.setAttribute('data-accion', `editar-${prefijo}-${valor}`);
     btnEditar.textContent = 'Editar';
     btnEditar.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -360,15 +429,11 @@ function tarjetaEstilo(valor, activa, { editable, onSeleccionar, onEditar }) {
   return { raiz, marco, btnSeleccionar, badge };
 }
 
-function mostrarMiniatura(marco, url, alt) {
+/** Exportada junto con `tarjetaEstilo` para la galería de presets de plantilla.js (Fase 4). */
+export function mostrarMiniatura(marco, url, alt) {
   const img = document.createElement('img');
   img.className = 'tarjeta-estilo__miniatura';
   img.alt = alt;
   img.src = url;
   marco.replaceChildren(img);
-}
-
-function limpiarUrls() {
-  urlsMiniaturas.forEach((u) => URL.revokeObjectURL(u));
-  urlsMiniaturas = [];
 }

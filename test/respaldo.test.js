@@ -1,7 +1,15 @@
 // Validación del archivo de respaldo importado: nunca confiar en la forma de un archivo externo.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validarRespaldo, construirRespaldo, VERSION_RESPALDO, AJUSTES_POR_DEFECTO_POR_ESTILO } from '../js/modelo.js';
+import {
+  validarRespaldo,
+  construirRespaldo,
+  VERSION_RESPALDO,
+  AJUSTES_POR_DEFECTO_POR_ESTILO,
+  NOMBRE_NEGOCIO_POR_DEFECTO,
+  TEXTO_BOTON_POR_DEFECTO,
+  resolverSeccionNombre,
+} from '../js/modelo.js';
 
 test('validarRespaldo: rechaza objeto vacío o null', () => {
   assert.equal(validarRespaldo(null).ok, false);
@@ -118,4 +126,53 @@ test('validarRespaldo: rechaza `secciones` de un producto que no sea un array de
   const productos = [{ id: 'p1', nombre: 'Gorra', precio: 1000, secciones: [123] }];
   const respaldo = construirRespaldo({ productos });
   assert.equal(validarRespaldo(respaldo).ok, false);
+});
+
+// --- "Nombre del negocio" / "Texto del botón" de los 4 presets de composición (ronda 2026-09-29) ---
+
+test('construirRespaldo: general incluye nombreNegocio/textoBoton con sus defaults (vacío / "Pedir por privado")', () => {
+  const respaldo = construirRespaldo({ productos: [], general: {} });
+  assert.equal(respaldo.general.nombreNegocio, NOMBRE_NEGOCIO_POR_DEFECTO);
+  assert.equal(respaldo.general.textoBoton, TEXTO_BOTON_POR_DEFECTO);
+  assert.equal(validarRespaldo(respaldo).ok, true);
+});
+
+test('construirRespaldo: conserva un nombreNegocio/textoBoton ya cargados', () => {
+  const respaldo = construirRespaldo({ productos: [], general: { nombreNegocio: 'Boutique Tierra', textoBoton: 'Escribime' } });
+  assert.equal(respaldo.general.nombreNegocio, 'Boutique Tierra');
+  assert.equal(respaldo.general.textoBoton, 'Escribime');
+});
+
+test('validarRespaldo: rechaza nombreNegocio/textoBoton que no sean string, o demasiado largos', () => {
+  const base = construirRespaldo({ productos: [], general: {} });
+  assert.equal(validarRespaldo({ ...base, general: { ...base.general, nombreNegocio: 123 } }).ok, false);
+  assert.equal(validarRespaldo({ ...base, general: { ...base.general, textoBoton: 123 } }).ok, false);
+  assert.equal(validarRespaldo({ ...base, general: { ...base.general, nombreNegocio: 'x'.repeat(61) } }).ok, false);
+  assert.equal(validarRespaldo({ ...base, general: { ...base.general, textoBoton: 'x'.repeat(41) } }).ok, false);
+});
+
+test('validarRespaldo: un respaldo VIEJO sin nombreNegocio/textoBoton (de antes de esta ronda) sigue siendo válido', () => {
+  const respaldo = construirRespaldo({ productos: [], general: {} });
+  delete respaldo.general.nombreNegocio;
+  delete respaldo.general.textoBoton;
+  assert.equal(validarRespaldo(respaldo).ok, true);
+});
+
+// --- resolverSeccionNombre (la "etiqueta/colección" de los 4 presets: la PRIMERA sección real) ---
+
+test('resolverSeccionNombre: sin secciones asignadas, string vacío (nunca inventa una)', () => {
+  assert.equal(resolverSeccionNombre({ secciones: [] }, [{ id: 's1', nombre: 'Lunes' }]), '');
+  assert.equal(resolverSeccionNombre({}, [{ id: 's1', nombre: 'Lunes' }]), '');
+});
+
+test('resolverSeccionNombre: toma la PRIMERA sección del producto', () => {
+  const secciones = [
+    { id: 's1', nombre: 'Lunes' },
+    { id: 's2', nombre: 'Ofertas' },
+  ];
+  assert.equal(resolverSeccionNombre({ secciones: ['s2', 's1'] }, secciones), 'Ofertas');
+});
+
+test('resolverSeccionNombre: si la sección ya no existe (fue borrada), string vacío', () => {
+  assert.equal(resolverSeccionNombre({ secciones: ['fantasma'] }, [{ id: 's1', nombre: 'Lunes' }]), '');
 });
