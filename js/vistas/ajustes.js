@@ -10,12 +10,14 @@
 // tarjetas con miniatura en vivo) se saca de acá — el mock no la tiene entre Encuadre y Texto que
 // acompaña, y la elección de estilo/preset pasa a vivir en la pantalla Plantilla (`tarjetaEstilo`/
 // `mostrarMiniatura` siguen acá, exportadas, porque plantilla.js las reusa para su propia galería
-// de presets). Queda una fila compacta al final ("Estilo de las imágenes: <actual> ›") que abre
-// Plantilla, para no perder el acceso.
+// de presets). Queda una fila compacta ("Estilo de las imágenes: <actual> ›") que abre Plantilla —
+// desde 2026-10-03 dentro del panel "Tu plantilla", que pasó a ser lo PRIMERO de la pantalla.
 import * as repo from '../repositorio.js';
 import { ETIQUETA_ESTILO, ENCUADRES_FOTO, ETIQUETA_ENCUADRE_FOTO, aplicarPlantillaDescripcion } from '../modelo.js';
 import { mostrarToast } from '../utils/toast.js';
 import { crearIcono } from '../utils/iconos.js';
+import { abrirVisorImagen } from '../utils/visor-imagen.js';
+import { componerVistaCompleta } from '../utils/vista-completa.js';
 import { seccionLaApp } from './ajustes-la-app.js';
 
 let debounce = null;
@@ -49,6 +51,50 @@ export async function render(contenedor, { navegar }) {
   textosPagina.append(h1Pagina, subtituloPagina);
   cabeceraPagina.append(textosPagina);
   wrap.append(cabeceraPagina);
+
+  // --- 0) Tu plantilla: lo primero al entrar (pedido de Bruno 2026-10-03 — antes el editor quedaba
+  // al fondo de la pantalla, debajo de Encuadre/Texto/Moneda, y había que scrollear para llegar).
+  // Junta en un solo panel el estilo actual (la fila "Estilo de las imágenes: <actual> ›" que antes
+  // cerraba la pantalla), "Ver completa" (el estado 1080×1920 entero, en el visor) y el botón del
+  // editor. La galería de estilos sigue viviendo en Plantilla (ronda "orden del diseño"). ---
+  const panelPlantilla = panel('lapiz', 'Tu plantilla', {
+    subtitulo: 'Elegí el estilo de tus estados y ajustá dónde va el nombre, el precio y la descripción.',
+  });
+  const filaAccesoEstilo = document.createElement('button');
+  filaAccesoEstilo.type = 'button';
+  filaAccesoEstilo.className = 'fila-acceso';
+  filaAccesoEstilo.setAttribute('data-accion', 'ir-plantilla-estilo');
+  const textosAccesoEstilo = document.createElement('span');
+  textosAccesoEstilo.className = 'fila-acceso__textos';
+  const tituloAccesoEstilo = document.createElement('span');
+  tituloAccesoEstilo.className = 'fila-acceso__titulo';
+  tituloAccesoEstilo.textContent = 'Estilo de las imágenes';
+  const valorAccesoEstilo = document.createElement('span');
+  valorAccesoEstilo.className = 'fila-acceso__valor';
+  valorAccesoEstilo.textContent = ETIQUETA_ESTILO[general.estiloGeneral] ?? ETIQUETA_ESTILO['solo-foto'];
+  textosAccesoEstilo.append(tituloAccesoEstilo, valorAccesoEstilo);
+  filaAccesoEstilo.append(textosAccesoEstilo, crearIcono('chevron-derecha'));
+  filaAccesoEstilo.addEventListener('click', () => navegar('#/plantilla'));
+
+  const accionesPlantilla = document.createElement('div');
+  accionesPlantilla.className = 'panel__acciones';
+  const btnVerCompleta = document.createElement('button');
+  btnVerCompleta.type = 'button';
+  btnVerCompleta.className = 'boton boton--ancho';
+  btnVerCompleta.setAttribute('data-accion', 'ver-completa');
+  btnVerCompleta.append(crearIcono('pantalla-completa'), document.createTextNode('Ver completa'));
+  btnVerCompleta.addEventListener('click', () =>
+    abrirVisorImagen({ titulo: 'Así se ve tu estado', obtenerBlob: () => componerVistaCompleta() })
+  );
+  const enlacePlantilla = document.createElement('button');
+  enlacePlantilla.type = 'button';
+  enlacePlantilla.className = 'boton boton--primario boton--ancho';
+  enlacePlantilla.setAttribute('data-accion', 'ir-plantilla');
+  enlacePlantilla.textContent = 'Abrir editor de plantilla';
+  enlacePlantilla.addEventListener('click', () => navegar('#/plantilla'));
+  accionesPlantilla.append(btnVerCompleta, enlacePlantilla);
+  panelPlantilla.append(filaAccesoEstilo, accionesPlantilla);
+  wrap.append(panelPlantilla);
 
   // --- 1) Encuadre de la foto: selector segmentado (2 opciones) ---
   const panelEncuadre = panel('recortar', 'Encuadre de la foto', { badge: 'Relación de aspecto' });
@@ -243,19 +289,6 @@ export async function render(contenedor, { navegar }) {
   panelMoneda.append(grupoFormato);
   wrap.append(panelMoneda);
 
-  // --- 5) Tu plantilla: editor visual (no está en el mock — se mantiene igual que arriba). ---
-  const panelPlantilla = panel('lapiz', 'Tu plantilla', {
-    subtitulo: 'Ajustá a mano dónde va el nombre, el precio y la descripción, con qué tipografía y color, y (si elegís "Mi plantilla") subí tu propio fondo.',
-  });
-  const enlacePlantilla = document.createElement('button');
-  enlacePlantilla.type = 'button';
-  enlacePlantilla.className = 'boton boton--primario boton--ancho';
-  enlacePlantilla.setAttribute('data-accion', 'ir-plantilla');
-  enlacePlantilla.textContent = 'Abrir editor de plantilla';
-  enlacePlantilla.addEventListener('click', () => navegar('#/plantilla'));
-  panelPlantilla.append(enlacePlantilla);
-  wrap.append(panelPlantilla);
-
   // --- 6) Datos (no está en el mock — se mantiene igual que arriba). ---
   const panelDatos = panel('carpeta', 'Datos', {
     subtitulo: 'Todo vive en este celular. Para exportar, importar o borrar todo, andá a Respaldo.',
@@ -271,27 +304,6 @@ export async function render(contenedor, { navegar }) {
   btnRespaldo.addEventListener('click', () => navegar('#/respaldo'));
   panelDatos.append(resumenDatos, btnRespaldo);
   wrap.append(panelDatos);
-
-  // --- Acceso compacto a "Estilo de las imágenes" (ronda "orden del diseño"): la elección de
-  // estilo/preset vive en Plantilla — acá queda solo una fila chica al final, "<estilo actual> ›",
-  // para no perder el acceso directo desde Ajustes. Mismo componente `fila-acceso` que usa la fila
-  // "Estilo para esta tanda" de la hoja de revisión (js/vistas/revision.js). ---
-  const filaAccesoEstilo = document.createElement('button');
-  filaAccesoEstilo.type = 'button';
-  filaAccesoEstilo.className = 'fila-acceso';
-  filaAccesoEstilo.setAttribute('data-accion', 'ir-plantilla-estilo');
-  const textosAccesoEstilo = document.createElement('span');
-  textosAccesoEstilo.className = 'fila-acceso__textos';
-  const tituloAccesoEstilo = document.createElement('span');
-  tituloAccesoEstilo.className = 'fila-acceso__titulo';
-  tituloAccesoEstilo.textContent = 'Estilo de las imágenes';
-  const valorAccesoEstilo = document.createElement('span');
-  valorAccesoEstilo.className = 'fila-acceso__valor';
-  valorAccesoEstilo.textContent = ETIQUETA_ESTILO[general.estiloGeneral] ?? ETIQUETA_ESTILO['solo-foto'];
-  textosAccesoEstilo.append(tituloAccesoEstilo, valorAccesoEstilo);
-  filaAccesoEstilo.append(textosAccesoEstilo, crearIcono('chevron-derecha'));
-  filaAccesoEstilo.addEventListener('click', () => navegar('#/plantilla'));
-  wrap.append(filaAccesoEstilo);
 
   wrap.append(seccionLaApp());
   contenedor.append(wrap);
@@ -346,7 +358,7 @@ function panel(icono, titulo, { badge, subtitulo } = {}) {
 export function tarjetaEstilo(
   valor,
   activa,
-  { editable, onSeleccionar, onEditar, prefijo = 'estilo', subtitulo = null, mostrarActivoPill = false }
+  { editable, onSeleccionar, onEditar, onVerCompleta = null, prefijo = 'estilo', subtitulo = null, mostrarActivoPill = false }
 ) {
   const raiz = document.createElement('div');
   raiz.className = 'tarjeta-estilo' + (activa ? ' tarjeta-estilo--activa' : '');
@@ -404,6 +416,19 @@ export function tarjetaEstilo(
     await onSeleccionar();
   });
   raiz.append(btnSeleccionar);
+
+  // "Ver completa": hermano del botón de seleccionar (un <button> no puede anidar otro), flotando
+  // sobre la esquina de la miniatura — abre el estado entero en el visor sin cambiar la selección.
+  if (onVerCompleta) {
+    const btnVer = document.createElement('button');
+    btnVer.type = 'button';
+    btnVer.className = 'tarjeta-estilo__ver';
+    btnVer.setAttribute('data-accion', `ver-${prefijo}-${valor}`);
+    btnVer.setAttribute('aria-label', `Ver completa: ${ETIQUETA_ESTILO[valor]}`);
+    btnVer.append(crearIcono('pantalla-completa'));
+    btnVer.addEventListener('click', onVerCompleta);
+    raiz.append(btnVer);
+  }
 
   let badge = null;
   if (editable) {

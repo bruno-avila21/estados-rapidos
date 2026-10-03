@@ -212,3 +212,47 @@ test('"Compartir la app" sin navigator.share copia el link (fallback)', async ({
   const copiado = await page.evaluate(() => window.__copiado);
   expect(copiado).toMatch(/^https?:\/\//);
 });
+
+// Pedido 2026-10-03: el acceso a Plantilla es lo PRIMERO de Ajustes (antes quedaba al fondo) y hay
+// "Ver completa" (visor a pantalla completa con el estado entero) en Ajustes, en cada tarjeta de
+// estilo de Plantilla y en la foto del alta/edición de producto.
+test('Ajustes: "Tu plantilla" es el primer panel y "Ver completa" abre el estado entero', async ({ page }) => {
+  await page.goto('/#/ajustes');
+  const primerPanel = page.locator('.panel').first();
+  await expect(primerPanel.locator('[data-accion="ir-plantilla"]')).toBeVisible();
+  await expect(primerPanel.locator('[data-accion="ir-plantilla-estilo"]')).toBeVisible();
+  await expect(primerPanel.locator('[data-accion="ir-plantilla"]')).toBeInViewport();
+
+  await primerPanel.locator('[data-accion="ver-completa"]').click();
+  const imagen = page.locator('.visor-imagen__imagen');
+  await expect(imagen).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
+  const proporcion = await imagen.evaluate(async (img) => {
+    await img.decode();
+    return { natural: img.naturalWidth / img.naturalHeight, ancho: img.naturalWidth, caja: img.clientWidth / img.clientHeight };
+  });
+  expect(proporcion.ancho).toBe(1080);
+  expect(Math.abs(proporcion.natural - proporcion.caja)).toBeLessThan(0.02); // entera, sin recortar
+  await page.locator('[data-accion="cerrar-visor"]').click();
+  await expect(page.locator('.visor-imagen')).toHaveCount(0);
+});
+
+test('Plantilla: cada tarjeta de estilo tiene "Ver completa" y no cambia el estilo elegido', async ({ page }) => {
+  await page.goto('/#/plantilla');
+  await page.locator('[data-accion="ver-estilo-general-polaroid"]').click();
+  await expect(page.locator('.visor-imagen__imagen')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.visor-imagen')).toHaveCount(0);
+  await expect(page.locator('[data-accion="estilo-general-solo-foto"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('Alta de producto: "Ver completa" aparece al elegir la foto y muestra el estado entero', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-accion="agregar"]').click();
+  await expect(page.locator('.foto-picker [data-accion="ver-completa"]')).toBeHidden();
+  await page.locator('#campo-nombre').fill('Producto visor');
+  await page.locator('[data-accion-input="elegir-galeria"]').setInputFiles(FOTO);
+  await page.locator('.foto-picker [data-accion="ver-completa"]').click();
+  await expect(page.locator('.visor-imagen__imagen')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
+  await page.locator('[data-accion="cerrar-visor"]').click();
+  await expect(page.locator('#campo-nombre')).toHaveValue('Producto visor'); // el formulario sigue intacto
+});

@@ -7,6 +7,8 @@ import { validarProducto, parsearPrecio, formatearPrecio, ESTILOS_IMAGEN, ETIQUE
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 import { crearIcono } from '../utils/iconos.js';
+import { abrirVisorImagen } from '../utils/visor-imagen.js';
+import { componerVistaCompleta } from '../utils/vista-completa.js';
 
 export async function render(contenedor, { navegar, params }) {
   contenedor.textContent = '';
@@ -118,7 +120,35 @@ export async function render(contenedor, { navegar, params }) {
   badgeFoto.textContent = 'Foto actual';
   badgeFoto.hidden = !urlPreviaActual;
 
-  marcoFoto.append(previa, previaVacia, badgeFoto);
+  // "Ver completa": el marco es cuadrado y recorta la foto (object-fit: cover) — este botón abre el
+  // estado 1080×1920 ENTERO, armado con lo que hay cargado en el formulario ahora mismo (foto recién
+  // elegida, nombre, precio, descripción y estilo), sin tener que guardar y pasar por "Publicar".
+  const btnVerCompleta = document.createElement('button');
+  btnVerCompleta.type = 'button';
+  btnVerCompleta.className = 'foto-picker__ver';
+  btnVerCompleta.setAttribute('data-accion', 'ver-completa');
+  btnVerCompleta.append(crearIcono('pantalla-completa'), document.createTextNode('Ver completa'));
+  btnVerCompleta.hidden = !urlPreviaActual;
+  btnVerCompleta.addEventListener('click', () =>
+    abrirVisorImagen({
+      titulo: 'Así se ve el estado',
+      obtenerBlob: () => {
+        const textoPrecio = campoPrecio.input.value.trim();
+        return componerVistaCompleta({
+          producto: {
+            nombre: campoNombre.input.value.trim() || 'Nombre del producto',
+            precio: textoPrecio ? parsearPrecio(textoPrecio) : null,
+            descripcion: textareaDescripcion.value,
+            estilo: selectEstiloOverride.value || null,
+            secciones: [...seccionesSeleccionadas],
+          },
+          fotoBlob: archivoFotoNuevo || fotoBlobActual,
+        });
+      },
+    })
+  );
+
+  marcoFoto.append(previa, previaVacia, badgeFoto, btnVerCompleta);
 
   const inputGaleria = document.createElement('input');
   inputGaleria.type = 'file';
@@ -145,6 +175,7 @@ export async function render(contenedor, { navegar, params }) {
     previa.hidden = false;
     previaVacia.hidden = true;
     badgeFoto.hidden = false;
+    btnVerCompleta.hidden = false;
   };
   inputGaleria.addEventListener('change', alElegirFoto(inputGaleria));
   inputCamara.addEventListener('change', alElegirFoto(inputCamara));

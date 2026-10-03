@@ -4210,3 +4210,168 @@ details[open] > .grupo__titulo--seccion::after {
   font-size: 0.75rem;
   color: var(--color-texto-tenue);
 }
+
+/* ---------- "Ver completa" (2026-10-03): visor a pantalla completa de UN estado entero, sin
+   recortar (js/utils/visor-imagen.js) + los botones que lo abren desde Ajustes, las tarjetas de
+   estilo de Plantilla y la foto del alta/edición de producto. ---------- */
+.panel__acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.tarjeta-estilo {
+  position: relative; /* ancla de .tarjeta-estilo__ver */
+}
+.tarjeta-estilo__ver {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--borde-medio);
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie-blanca);
+  color: var(--color-primario-oscuro);
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease),
+    transform var(--duracion) var(--ease);
+}
+/* 32px a la vista, 48px de área táctil (regla 6) — mismo recurso que .hoja-revision__manija. */
+.tarjeta-estilo__ver::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+.tarjeta-estilo__ver:hover {
+  border-color: var(--color-acento);
+}
+.tarjeta-estilo__ver:focus-visible,
+.foto-picker__ver:focus-visible,
+.visor-imagen__cerrar:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.tarjeta-estilo__ver:active,
+.foto-picker__ver:active,
+.visor-imagen__cerrar:active {
+  transform: scale(0.97);
+}
+.tarjeta-estilo__ver .icono {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
+}
+.grilla-estilos--galeria .tarjeta-estilo__ver {
+  top: 12px;
+  right: 12px;
+}
+
+.foto-picker__ver {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--toque-min);
+  padding: 0 12px;
+  border: 1px solid var(--borde-medio);
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie-blanca);
+  color: var(--color-texto);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--duracion) var(--ease), transform var(--duracion) var(--ease);
+}
+.foto-picker__ver[hidden] {
+  display: none;
+}
+.foto-picker__ver:hover {
+  border-color: var(--color-acento);
+}
+.foto-picker__ver .icono {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
+  color: var(--color-primario-oscuro);
+}
+
+.visor-imagen {
+  position: fixed;
+  inset: 0;
+  z-index: 50; /* por encima de .dialogo-overlay (40) */
+  display: flex;
+  flex-direction: column;
+  background: var(--color-fondo);
+  animation: aparecer var(--duracion) var(--ease);
+}
+.visor-imagen__cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(8px + var(--safe-top)) 8px 8px 16px;
+  border-bottom: 1px solid var(--borde-sutil);
+}
+.visor-imagen__titulo {
+  min-width: 0;
+  font-family: var(--font-titulo);
+  font-size: var(--tamano-20);
+  font-weight: 500;
+  color: var(--color-primario-oscuro);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.visor-imagen__cerrar {
+  flex-shrink: 0;
+  width: var(--toque-min);
+  height: var(--toque-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--color-texto);
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), transform var(--duracion) var(--ease);
+}
+.visor-imagen__cerrar:hover {
+  background: var(--color-superficie);
+}
+.visor-imagen__cerrar .icono {
+  margin-right: 0;
+}
+.visor-imagen__cuerpo {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 12px calc(12px + var(--safe-bottom));
+}
+/* La imagen ENTERA: se achica hasta entrar en alto y ancho, nunca se recorta. */
+.visor-imagen__imagen {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+}
+.visor-imagen__estado {
+  margin: 0;
+  font-size: var(--tamano-14);
+  color: var(--color-texto-tenue);
+  text-align: center;
+}

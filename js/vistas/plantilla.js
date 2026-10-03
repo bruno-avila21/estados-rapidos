@@ -25,7 +25,7 @@
 // VIVO (mismo `tarjetaEstilo`/`componerMiniatura` que Ajustes) para elegirlos con un toque sin salir
 // del editor, con un "Deshacer" corto para el estilo general anterior.
 import * as repo from '../repositorio.js';
-import { dibujarSegunEstilo, componerMiniatura, ANCHO, ALTO } from '../componer.js';
+import { dibujarSegunEstilo, componerMiniatura, componerSegunEstilo, ANCHO, ALTO } from '../componer.js';
 import { cargarFuentes } from '../fuentes.js';
 import { elementoEnPunto, moverCaja, redimensionarCaja, aplicarSnap, acomodarAutomatico } from '../editor-geometria.js';
 import {
@@ -47,6 +47,7 @@ import { pedirConfirmacion } from '../utils/confirmar.js';
 import { crearIcono } from '../utils/iconos.js';
 import { mostrarToast } from '../utils/toast.js';
 import { fotoDeEjemploPorDefecto } from '../utils/foto-ejemplo.js';
+import { abrirVisorImagen } from '../utils/visor-imagen.js';
 import { tarjetaEstilo, mostrarMiniatura } from './ajustes.js';
 
 const COLORES_RAPIDOS = ['#ffffff', '#242220', '#3a4d39', '#6e5b49', '#f5a623', '#3f5c38'];
@@ -180,6 +181,7 @@ export async function render(contenedor, { navegar, params } = {}) {
         mostrarToast(`Estilo general: ${ETIQUETA_ESTILO[valor]}`);
       },
       onEditar: editableGeneral ? () => navegar(`#/plantilla?estilo=${valor}`) : null,
+      onVerCompleta: () => verEstiloCompleto(valor),
       prefijo: 'estilo-general',
     });
     tarjetasEstiloGeneral[valor] = tarjeta;
@@ -284,6 +286,7 @@ export async function render(contenedor, { navegar, params } = {}) {
       editable: false,
       subtitulo: SUBTITULO_PRESET[valor],
       mostrarActivoPill: true,
+      onVerCompleta: () => verEstiloCompleto(valor),
       onSeleccionar: async () => {
         const anterior = general.estiloGeneral;
         await repo.guardarEstiloGeneral(valor);
@@ -567,6 +570,29 @@ export async function render(contenedor, { navegar, params } = {}) {
       estilo: estiloEditando,
       ajustes: estructuraClonada(ajustes),
     };
+  }
+
+  // "Ver completa" de las 2 galerías: el mismo estado de ejemplo de la miniatura, pero a 1080×1920
+  // y entero en el visor (la miniatura mide ~110px en la tira de presets: no se llega a leer). Para
+  // el estilo que se está editando usa los ajustes EN MEMORIA, así se ve lo que hay en el lienzo.
+  function verEstiloCompleto(valor) {
+    return abrirVisorImagen({
+      titulo: ETIQUETA_ESTILO[valor],
+      obtenerBlob: () =>
+        componerSegunEstilo({
+          estilo: valor,
+          plantillaImagen: plantillaImagenActual,
+          fotoImagen: fotoEjemplo,
+          producto: productoEjemplo,
+          ajustes: valor === estiloEditando ? ajustes : (config.ajustesPorEstilo[valor] ?? {}),
+          formatoPrecio,
+          descripcion: descripcionEjemplo,
+          encuadreFoto: general.encuadreFoto,
+          general,
+          seccionNombre: seccionNombreEjemplo,
+          posicion: posicionEjemplo,
+        }),
+    });
   }
 
   // Miniaturas REALES de la galería de presets (Fase 4): mismo `componerMiniatura` de Ajustes, con
