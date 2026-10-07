@@ -38,6 +38,8 @@ import {
   geometriaEditorial,
   geometriaPolaroid,
   geometriaStoryInmersiva,
+  geometriaNovedad,
+  geometriaFichaNatural,
   EXTRA_DESCRIPCION_MAX,
 } from './geometria-presets.js';
 
@@ -56,7 +58,11 @@ const GEOMETRIA_PRESET = Object.freeze({
   editorial: geometriaEditorial,
   polaroid: geometriaPolaroid,
   'story-inmersiva': geometriaStoryInmersiva,
+  novedad: geometriaNovedad,
+  'ficha-natural': geometriaFichaNatural,
 });
+// Presets cuyas cajas de texto se corren según haya o no precio/descripción (ver resolverCajasTexto).
+const PRESETS_QUE_REACOMODAN = Object.freeze(['novedad', 'ficha-natural']);
 // Estilos que dibujan la descripción ("Foto con precio" y "Mi plantilla" no la dibujan).
 export const ESTILOS_CON_DESCRIPCION = Object.freeze(['foto-descripcion', ...Object.keys(GEOMETRIA_PRESET)]);
 
@@ -89,6 +95,20 @@ const COLOR_STORY_SCRIM_ABAJO = 'rgba(5,6,10,0.85)';
 const COLOR_STORY_PILL_BG = 'rgba(255,255,255,0.18)';
 const COLOR_STORY_PILL_BORDE = 'rgba(255,255,255,0.38)';
 
+// "Novedad" y "Ficha natural": colores medidos de los dos diseños que entregó Bruno (2026-10-07).
+const COLOR_NOVEDAD_FONDO = '#18230f';
+const COLOR_NOVEDAD_PILL = '#263a1e';
+const COLOR_NOVEDAD_ORO = '#c9a86a';
+const COLOR_NOVEDAD_CREMA = '#f1e9d6';
+const COLOR_NOVEDAD_ACENTO = '#a9c47f';
+const COLOR_NOVEDAD_VERDE = '#8fb36a';
+
+const COLOR_FICHA_FONDO = '#f7f1e6';
+const COLOR_FICHA_INSIGNIA = '#eadfce';
+const COLOR_FICHA_VERDE = '#2f3e22';
+const COLOR_FICHA_DIVISOR = '#8d927f';
+const COLOR_FICHA_TEXTO = '#2a2a26';
+
 /** Qué elementos opcionales entran en el dibujo (hay dato Y está visible): los mismos flags que
  * recibe la geometría de los 4 presets. */
 function banderasDeContenido({ producto, ajustes, formatoPrecio, descripcion, general, seccionNombre }) {
@@ -115,19 +135,28 @@ export function resolverCajasTexto(ctx, datos) {
   const { estilo, ajustes, descripcion } = datos;
   const cajas = { nombre: ajustes?.nombre, precio: ajustes?.precio, descripcion: ajustes?.descripcion, extra: 0 };
   const caja = ajustes?.descripcion;
-  if (!ESTILOS_CON_DESCRIPCION.includes(estilo) || !caja || caja.visible === false || !descripcion) return cajas;
-
   const geometria = GEOMETRIA_PRESET[estilo];
-  const extraMax = geometria ? EXTRA_DESCRIPCION_MAX[estilo] : Math.max(0, caja.y - MARGEN_SUPERIOR_TEXTO);
-  const { lineas, tamano } = parrafoDeCaja(ctx, descripcion, caja, caja.h + extraMax);
-  const altoNecesario = Math.ceil(lineas.length * tamano * INTERLINEADO + PAD_VERTICAL_PARRAFO * 2);
-  const extra = Math.min(extraMax, Math.max(0, altoNecesario - caja.h));
-  if (!extra) return cajas;
+  // "Novedad" y "Ficha natural" además se reacomodan según haya o no precio/descripción (los 4
+  // presets anteriores solo acompañan el crecimiento de la descripción).
+  const reacomoda = PRESETS_QUE_REACOMODAN.includes(estilo);
+  const hayDescripcion = ESTILOS_CON_DESCRIPCION.includes(estilo) && !!caja && caja.visible !== false && !!descripcion;
+  if (!hayDescripcion && !reacomoda) return cajas;
+
+  let extra = 0;
+  if (hayDescripcion) {
+    const extraMax = geometria ? EXTRA_DESCRIPCION_MAX[estilo] : Math.max(0, caja.y - MARGEN_SUPERIOR_TEXTO);
+    const { lineas, tamano } = parrafoDeCaja(ctx, descripcion, caja, caja.h + extraMax);
+    const altoNecesario = Math.ceil(lineas.length * tamano * INTERLINEADO + PAD_VERTICAL_PARRAFO * 2);
+    extra = Math.min(extraMax, Math.max(0, altoNecesario - caja.h));
+  }
+  if (!extra && !reacomoda) return cajas;
 
   if (geometria) {
     const { conPrecio, conDescripcion, conSeccion, conNombreNegocio } = banderasDeContenido(datos);
     const flags = { conPrecio, conDescripcion, conSeccion, conNombreNegocio };
-    const antes = geometria(flags);
+    // De dónde partían las cajas: la geometría de fábrica (todo visible) si el preset se
+    // reacomoda, o la vigente sin el alto extra en los demás.
+    const antes = reacomoda ? geometria({}) : geometria(flags);
     const despues = geometria({ ...flags, extraDescripcion: extra });
     const mover = (clave) => {
       const c = ajustes[clave];
@@ -138,7 +167,7 @@ export function resolverCajasTexto(ctx, datos) {
     return {
       nombre: mover('nombre'),
       precio: mover('precio'),
-      descripcion: { ...descripcionMovida, h: descripcionMovida.h + extra },
+      descripcion: descripcionMovida ? { ...descripcionMovida, h: descripcionMovida.h + extra } : descripcionMovida,
       extra,
     };
   }
@@ -296,6 +325,44 @@ export function dibujarSegunEstilo(ctx, datos) {
       });
     }
     if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion, { parrafo: true });
+    return;
+  }
+
+  if (estilo === 'novedad') {
+    const geo = geometriaNovedad({ conPrecio, conDescripcion, extraDescripcion });
+
+    dibujarFondoFoto(ctx, fotoImagen, 'cover');
+    dibujarScrimNovedad(ctx, geo.scrim);
+    dibujarPillNovedad(ctx, geo.pill, (seccionNombre || 'Novedad').toUpperCase());
+    // El segundo renglón del nombre va en itálica verde (como el diseño) mientras la tipografía sea
+    // la de fábrica; si se eligió otra en el editor, queda en esa, solo con el color de acento.
+    const segunda =
+      ajustes.nombre?.familia === 'newsreader'
+        ? { color: COLOR_NOVEDAD_ACENTO, familia: 'newsreader-italica', peso: 700 }
+        : { color: COLOR_NOVEDAD_ACENTO };
+    dibujarNombreEnDosLineas(ctx, producto?.nombre ?? '', ajustes.nombre, { segunda });
+    dibujarDivisorHoja(ctx, geo.divisor, COLOR_NOVEDAD_ORO);
+    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion, { parrafo: true });
+    if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, { ...ajustes.precio, bordeColor: COLOR_NOVEDAD_CREMA, bordeAncho: 3 });
+    dibujarContactoNovedad(ctx, geo.contacto);
+    dibujarDivisorHoja(ctx, geo.divisorInferior, COLOR_NOVEDAD_ORO);
+    return;
+  }
+
+  if (estilo === 'ficha-natural') {
+    const geo = geometriaFichaNatural({ conPrecio, conDescripcion, extraDescripcion });
+
+    ctx.save();
+    ctx.fillStyle = COLOR_FICHA_FONDO;
+    ctx.fillRect(0, 0, ANCHO, ALTO);
+    ctx.restore();
+    if (fotoImagen) dibujarFotoCover(ctx, fotoImagen, geo.foto);
+    dibujarInsigniaHoja(ctx, geo.insignia);
+    dibujarNombreEnDosLineas(ctx, producto?.nombre ?? '', ajustes.nombre, { mayusculas: true });
+    dibujarDivisorHoja(ctx, geo.divisor, COLOR_FICHA_DIVISOR, { grosor: 2 });
+    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion, { parrafo: true });
+    if (conPrecio) dibujarCajaTexto(ctx, `Precio: ${textoPrecio}`, ajustes.precio);
+    dibujarContactoFicha(ctx, geo.contacto);
     return;
   }
 
@@ -804,5 +871,254 @@ function dibujarCajaTexto(ctx, texto, caja, { parrafo = false } = {}) {
     ctx.fillText(linea, xTexto, y, caja.w - 24);
     y += interlineado;
   }
+  ctx.restore();
+}
+
+// ===== "Novedad" y "Ficha natural" (diseños entregados por Bruno, 2026-10-07) =====
+
+/** Scrim verde oscuro de "Novedad": transparente arriba, casi opaco donde empieza el nombre y
+ * sólido hasta el borde inferior (funcional: es el fondo de todo el bloque de texto). */
+function dibujarScrimNovedad(ctx, rect) {
+  if (!rect) return;
+  ctx.save();
+  const gradiente = ctx.createLinearGradient(0, rect.y, 0, rect.y + rect.h);
+  gradiente.addColorStop(0, hexARgba(COLOR_NOVEDAD_FONDO, 0));
+  gradiente.addColorStop(Math.min(0.9, 320 / rect.h), hexARgba(COLOR_NOVEDAD_FONDO, 0.93));
+  gradiente.addColorStop(1, hexARgba(COLOR_NOVEDAD_FONDO, 0.98));
+  ctx.fillStyle = gradiente;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.restore();
+}
+
+/** Hojas de línea (el motivo de los dos diseños): una por cada ángulo de `angulos`, saliendo del
+ * mismo punto, con su nervadura. Dos ángulos opuestos + tallo = el brote de los divisores. */
+function dibujarHojas(ctx, cx, cy, tamano, color, grosor, angulos = [-0.62, 0.62]) {
+  const largo = tamano * 0.95;
+  const ancho = tamano * 0.36;
+  ctx.save();
+  ctx.translate(cx, cy + tamano * 0.42);
+  ctx.strokeStyle = colorCss(color);
+  ctx.lineWidth = grosor;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  for (const angulo of angulos) {
+    ctx.save();
+    ctx.rotate(angulo);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(-ancho, -largo * 0.55, 0, -largo);
+    ctx.quadraticCurveTo(ancho, -largo * 0.55, 0, 0);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -largo * 0.14);
+    ctx.lineTo(0, -largo * 0.78);
+    ctx.stroke();
+    ctx.restore();
+  }
+  if (angulos.length > 1) {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, tamano * 0.16);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Divisor fino con un brote en el medio (la línea se corta para dejarle lugar). */
+function dibujarDivisorHoja(ctx, rect, color, { grosor = 2.5 } = {}) {
+  if (!rect) return;
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  const hueco = 42;
+  ctx.save();
+  ctx.strokeStyle = colorCss(color);
+  ctx.lineWidth = grosor;
+  ctx.beginPath();
+  ctx.moveTo(rect.x, cy);
+  ctx.lineTo(cx - hueco, cy);
+  ctx.moveTo(cx + hueco, cy);
+  ctx.lineTo(rect.x + rect.w, cy);
+  ctx.stroke();
+  ctx.restore();
+  dibujarHojas(ctx, cx, cy - 2, 40, color, grosor);
+}
+
+/** Pill superior de "Novedad": relleno verde oscuro, borde dorado, texto serif con una hoja a cada
+ * lado. El texto es la sección del producto o, si no tiene, "NOVEDAD" (como el diseño). */
+function dibujarPillNovedad(ctx, rect, texto) {
+  if (!rect) return;
+  const radio = rect.h / 2;
+  ctx.save();
+  ctx.fillStyle = hexARgba(COLOR_NOVEDAD_PILL, 0.94);
+  rutaRedondeada(ctx, rect.x, rect.y, rect.w, rect.h, radio);
+  ctx.fill();
+  ctx.strokeStyle = COLOR_NOVEDAD_ORO;
+  ctx.lineWidth = 3;
+  rutaRedondeada(ctx, rect.x + 1.5, rect.y + 1.5, rect.w - 3, rect.h - 3, radio - 1.5);
+  ctx.stroke();
+  ctx.restore();
+  const cy = rect.y + rect.h / 2;
+  dibujarHojas(ctx, rect.x + 74, cy - 4, 34, COLOR_NOVEDAD_ORO, 2.5, [-0.5]);
+  dibujarHojas(ctx, rect.x + rect.w - 74, cy - 4, 34, COLOR_NOVEDAD_ORO, 2.5, [0.5]);
+  dibujarEtiqueta(ctx, texto, { x: rect.x + 112, y: rect.y, w: rect.w - 224, h: rect.h }, {
+    tamano: 46,
+    familia: 'newsreader',
+    peso: 700,
+    color: COLOR_NOVEDAD_CREMA,
+    alineacion: 'center',
+    tracking: 2,
+  });
+}
+
+/** Glifo de WhatsApp en línea (burbuja con colita + auricular), con primitivas de canvas. */
+function dibujarIconoWhatsapp(ctx, cx, cy, radio, color) {
+  const r = radio;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.strokeStyle = colorCss(color);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.lineWidth = r * 0.16;
+  // burbuja: círculo abierto abajo a la izquierda, cerrado por la punta de la colita
+  ctx.beginPath();
+  ctx.arc(0, 0, r, Math.PI * 0.9, Math.PI * 0.6 + Math.PI * 2);
+  ctx.lineTo(-r * 0.98, r * 0.98);
+  ctx.closePath();
+  ctx.stroke();
+  // auricular: curva + los dos extremos más gruesos
+  ctx.lineWidth = r * 0.19;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.36, -r * 0.34);
+  ctx.quadraticCurveTo(-r * 0.3, r * 0.3, r * 0.36, r * 0.36);
+  ctx.stroke();
+  ctx.lineWidth = r * 0.32;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.38, -r * 0.4);
+  ctx.lineTo(-r * 0.34, -r * 0.24);
+  ctx.moveTo(r * 0.24, r * 0.34);
+  ctx.lineTo(r * 0.4, r * 0.38);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Llamado de "Novedad": ícono de WhatsApp, una línea vertical y "Consultá / por mensaje". */
+function dibujarContactoNovedad(ctx, rect) {
+  if (!rect) return;
+  const cy = rect.y + rect.h / 2;
+  dibujarIconoWhatsapp(ctx, rect.x + 45, cy - 2, 42, COLOR_NOVEDAD_VERDE);
+  ctx.save();
+  ctx.strokeStyle = hexARgba(COLOR_NOVEDAD_CREMA, 0.45);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(rect.x + 110, cy - 50);
+  ctx.lineTo(rect.x + 110, cy + 50);
+  ctx.stroke();
+  ctx.restore();
+  const ancho = Math.max(0, rect.w - 132);
+  const opciones = { tamano: 39, familia: 'manrope', peso: 600, alineacion: 'left' };
+  dibujarEtiqueta(ctx, 'Consultá', { x: rect.x + 132, y: cy - 46, w: ancho, h: 46 }, { ...opciones, color: COLOR_NOVEDAD_VERDE });
+  dibujarEtiqueta(ctx, 'por mensaje', { x: rect.x + 132, y: cy, w: ancho, h: 46 }, { ...opciones, color: COLOR_NOVEDAD_CREMA });
+}
+
+/** Insignia redonda con brote, a caballo del borde inferior de la foto ("Ficha natural"). */
+function dibujarInsigniaHoja(ctx, insignia) {
+  if (!insignia) return;
+  ctx.save();
+  ctx.fillStyle = COLOR_FICHA_FONDO;
+  ctx.beginPath();
+  ctx.arc(insignia.cx, insignia.cy, insignia.r + 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = COLOR_FICHA_INSIGNIA;
+  ctx.beginPath();
+  ctx.arc(insignia.cx, insignia.cy, insignia.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  dibujarHojas(ctx, insignia.cx, insignia.cy - 4, insignia.r * 0.7, COLOR_FICHA_VERDE, 3);
+}
+
+/** Llamado de "Ficha natural": ícono de WhatsApp + "Escribime", el grupo centrado. */
+function dibujarContactoFicha(ctx, rect) {
+  if (!rect) return;
+  const texto = 'Escribime';
+  const tamano = 44;
+  const radio = 30;
+  const gap = 24;
+  const cy = rect.y + rect.h / 2;
+  ctx.save();
+  ctx.font = `400 ${tamano}px ${familiaCanvas('manrope')}`;
+  const anchoTexto = ctx.measureText(texto).width;
+  const x = rect.x + (rect.w - (radio * 2 + gap + anchoTexto)) / 2;
+  ctx.fillStyle = COLOR_FICHA_TEXTO;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(texto, x + radio * 2 + gap, cy + 2);
+  ctx.restore();
+  dibujarIconoWhatsapp(ctx, x + radio, cy, radio, COLOR_FICHA_TEXTO);
+}
+
+/**
+ * Nombre en DOS renglones parejos (los dos diseños lo muestran así: "Nombre del / producto"), en
+ * vez de la regla de `calcularLineas` (achicar hasta que entre en uno). Con 2+ palabras parte donde
+ * los dos renglones quedan más parecidos de ancho y achica la letra solo si no entran; con una sola
+ * palabra queda un renglón. `segunda` cambia color/tipografía del segundo renglón ("Novedad");
+ * `mayusculas` lo pasa todo a mayúsculas ("Ficha natural"). Respeta tamaño, color, tipografía,
+ * peso y alineación de la caja, así se sigue editando igual que cualquier otro texto.
+ */
+function dibujarNombreEnDosLineas(ctx, texto, caja, { mayusculas = false, segunda = null } = {}) {
+  if (!caja || caja.visible === false) return;
+  dibujarFondoCaja(ctx, caja);
+  const limpio = String(texto ?? '').trim();
+  const palabras = (mayusculas ? limpio.toUpperCase() : limpio).split(/\s+/).filter(Boolean);
+  if (!palabras.length) return;
+
+  const INTERLINEADO_TITULO = 1.04;
+  const anchoMax = caja.w - 24;
+  const fuentePrimera = (tamano) => fuenteDeCaja(caja, tamano);
+  const fuenteSegunda = (tamano) =>
+    segunda?.familia ? fuenteDeCaja({ familia: segunda.familia, peso: segunda.peso ?? caja.peso }, tamano) : fuentePrimera(tamano);
+  const medir = (t, fuente) => {
+    ctx.font = fuente;
+    return ctx.measureText(t).width;
+  };
+
+  const tamanoInicial = caja.tamano || 48;
+  const tamanoMinimo = Math.max(16, Math.round(tamanoInicial * 0.45));
+  let lineas = [palabras.join(' ')];
+  if (palabras.length > 1) {
+    let mejor = Infinity;
+    for (let corte = 1; corte < palabras.length; corte += 1) {
+      const a = palabras.slice(0, corte).join(' ');
+      const b = palabras.slice(corte).join(' ');
+      const peor = Math.max(medir(a, fuentePrimera(tamanoInicial)), medir(b, fuenteSegunda(tamanoInicial)));
+      // ante anchos parecidos gana el corte más tardío: primer renglón largo, segundo corto
+      if (peor <= mejor * 1.1) {
+        mejor = peor;
+        lineas = [a, b];
+      }
+    }
+  }
+  const fuenteDe = (i, tamano) => (i === 1 ? fuenteSegunda(tamano) : fuentePrimera(tamano));
+  let tamano = tamanoInicial;
+  const entra = (t) =>
+    lineas.every((linea, i) => medir(linea, fuenteDe(i, t)) <= anchoMax) && lineas.length * t * INTERLINEADO_TITULO <= (caja.h ?? ALTO);
+  while (tamano > tamanoMinimo && !entra(tamano)) tamano -= 2;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(caja.x, caja.y, caja.w, caja.h ?? tamano * 1.3 * lineas.length);
+  ctx.clip();
+  ctx.textBaseline = 'middle';
+  const alineacion = caja.alineacion || 'center';
+  ctx.textAlign = alineacion;
+  const x = alineacion === 'left' ? caja.x + 12 : alineacion === 'right' ? caja.x + caja.w - 12 : caja.x + caja.w / 2;
+  const paso = tamano * INTERLINEADO_TITULO;
+  const alto = caja.h ?? paso * lineas.length;
+  let y = caja.y + Math.max(paso / 2, (alto - paso * lineas.length) / 2 + paso / 2);
+  lineas.forEach((linea, i) => {
+    ctx.font = fuenteDe(i, tamano);
+    ctx.fillStyle = (i === 1 && segunda?.color) || caja.color || '#ffffff';
+    ctx.fillText(linea, x, y, anchoMax);
+    y += paso;
+  });
   ctx.restore();
 }

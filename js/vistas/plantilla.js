@@ -126,6 +126,10 @@ export async function render(contenedor, { navegar, params } = {}) {
   // tape lo que se está acomodando. `guiasActivas` = las que `aplicarSnap` enganchó en este paso.
   let arrastrando = false;
   let guiasActivas = [];
+  // El lienzo arranca BLOQUEADO (pedido 2026-10-07): deslizar el dedo por encima hace scroll de la
+  // página y no mueve nada. Se edita recién después de tocar "Editar" o uno de los textos; "Listo"
+  // (o irse con el scroll hasta que el lienzo casi no se vea) lo vuelve a bloquear.
+  let editando = false;
   let miniColorAbierto = false;
   // Declarados acá (y no más abajo, junto a `solicitarRedibujo`) para que la llamada inicial de
   // más abajo no choque con la zona muerta temporal de `let` (TDZ): las funciones declaradas con
@@ -296,6 +300,8 @@ export async function render(contenedor, { navegar, params } = {}) {
     editorial: 'Asimétrico',
     polaroid: 'Instantánea',
     'story-inmersiva': 'A sangre',
+    novedad: 'Verde oscuro',
+    'ficha-natural': 'Crema',
   };
   for (const valor of PRESETS_COMPOSICION) {
     const tarjeta = tarjetaEstilo(valor, general.estiloGeneral === valor, {
@@ -424,12 +430,27 @@ export async function render(contenedor, { navegar, params } = {}) {
   const tituloPrevia = document.createElement('span');
   tituloPrevia.className = 'grupo__titulo';
   tituloPrevia.textContent = 'Previsualización de estado (9:16)';
-  const pistaPrevia = document.createElement('span');
-  pistaPrevia.className = 'texto-tenue editor-plantilla__pista';
-  const puntoPrevia = document.createElement('span');
-  puntoPrevia.className = 'editor-plantilla__punto';
-  pistaPrevia.append(puntoPrevia, document.createTextNode('Guías interactivas'));
-  cabeceraPrevia.append(tituloPrevia, pistaPrevia);
+  const btnModo = document.createElement('button');
+  btnModo.type = 'button';
+  btnModo.className = 'boton boton--chico editor-plantilla__modo';
+  btnModo.setAttribute('data-accion', 'editar-lienzo');
+  btnModo.addEventListener('click', () => fijarEdicion(!editando));
+  cabeceraPrevia.append(tituloPrevia, btnModo);
+
+  // Estado del lienzo con palabras, debajo de la vista previa (y un segundo "Listo" a mano: con el
+  // lienzo en edición el de arriba puede haber quedado fuera de la pantalla).
+  const filaModo = document.createElement('div');
+  filaModo.className = 'editor-plantilla__estado-modo';
+  const textoModo = document.createElement('p');
+  textoModo.className = 'texto-tenue';
+  textoModo.setAttribute('role', 'status');
+  const btnListo = document.createElement('button');
+  btnListo.type = 'button';
+  btnListo.className = 'boton boton--chico boton--primario';
+  btnListo.setAttribute('data-accion', 'terminar-edicion-lienzo');
+  btnListo.append(crearIcono('check'), document.createTextNode('Listo'));
+  btnListo.addEventListener('click', () => fijarEdicion(false));
+  filaModo.append(textoModo, btnListo);
 
   // --- Vista previa (canvas en vivo) + overlay interactivo ---
   const previaContenedor = document.createElement('div');
@@ -505,6 +526,7 @@ export async function render(contenedor, { navegar, params } = {}) {
     galeriaPresets,
     cabeceraPrevia,
     previaContenedor,
+    filaModo,
     capas,
     panel,
     panelEstiloGeneral
@@ -523,6 +545,18 @@ export async function render(contenedor, { navegar, params } = {}) {
     solicitarRedibujo();
   });
   resizeObserver.observe(previaContenedor);
+
+  // Si el lienzo quedó casi fuera de la pantalla mientras estaba en edición, se bloquea solo: al
+  // volver con el scroll no se mueve nada sin querer.
+  if (typeof IntersectionObserver !== 'undefined') {
+    const observadorVisible = new IntersectionObserver(
+      ([entrada]) => {
+        if (editando && !arrastrando && entrada.intersectionRatio < 0.15) fijarEdicion(false);
+      },
+      { threshold: [0, 0.15] }
+    );
+    observadorVisible.observe(previaContenedor);
+  }
 
   // ================= Lógica =================
 
@@ -694,8 +728,30 @@ export async function render(contenedor, { navegar, params } = {}) {
   // `conPanel: false` redibuja el overlay/capas pero deja el panel de propiedades como está: si se
   // rehiciera, el deslizador que el dedo está arrastrando se reemplaza por uno nuevo y el gesto se
   // corta después del primer paso (QA v4, BUGS.md).
+  function fijarEdicion(valor, clave) {
+    editando = valor;
+    if (clave !== undefined) {
+      if (clave !== seleccion) miniColorAbierto = false;
+      seleccion = clave;
+    }
+    dibujarOverlay();
+  }
+
+  function pintarModo() {
+    previaContenedor.classList.toggle('editor-plantilla__lienzo--editando', editando);
+    btnModo.textContent = '';
+    btnModo.append(crearIcono(editando ? 'check' : 'lapiz'), document.createTextNode(editando ? 'Listo' : 'Editar'));
+    btnModo.classList.toggle('boton--primario', !editando);
+    btnModo.setAttribute('aria-pressed', String(editando));
+    textoModo.textContent = editando
+      ? 'Editando: arrastrá los textos para moverlos. Tocá "Listo" para volver a deslizar la pantalla.'
+      : 'Bloqueado: podés deslizar sin mover nada. Tocá "Editar" o un texto de la imagen para acomodarlo.';
+    btnListo.hidden = !editando;
+  }
+
   function dibujarOverlay({ conPanel = true } = {}) {
     overlay.textContent = '';
+    pintarModo();
     const claves = clavesVisiblesParaEstilo();
     const visuales = cajasVisuales();
 
@@ -727,8 +783,9 @@ export async function render(contenedor, { navegar, params } = {}) {
         div.className = 'editor-plantilla__caja' + (seleccion === clave ? ' editor-plantilla__caja--activa' : '');
         div.setAttribute('data-elemento', clave); // para tests: clic directo sobre el elemento en el lienzo
         posicionarEnPx(div, visuales[clave]);
-        div.addEventListener('pointerdown', (ev) => alPointerDownCaja(ev, clave));
-        if (seleccion === clave) {
+        if (editando) div.addEventListener('pointerdown', (ev) => alPointerDownCaja(ev, clave));
+        else div.addEventListener('click', () => fijarEdicion(true, clave)); // un toque (no un deslizamiento) entra a editar
+        if (editando && seleccion === clave) {
           for (const manija of HANDLES) {
             const h = document.createElement('div');
             h.className = `editor-plantilla__manija editor-plantilla__manija--${manija}`;
@@ -786,7 +843,7 @@ export async function render(contenedor, { navegar, params } = {}) {
     }
 
     if (arrastrando) dibujarGuias();
-    else if (seleccion && seleccion !== 'foto' && ajustes[seleccion].visible !== false) {
+    else if (editando && seleccion && seleccion !== 'foto' && ajustes[seleccion].visible !== false) {
       overlay.append(miniMenu(seleccion, visuales[seleccion]));
     }
 
@@ -956,6 +1013,7 @@ export async function render(contenedor, { navegar, params } = {}) {
   }
 
   overlay.addEventListener('pointerdown', (ev) => {
+    if (!editando) return; // bloqueado: el toque en el fondo es scroll, no selección
     if (ev.target !== overlay) return; // ya lo maneja alPointerDownCaja si tocó una caja
     const punto = puntoDesdeEvento(ev);
     const clave = elementoEnPunto(cajasHitTest(), punto.x, punto.y);

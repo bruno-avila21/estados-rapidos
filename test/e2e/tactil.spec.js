@@ -21,6 +21,9 @@ async function crearProducto(page) {
 // lienzo, así que ya no está visible al cargar sin más — mismo helper que editor.spec.js (BUGS.md
 // #48/#50: scrollIntoViewIfNeeded solo no alcanza porque no sabe que la nav inferior es fixed).
 async function asegurarLienzoVisible(page) {
+  // El lienzo arranca bloqueado (2026-10-07): se habilita la edición antes de arrastrar.
+  const modo = page.locator('[data-accion="editar-lienzo"]');
+  if ((await modo.getAttribute('aria-pressed')) === 'false') await modo.click();
   await page.locator('.editor-plantilla__lienzo').scrollIntoViewIfNeeded();
   await page.evaluate(() => {
     const el = document.querySelector('.editor-plantilla__lienzo');

@@ -45,6 +45,8 @@ export const EXTRA_DESCRIPCION_MAX = Object.freeze({
   editorial: 520,
   polaroid: 420,
   'story-inmersiva': 600,
+  novedad: 500,
+  'ficha-natural': 500,
 });
 
 // --- Banner inferior: foto a sangre completa + franja sólida anclada abajo (esquinas superiores
@@ -328,5 +330,153 @@ export function geometriaStoryInmersiva({
     nombre,
     precio,
     descripcion,
+  };
+}
+
+// --- Novedad (diseño entregado por Bruno el 2026-10-07, 941×1672 → escala ×1.148): foto a sangre
+// + scrim verde oscuro abajo; pill arriba (sección, o "NOVEDAD"), nombre serif en dos renglones
+// (el segundo en itálica verde), divisor dorado con hoja, descripción, y una fila con la caja del
+// precio + el llamado de WhatsApp; cierra un divisor dorado. Anclado ABAJO: lo que falte (precio,
+// descripción) no deja hueco, y la descripción crece hacia arriba. ---
+const NOVEDAD = {
+  margenLateral: 94,
+  pillY: 55,
+  pillW: 464,
+  pillH: 101,
+  nombreH: 260,
+  gapNombreDivisor: 1,
+  divisorH: 30,
+  anchoDivisor: 610,
+  gapDivisorDescripcion: 27,
+  descripcionH: 70,
+  gapDescripcionFila: 52,
+  gapDivisorFila: 46,
+  yFila: 1620,
+  filaH: 167,
+  anchoPrecio: 409,
+  gapPrecioContacto: 124,
+  yDivisorInferior: 1845,
+  alturaScrim: 280,
+};
+
+export function geometriaNovedad({
+  ancho = ANCHO_LIENZO,
+  alto = ALTO_LIENZO,
+  conPrecio = true,
+  conDescripcion = true,
+  extraDescripcion = 0,
+} = {}) {
+  const c = NOVEDAD;
+  const anchoContenido = ancho - c.margenLateral * 2;
+  const precio = conPrecio ? zona(c.margenLateral, c.yFila, c.anchoPrecio, c.filaH) : null;
+  const xContacto = conPrecio ? c.margenLateral + c.anchoPrecio + c.gapPrecioContacto : c.margenLateral;
+  const contacto = zona(xContacto, c.yFila, ancho - c.margenLateral - xContacto, c.filaH);
+
+  let y = c.yFila;
+  let descripcion = null;
+  if (conDescripcion) {
+    y -= c.gapDescripcionFila + c.descripcionH + extraDescripcion;
+    descripcion = zona(c.margenLateral, y, anchoContenido, c.descripcionH + extraDescripcion);
+    y -= c.gapDivisorDescripcion;
+  } else {
+    y -= c.gapDivisorFila;
+  }
+  y -= c.divisorH;
+  const divisor = zona(c.margenLateral, y, c.anchoDivisor, c.divisorH);
+  y -= c.gapNombreDivisor + c.nombreH;
+  const nombre = zona(c.margenLateral, y, anchoContenido, c.nombreH);
+
+  const yScrim = Math.max(0, nombre.y - c.alturaScrim);
+  return {
+    foto: zona(0, 0, ancho, alto),
+    scrim: zona(0, yScrim, ancho, alto - yScrim),
+    pill: zona((ancho - c.pillW) / 2, c.pillY, c.pillW, c.pillH),
+    nombre,
+    divisor,
+    descripcion,
+    precio,
+    contacto,
+    divisorInferior: zona(c.margenLateral, c.yDivisorInferior, anchoContenido, c.divisorH),
+  };
+}
+
+// --- Ficha natural (diseño entregado por Bruno el 2026-10-07, 1125×2000 → escala ×0.96): fondo
+// crema, foto arriba con un marco fino, insignia redonda con hoja a caballo del borde de la foto,
+// y debajo todo centrado: nombre serif en MAYÚSCULAS (dos renglones), divisor con hoja,
+// descripción, caja "Precio: $…" y el llamado de WhatsApp. El bloque de texto va anclado abajo: si
+// falta el precio o la descripción (o la descripción crece), la FOTO se alarga o se acorta. ---
+const FICHA = {
+  marco: 13,
+  radioInsignia: 69,
+  margenTexto: 90,
+  gapFotoNombre: 100,
+  nombreH: 215,
+  gapNombreDivisor: 21,
+  divisorH: 30,
+  anchoDivisor: 622,
+  gapDivisorDescripcion: 26,
+  descripcionH: 70,
+  gapDescripcionPrecio: 35,
+  precioH: 120,
+  anchoPrecio: 476,
+  gapAntesContacto: 45,
+  contactoH: 70,
+  margenInferior: 63,
+  fotoMinima: 520,
+};
+
+export function geometriaFichaNatural({
+  ancho = ANCHO_LIENZO,
+  alto = ALTO_LIENZO,
+  conPrecio = true,
+  conDescripcion = true,
+  extraDescripcion = 0,
+} = {}) {
+  const c = FICHA;
+  const altoTexto =
+    c.gapFotoNombre +
+    c.nombreH +
+    c.gapNombreDivisor +
+    c.divisorH +
+    (conDescripcion ? c.gapDivisorDescripcion + c.descripcionH + extraDescripcion : 0) +
+    (conPrecio ? c.gapDescripcionPrecio + c.precioH : 0) +
+    c.gapAntesContacto +
+    c.contactoH +
+    c.margenInferior;
+  const altoFoto = Math.max(c.fotoMinima, alto - altoTexto - c.marco);
+  const foto = zona(c.marco, c.marco, ancho - c.marco * 2, altoFoto);
+  const anchoTexto = ancho - c.margenTexto * 2;
+
+  let y = foto.y + foto.h + c.gapFotoNombre;
+  const nombre = zona(c.margenTexto, y, anchoTexto, c.nombreH);
+  y += c.nombreH + c.gapNombreDivisor;
+  const divisor = zona((ancho - c.anchoDivisor) / 2, y, c.anchoDivisor, c.divisorH);
+  y += c.divisorH;
+
+  let descripcion = null;
+  if (conDescripcion) {
+    y += c.gapDivisorDescripcion;
+    descripcion = zona(c.margenTexto, y, anchoTexto, c.descripcionH + extraDescripcion);
+    y += c.descripcionH + extraDescripcion;
+  }
+
+  let precio = null;
+  if (conPrecio) {
+    y += c.gapDescripcionPrecio;
+    precio = zona((ancho - c.anchoPrecio) / 2, y, c.anchoPrecio, c.precioH);
+    y += c.precioH;
+  }
+
+  y += c.gapAntesContacto;
+  const contacto = zona(c.margenTexto, y, anchoTexto, c.contactoH);
+
+  return {
+    foto,
+    insignia: { cx: ancho / 2, cy: foto.y + foto.h, r: c.radioInsignia },
+    nombre,
+    divisor,
+    descripcion,
+    precio,
+    contacto,
   };
 }

@@ -44,7 +44,7 @@ test.beforeEach(async ({ context }) => {
 // miniatura + botón Editar) se mudó de Ajustes a Plantilla, namespace `estilo-general-*` — no
 // confundir con la galería "Presets de composición" (`estilo-<preset>` sin namespace, más abajo en
 // este mismo archivo), que selecciona-y-navega-y-permite-deshacer en vez de solo marcar el general.
-for (const preset of ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva']) {
+for (const preset of ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva', 'novedad', 'ficha-natural']) {
   test(`Plantilla: la tarjeta "Estilo de las imágenes" del preset "${preset}" tiene miniatura en vivo y botón Editar`, async ({
     page,
   }) => {
@@ -59,12 +59,12 @@ for (const preset of ['banner-inferior', 'editorial', 'polaroid', 'story-inmersi
   });
 }
 
-test('Plantilla: la galería de presets tiene las 4 miniaturas en vivo del producto de ejemplo', async ({ page }) => {
+test('Plantilla: la galería de presets tiene las 6 miniaturas en vivo del producto de ejemplo', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page, { nombre: 'Ejemplo galería', precio: '6000' });
   await page.goto('/#/plantilla?estilo=editorial');
   const galeria = page.locator('.grilla-estilos--galeria .tarjeta-estilo');
-  await expect(galeria).toHaveCount(4);
+  await expect(galeria).toHaveCount(6);
   for (const tarjeta of await galeria.all()) {
     await expect(tarjeta.locator('img')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
   }

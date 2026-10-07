@@ -21,6 +21,9 @@ function revisionDibujo(page) {
 // ella (BUGS.md #48/#50) — acá se calcula el scroll exacto que hace falta para dejarlo del todo
 // arriba de la nav antes de leer `boundingBox()`/arrastrar con `page.mouse`.
 async function asegurarLienzoVisible(page) {
+  // El lienzo arranca bloqueado (2026-10-07): se habilita la edición antes de arrastrar.
+  const modo = page.locator('[data-accion="editar-lienzo"]');
+  if ((await modo.getAttribute('aria-pressed')) === 'false') await modo.click();
   await page.locator('.editor-plantilla__lienzo').scrollIntoViewIfNeeded();
   await page.evaluate(() => {
     const el = document.querySelector('.editor-plantilla__lienzo');
@@ -600,4 +603,60 @@ test('el mini menú del elemento seleccionado cambia tamaño, alineación, color
   const cajaMenu = await menu.boundingBox();
   expect(cajaMenu.x).toBeGreaterThanOrEqual(0);
   expect(cajaMenu.x + cajaMenu.width).toBeLessThanOrEqual(412);
+});
+
+// --- Lienzo bloqueado por defecto (2026-10-07) ---
+
+test('el lienzo arranca bloqueado: arrastrar sobre un texto no lo mueve hasta tocar "Editar"', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=foto-precio');
+  const modo = page.locator('[data-accion="editar-lienzo"]');
+  await expect(modo).toHaveAttribute('aria-pressed', 'false');
+  await expect(modo).toHaveText('Editar');
+  await expect(page.locator('[data-accion="terminar-edicion-lienzo"]')).toBeHidden();
+  await page.locator('.editor-plantilla__lienzo').scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.scrollBy(0, 200));
+
+  const leer = () => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre);
+  const antes = await leer();
+  const caja = page.locator('[data-elemento="nombre"]');
+  // Bloqueado, el lienzo no le saca el scroll al dedo.
+  expect(await page.locator('.editor-plantilla__lienzo').evaluate((el) => getComputedStyle(el).touchAction)).not.toBe('none');
+  expect(await caja.evaluate((el) => getComputedStyle(el).touchAction)).not.toBe('none');
+  const box = await caja.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 30, box.y + box.height / 2 - 90, { steps: 5 });
+  await expect(page.locator('.editor-plantilla__guia')).toHaveCount(0);
+  await page.mouse.up();
+  expect(await leer()).toEqual(antes);
+  await expect(page.locator('.editor-plantilla__mini')).toHaveCount(0);
+
+  // "Editar" habilita el arrastre; "Listo" lo vuelve a bloquear.
+  await modo.click();
+  await expect(modo).toHaveAttribute('aria-pressed', 'true');
+  await expect(modo).toHaveText('Listo');
+  expect(await page.locator('.editor-plantilla__lienzo').evaluate((el) => getComputedStyle(el).touchAction)).toBe('none');
+  await asegurarLienzoVisible(page);
+  const box2 = await caja.boundingBox();
+  await page.mouse.move(box2.x + box2.width / 2, box2.y + box2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box2.x + box2.width / 2, box2.y + box2.height / 2 - 90, { steps: 5 });
+  await page.mouse.up();
+  expect((await leer()).y).toBeLessThan(antes.y);
+
+  await page.locator('[data-accion="terminar-edicion-lienzo"]').click();
+  await expect(modo).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.editor-plantilla__mini')).toHaveCount(0);
+});
+
+test('tocar un texto del lienzo bloqueado entra a editar con ese texto seleccionado', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=foto-precio');
+  await page.locator('[data-elemento="precio"]').click();
+  await expect(page.locator('[data-accion="editar-lienzo"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-elemento="precio"]')).toHaveClass(/editor-plantilla__caja--activa/);
+  await expect(page.locator('.editor-plantilla__mini')).toBeVisible();
 });

@@ -188,6 +188,8 @@ test('extraDescripcion: la descripción gana ese alto en los 4 presets y nada se
     editorial: m.geometriaEditorial,
     polaroid: m.geometriaPolaroid,
     'story-inmersiva': m.geometriaStoryInmersiva,
+    novedad: m.geometriaNovedad,
+    'ficha-natural': m.geometriaFichaNatural,
   };
   for (const [preset, geometria] of Object.entries(casos)) {
     const base = geometria({});
@@ -210,4 +212,55 @@ test('extraDescripcion: el banner y la story crecen hacia arriba (nombre sube), 
   assert.equal(m.geometriaEditorial({ extraDescripcion: 80 }).pie.y, m.geometriaEditorial({}).pie.y + 80);
   assert.equal(m.geometriaEditorial({ extraDescripcion: 80 }).marco.h, m.geometriaEditorial({}).marco.h); // todavía entra
   assert.ok(m.geometriaEditorial({ extraDescripcion: 400 }).marco.h < m.geometriaEditorial({}).marco.h); // ya no: se acorta la foto
+});
+
+// --- "Novedad" y "Ficha natural" (diseños entregados el 2026-10-07) ---
+
+test('geometriaNovedad: posiciones del diseño (941×1672 escalado a 1080) con todo visible', async () => {
+  const { geometriaNovedad } = await import('../js/geometria-presets.js');
+  const geo = geometriaNovedad();
+  assert.deepEqual(geo.foto, { x: 0, y: 0, w: 1080, h: 1920 });
+  assert.equal(geo.pill.x + geo.pill.w / 2, 540); // pill centrado arriba
+  assert.equal(geo.nombre.y, 1180);
+  assert.equal(geo.descripcion.y, 1498);
+  assert.deepEqual(geo.precio, { x: 94, y: 1620, w: 409, h: 167 });
+  assert.ok(geo.contacto.x > geo.precio.x + geo.precio.w); // el llamado va a la derecha del precio
+  assert.ok(geo.scrim.y < geo.nombre.y); // el scrim empieza antes del texto
+});
+
+test('geometriaNovedad: sin precio el llamado pasa a la izquierda; sin descripción el nombre baja (no queda hueco)', async () => {
+  const { geometriaNovedad } = await import('../js/geometria-presets.js');
+  const base = geometriaNovedad();
+  const sinPrecio = geometriaNovedad({ conPrecio: false });
+  assert.equal(sinPrecio.precio, null);
+  assert.equal(sinPrecio.contacto.x, base.precio.x);
+  const sinDescripcion = geometriaNovedad({ conDescripcion: false });
+  assert.equal(sinDescripcion.descripcion, null);
+  assert.ok(sinDescripcion.nombre.y > base.nombre.y);
+  assert.ok(sinDescripcion.divisor.y + sinDescripcion.divisor.h < sinDescripcion.contacto.y);
+  assert.equal(geometriaNovedad({ extraDescripcion: 100 }).nombre.y, base.nombre.y - 100); // crece hacia arriba
+});
+
+test('geometriaFichaNatural: posiciones del diseño (1125×2000 escalado a 1080) y la insignia sobre el borde de la foto', async () => {
+  const { geometriaFichaNatural } = await import('../js/geometria-presets.js');
+  const geo = geometriaFichaNatural();
+  assert.deepEqual(geo.foto, { x: 13, y: 13, w: 1054, h: 1112 });
+  assert.deepEqual(geo.insignia, { cx: 540, cy: 1125, r: 69 });
+  assert.equal(geo.nombre.y, 1225);
+  assert.equal(geo.descripcion.y, 1517);
+  assert.equal(geo.precio.y, 1622);
+  assert.equal(geo.precio.x + geo.precio.w / 2, 540);
+  assert.equal(geo.contacto.y + geo.contacto.h, 1857);
+});
+
+test('geometriaFichaNatural: lo que falta o sobra lo absorbe la foto; el llamado queda siempre a la misma altura', async () => {
+  const { geometriaFichaNatural } = await import('../js/geometria-presets.js');
+  const base = geometriaFichaNatural();
+  for (const flags of [{ conPrecio: false }, { conDescripcion: false }, { conPrecio: false, conDescripcion: false }, { extraDescripcion: 200 }]) {
+    const geo = geometriaFichaNatural(flags);
+    assert.equal(geo.contacto.y, base.contacto.y, JSON.stringify(flags));
+    assert.equal(geo.insignia.cy, geo.foto.y + geo.foto.h);
+  }
+  assert.ok(geometriaFichaNatural({ conPrecio: false }).foto.h > base.foto.h);
+  assert.ok(geometriaFichaNatural({ extraDescripcion: 200 }).foto.h < base.foto.h);
 });

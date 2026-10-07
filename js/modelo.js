@@ -5,6 +5,8 @@ import {
   geometriaEditorial,
   geometriaPolaroid,
   geometriaStoryInmersiva,
+  geometriaNovedad,
+  geometriaFichaNatural,
 } from './geometria-presets.js';
 
 export const VERSION_RESPALDO = 1;
@@ -105,6 +107,8 @@ export const ESTILOS_CON_AJUSTES = Object.freeze([
   'editorial',
   'polaroid',
   'story-inmersiva',
+  'novedad',
+  'ficha-natural',
 ]);
 
 /** Caja de texto de partida para uno de los 4 presets de composición: geometría (x/y/w/h) de las
@@ -141,6 +145,8 @@ const GEO_BANNER_INFERIOR = geometriaBannerInferior({ conPrecio: true, conDescri
 const GEO_EDITORIAL = geometriaEditorial({ conPrecio: true, conDescripcion: true });
 const GEO_POLAROID = geometriaPolaroid({ conPrecio: true, conDescripcion: true });
 const GEO_STORY_INMERSIVA = geometriaStoryInmersiva({ conPrecio: true, conDescripcion: true });
+const GEO_NOVEDAD = geometriaNovedad({ conPrecio: true, conDescripcion: true });
+const GEO_FICHA_NATURAL = geometriaFichaNatural({ conPrecio: true, conDescripcion: true });
 
 // Tipografía de fábrica de los 4 presets (ronda 2026-09-29, "presets calzan con los mocks"): serif
 // Newsreader para nombre/precio (títulos, igual que los 4 mocks Stitch) + sans Manrope para
@@ -229,6 +235,61 @@ function ajustesStoryInmersiva() {
   };
 }
 
+// "Novedad" y "Ficha natural" (2026-10-07): colores y tamaños medidos de los dos diseños que
+// entregó Bruno. La caja del precio ES la etiqueta del diseño (fondo + radio propios); el borde
+// crema de "Novedad" y el prefijo "Precio:" de "Ficha natural" los pone componer.js.
+function ajustesNovedad() {
+  return {
+    foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
+    nombre: cajaPreset(GEO_NOVEDAD.nombre, { tamano: 108, alineacion: 'left', familia: 'newsreader', peso: 700, color: '#f1e9d6', maxLineas: 2 }),
+    precio: cajaPreset(GEO_NOVEDAD.precio, {
+      tamano: 88,
+      alineacion: 'center',
+      familia: 'manrope',
+      peso: 700,
+      color: '#f4ecd9',
+      fondoColor: '#2b3b1e',
+      fondoOpacidad: 1,
+      fondoRadio: 34,
+      maxLineas: 1,
+    }),
+    descripcion: cajaPreset(GEO_NOVEDAD.descripcion, {
+      tamano: 40,
+      peso: 400,
+      alineacion: 'left',
+      familia: 'manrope',
+      color: '#f1e9d6',
+      maxLineas: 1,
+    }),
+  };
+}
+
+function ajustesFichaNatural() {
+  return {
+    foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
+    nombre: cajaPreset(GEO_FICHA_NATURAL.nombre, { tamano: 104, alineacion: 'center', familia: 'newsreader', peso: 700, color: '#2f3e22', maxLineas: 2 }),
+    precio: cajaPreset(GEO_FICHA_NATURAL.precio, {
+      tamano: 58,
+      alineacion: 'center',
+      familia: 'newsreader',
+      peso: 500,
+      color: '#2a2a26',
+      fondoColor: '#e6dccb',
+      fondoOpacidad: 1,
+      fondoRadio: 18,
+      maxLineas: 1,
+    }),
+    descripcion: cajaPreset(GEO_FICHA_NATURAL.descripcion, {
+      tamano: 42,
+      peso: 400,
+      alineacion: 'center',
+      familia: 'manrope',
+      color: '#2a2a26',
+      maxLineas: 1,
+    }),
+  };
+}
+
 export const AJUSTES_POR_DEFECTO_POR_ESTILO = Object.freeze({
   'foto-precio': Object.freeze(ajustesConVisibilidad(['nombre', 'precio'])),
   'foto-descripcion': Object.freeze(ajustesConVisibilidad(['descripcion'])),
@@ -237,6 +298,8 @@ export const AJUSTES_POR_DEFECTO_POR_ESTILO = Object.freeze({
   editorial: Object.freeze(ajustesEditorial()),
   polaroid: Object.freeze(ajustesPolaroid()),
   'story-inmersiva': Object.freeze(ajustesStoryInmersiva()),
+  novedad: Object.freeze(ajustesNovedad()),
+  'ficha-natural': Object.freeze(ajustesFichaNatural()),
 });
 
 /** Normaliza los ajustes de UN estilo contra sus propios defaults (completa cajas parciales o
@@ -367,6 +430,8 @@ export const ESTILOS_IMAGEN = Object.freeze([
   'editorial',
   'polaroid',
   'story-inmersiva',
+  'novedad',
+  'ficha-natural',
 ]);
 export const ESTILO_POR_DEFECTO = 'solo-foto';
 export const ETIQUETA_ESTILO = Object.freeze({
@@ -378,6 +443,8 @@ export const ETIQUETA_ESTILO = Object.freeze({
   editorial: 'Editorial',
   polaroid: 'Polaroid',
   'story-inmersiva': 'Story inmersiva',
+  novedad: 'Novedad',
+  'ficha-natural': 'Ficha natural',
 });
 
 // Los 4 presets de composición son un subconjunto de ESTILOS_IMAGEN (Fase 4): un "preset" es,
@@ -386,7 +453,14 @@ export const ETIQUETA_ESTILO = Object.freeze({
 // para la galería de presets del editor de plantilla (js/vistas/plantilla.js): son los que tiene
 // sentido mostrar ahí como "composiciones prediseñadas" en vez de mezclarlos con foto-precio/
 // foto-descripcion/mi-plantilla, que son configuraciones más libres, no una composición fija.
-export const PRESETS_COMPOSICION = Object.freeze(['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva']);
+export const PRESETS_COMPOSICION = Object.freeze([
+  'banner-inferior',
+  'editorial',
+  'polaroid',
+  'story-inmersiva',
+  'novedad',
+  'ficha-natural',
+]);
 
 // --- Datos de marca de los 4 presets (ronda 2026-09-29): "Nombre del negocio" (vacío = no se
 // dibuja) y "Texto del botón/llamado" de "Banner inferior", editables en Ajustes generales (pantalla

@@ -390,6 +390,9 @@ h3 {
 }
 
 /* ---------- Botones ---------- */
+.boton[hidden] {
+  display: none;
+}
 .boton {
   min-height: var(--toque-min);
   padding: 0 18px;
@@ -1889,7 +1892,32 @@ details.grupo > .campo {
 /* ---------- Editor de plantilla: inspector visual (seleccionar/arrastrar/redimensionar) ---------- */
 .editor-plantilla__lienzo {
   overflow: visible; /* las manijas de resize no se recortan en los bordes */
-  touch-action: none; /* el arrastre con el dedo no hace scroll de la página */
+  transition: box-shadow var(--duracion) var(--ease);
+}
+/* Bloqueado (por defecto) el dedo hace scroll de la página por encima del lienzo; recién en
+   edición ("Editar" o un toque en un texto) el arrastre deja de hacer scroll y mueve los textos. */
+.editor-plantilla__lienzo--editando {
+  touch-action: none;
+  box-shadow: 0 0 0 3px var(--color-primario);
+}
+.editor-plantilla__lienzo:not(.editor-plantilla__lienzo--editando) .editor-plantilla__caja {
+  touch-action: auto;
+  cursor: pointer;
+}
+.editor-plantilla__modo {
+  flex-shrink: 0;
+}
+.editor-plantilla__estado-modo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -6px 0 4px;
+}
+.editor-plantilla__estado-modo p {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
 }
 .editor-plantilla__imagen {
   position: absolute;

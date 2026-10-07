@@ -9,7 +9,7 @@ uno o varios archivos juntos) para elegir WhatsApp → Mi estado. Sin backend, s
 dependencias de runtime. Todo el dato vive en el IndexedDB del celular de quien la usa — el repo es
 público pero solo tiene código, nunca datos de producto.
 
-Ocho estilos de imagen (`js/modelo.js`, `ESTILOS_IMAGEN`; Ajustes → tarjetas con miniatura en vivo,
+Diez estilos de imagen (`js/modelo.js`, `ESTILOS_IMAGEN`; Ajustes → tarjetas con miniatura en vivo,
 con override opcional por producto). Los 4 originales, configuraciones libres: **Solo la foto** (por
 defecto, sin textos), **Foto con precio**, **Foto con descripción** (cada estado lleva su propio
 texto aunque se publiquen varios juntos) y **Mi plantilla** (fondo PNG propio). Los 4 de Fase 4,
@@ -17,13 +17,20 @@ composiciones prediseñadas de geometría fija (`js/geometria-presets.js`, `PRES
 elegibles desde una galería en el editor de plantilla): **Banner inferior** (franja sólida anclada
 abajo), **Editorial** (marco con nombre/precio arriba), **Polaroid** (tarjeta blanca con foto
 recortada y textos abajo) y **Story inmersiva** (scrim degradado sobre la foto a pantalla completa).
+Más 2 presets replicados de diseños que entregó Bruno (2026-10-07): **Novedad** (foto a sangre,
+scrim verde oscuro, pill arriba, nombre en dos renglones con el segundo en itálica verde, caja de
+precio y llamado de WhatsApp) y **Ficha natural** (fondo crema, foto arriba con insignia de hoja,
+nombre en mayúsculas, caja "Precio: $…" y "Escribime") — para revisarlos a ojo:
+`node scripts/previa-presets.mjs <salida.jpg> <foto> novedad ficha-natural`.
 Precio **opcional** en todos: vacío es válido ("Sin precio"), solo un negativo es error. Nombre,
 precio y descripción comparten un solo **editor de plantilla** tipo inspector (pantalla "Plantilla",
 se abre desde Ajustes): clic/toque selecciona un elemento sobre la vista previa, arrastrar mueve,
 las manijas de las esquinas redimensionan, con panel de propiedades (tamaño, tipografía, color,
 fondo/etiqueta, visible), capas, deshacer/rehacer y restablecer. Al arrastrar se ven las guías del
 centro (se encienden y dicen "Centrado" al engancharse) y el elemento seleccionado trae un mini
-menú flotante (tamaño, alineación, color, tipografía).
+menú flotante (tamaño, alineación, color, tipografía). El lienzo arranca **bloqueado** (deslizar
+por encima hace scroll y no mueve nada): se edita después de tocar "Editar" o un texto de la
+imagen, y "Listo" (o irse con el scroll) lo vuelve a bloquear.
 
 Identidad visual "Organic Minimalist" (reskin 2026-09-28): paleta verde ciprés + umber sobre
 superficies de alabastro/lino (verde ciprés primario `--color-primario`, umber `--color-acento`;

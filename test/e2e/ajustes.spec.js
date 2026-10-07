@@ -20,6 +20,9 @@ async function crearProducto(page) {
 // lienzo, así que ya no está visible al cargar sin más — mismo helper que editor.spec.js (BUGS.md
 // #48/#50: scrollIntoViewIfNeeded solo no alcanza porque no sabe que la nav inferior es fixed).
 async function asegurarLienzoVisible(page) {
+  // El lienzo arranca bloqueado (2026-10-07): se habilita la edición antes de arrastrar.
+  const modo = page.locator('[data-accion="editar-lienzo"]');
+  if ((await modo.getAttribute('aria-pressed')) === 'false') await modo.click();
   await page.locator('.editor-plantilla__lienzo').scrollIntoViewIfNeeded();
   await page.evaluate(() => {
     const el = document.querySelector('.editor-plantilla__lienzo');
@@ -58,12 +61,12 @@ test('Ajustes: la fila compacta "Estilo de las imágenes" muestra el estilo actu
   await expect(page).toHaveURL(/#\/plantilla$/);
 });
 
-test('Plantilla: las 8 tarjetas de estilo (4 de siempre + 4 presets de composición, Fase 4) muestran una miniatura y se puede elegir una', async ({
+test('Plantilla: las 10 tarjetas de estilo (4 de siempre + 6 presets de composición) muestran una miniatura y se puede elegir una', async ({
   page,
 }) => {
   await page.goto('/#/plantilla');
   const tarjetas = page.locator('.grilla-estilos--general .tarjeta-estilo');
-  await expect(tarjetas).toHaveCount(8);
+  await expect(tarjetas).toHaveCount(10);
   for (const tarjeta of await tarjetas.all()) {
     await expect(tarjeta.locator('img')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
   }
@@ -101,6 +104,8 @@ test('"Solo la foto" no tiene botón Editar (no es editable); los otros 7 sí', 
     'editorial',
     'polaroid',
     'story-inmersiva',
+    'novedad',
+    'ficha-natural',
   ]) {
     await expect(page.locator(`[data-accion="editar-estilo-general-${estilo}"]`)).toBeVisible();
   }
@@ -321,7 +326,7 @@ test('La descripción larga se parte en renglones y la caja crece (no se trunca 
     const descripcion =
       'Remera de algodón peinado, corte recto, disponible en talles S, M, L y XL.\nColores: negro, blanco y verde.\nEnvíos a todo el país, consultá por privado.';
     const salida = {};
-    for (const estilo of ['foto-descripcion', 'banner-inferior', 'editorial', 'polaroid', 'story-inmersiva']) {
+    for (const estilo of ['foto-descripcion', 'banner-inferior', 'editorial', 'polaroid', 'story-inmersiva', 'novedad', 'ficha-natural']) {
       const canvas = document.createElement('canvas');
       canvas.width = 1080;
       canvas.height = 1920;

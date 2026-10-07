@@ -166,8 +166,8 @@ test('resolverEstilo: ignora un override u estiloGeneral inválido (dato corrupt
   assert.equal(resolverEstilo({}, { estiloGeneral: 'tampoco-existe' }), ESTILO_POR_DEFECTO);
 });
 
-test('resolverEstilo: los 8 estilos declarados son válidos (4 de siempre + 4 presets de composición, Fase 4)', () => {
-  assert.equal(ESTILOS_IMAGEN.length, 8);
+test('resolverEstilo: los 10 estilos declarados son válidos (4 de siempre + 6 presets de composición)', () => {
+  assert.equal(ESTILOS_IMAGEN.length, 10);
   for (const estilo of ESTILOS_IMAGEN) {
     assert.equal(resolverEstilo({ estilo }, {}), estilo);
   }
@@ -326,7 +326,7 @@ test('migrarAjustesPorEstilo: formato VIEJO (ajustes compartido) se copia a los 
   assert.deepEqual(resultado['foto-precio'], resultado['mi-plantilla']);
   // los 4 presets de composición (Fase 4) no existían en este respaldo viejo: no hay nada que
   // copiarles, arrancan con sus propios defaults de fábrica (no quedan ausentes).
-  for (const preset of ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva']) {
+  for (const preset of ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva', 'novedad', 'ficha-natural']) {
     assert.deepEqual(resultado[preset], AJUSTES_POR_DEFECTO_POR_ESTILO[preset]);
   }
 });
@@ -418,7 +418,10 @@ test('construirRespaldo: sin calidadImagen explícita, guarda el valor por defec
 // funciones puras de geometria-presets.js en vez de un número fijo a mano.
 
 test('PRESETS_COMPOSICION: los 4 presets son también estilos de imagen editables', () => {
-  assert.deepEqual([...PRESETS_COMPOSICION].sort(), ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva'].sort());
+  assert.deepEqual(
+    [...PRESETS_COMPOSICION].sort(),
+    ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva', 'novedad', 'ficha-natural'].sort()
+  );
   for (const preset of PRESETS_COMPOSICION) {
     assert.ok(ESTILOS_IMAGEN.includes(preset));
     assert.ok(ESTILOS_CON_AJUSTES.includes(preset));

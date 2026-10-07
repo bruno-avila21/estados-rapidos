@@ -917,3 +917,12 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** ninguno nuevo de código; se publica todo junto (commit + Pages + APK 1.7).
 - **Resuelto:** pendiente: que Bruno confirme con el 1.7; si sigue, anotar en qué pantalla lo ve. En el árbol actual los tests de `calcularParrafo` y el E2E de descripción larga (con saltos escritos, 5 estilos) pasan.
 - ¿Se repetiría en otro proyecto? Sí — "resuelto" en BUGS.md tiene que decir también si salió publicado; un arreglo sin release es un bug abierto para el usuario.
+
+### 67. `resolverEstilo: los 8 estilos declarados son válidos` falla al sumar los presets "Novedad" y "Ficha natural"
+- **Paso:** `npm test` (2026-10-07), después de agregar 2 presets a `ESTILOS_IMAGEN`.
+- **Error exacto:** `Expected values to be strictly equal: 10 !== 8` (`test/modelo.test.js:169`).
+- **Reproducir:** `npm test` con `ESTILOS_IMAGEN` de 10 entradas.
+- **Causa:** no es un bug de la app: el test tiene la CANTIDAD de estilos escrita a mano (8) y ahora son 10.
+- **Arreglo:** actualizar el test a 10 estilos (4 de siempre + 6 presets). Mismo caso en 2 E2E que también contaban a mano: `ajustes.spec.js:64` (8 tarjetas → 10) y `revision.spec.js:152` (9 opciones → 11).
+- **Resuelto:** sí — ver la corrida de `npm test` posterior.
+- ¿Se repetiría en otro proyecto? Sí, pero es esperable: un test que fija una cantidad se rompe a propósito cuando el catálogo crece; alcanza con actualizarlo.
