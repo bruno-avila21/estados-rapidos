@@ -5,18 +5,19 @@ import { abrirVisorImagen } from './visor-imagen.js';
 import { componerVista } from './vista-completa.js';
 
 /**
- * @param {{ obtenerOpciones: () => object, titulo?: string }} config `obtenerOpciones` devuelve las
- *   opciones de `componerVista` con lo que haya AHORA en pantalla (se llama en cada rearmado).
+ * @param {{ obtenerOpciones: () => object, titulo?: string, accion?: string }} config `obtenerOpciones`
+ *   devuelve las opciones de `componerVista` con lo que haya AHORA en pantalla (se llama en cada
+ *   rearmado). `accion` es el `data-accion` del marco, por si conviven dos en la misma pantalla.
  * @returns {{ raiz: HTMLElement, actualizar: (o?: {inmediato?: boolean}) => void }}
  */
-export function crearVistaPrevia({ obtenerOpciones, titulo = 'Así se ve el estado' }) {
+export function crearVistaPrevia({ obtenerOpciones, titulo = 'Así se ve el estado', accion = 'vista-previa' }) {
   const raiz = document.createElement('div');
   raiz.className = 'vista-previa-estado';
 
   const marco = document.createElement('button');
   marco.type = 'button';
   marco.className = 'vista-previa-estado__marco';
-  marco.setAttribute('data-accion', 'vista-previa');
+  marco.setAttribute('data-accion', accion);
   marco.setAttribute('aria-label', 'Vista previa del estado. Tocá para verla completa.');
   const placeholder = document.createElement('span');
   placeholder.className = 'vista-previa-estado__placeholder skeleton';

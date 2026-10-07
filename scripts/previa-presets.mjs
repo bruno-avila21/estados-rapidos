@@ -1,6 +1,6 @@
 // Arma una imagen con los presets pedidos lado a lado, para revisarlos a ojo contra el diseño.
 // Uso: node scripts/previa-presets.mjs <salida.jpg> <foto> <preset> [<preset>...]
-// Variantes: "novedad:sin-precio", "ficha-natural:sin-descripcion", "novedad:larga".
+// Variantes: "novedad:sin-precio", "ficha-natural:sin-descripcion", "novedad:larga", "novedad:pelado" (sin precio ni descripción).
 import { chromium } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -47,11 +47,11 @@ try {
         dibujarSegunEstilo(c, {
           estilo,
           fotoImagen,
-          producto: { nombre: 'Nombre del producto', precio: variante === 'sin-precio' ? null : 12500 },
+          producto: { nombre: 'Nombre del producto', precio: variante === 'sin-precio' || variante === 'pelado' ? null : 12500 },
           ajustes: AJUSTES_POR_DEFECTO_POR_ESTILO[estilo],
           formatoPrecio: { prefijo: '$ ', separadorMiles: true, decimales: false },
           descripcion:
-            variante === 'sin-descripcion'
+            variante === 'sin-descripcion' || variante === 'pelado'
               ? ''
               : variante === 'larga'
                 ? 'Set de cubiertos de acero con mango gris.\n24 piezas.\nEnvíos a todo el país, consultá por privado.'

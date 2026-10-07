@@ -36,6 +36,13 @@ async function asegurarLienzoVisible(page) {
   });
 }
 
+// Con el lienzo en edición la zona del lienzo ocupa toda la pantalla (2026-10-07): para tocar el
+// panel de propiedades, las capas o la barra de controles primero hay que salir con "Listo".
+async function listo(page) {
+  const modo = page.locator('[data-accion="editar-lienzo"]');
+  if ((await modo.count()) && (await modo.getAttribute('aria-pressed')) === 'true') await modo.click();
+}
+
 async function arrastrarConDedo(page, selector, dx, dy) {
   const caja = await page.locator(selector).boundingBox();
   const x = caja.x + caja.width / 2;
@@ -71,6 +78,7 @@ test('con el dedo: arrastrar mueve y deshacer lo devuelve', async ({ page }) => 
   await expect(page.locator('[data-accion="deshacer"]')).toBeEnabled();
   // .click() y no .tap(): con la emulación táctil por CDP el primer toque después de un arrastre
   // no genera click (pasa igual en una página vacía: es del emulador, no de la app — BUGS.md #18).
+  await listo(page);
   await page.locator('[data-accion="deshacer"]').click();
   await expect.poll(() => posicion(page, 'nombre')).toEqual(inicial);
   await expect(page.locator('[data-accion="rehacer"]')).toBeEnabled();

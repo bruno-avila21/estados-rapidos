@@ -45,12 +45,12 @@ test.beforeEach(async ({ context }) => {
 // confundir con la galería "Presets de composición" (`estilo-<preset>` sin namespace, más abajo en
 // este mismo archivo), que selecciona-y-navega-y-permite-deshacer en vez de solo marcar el general.
 for (const preset of ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva', 'novedad', 'ficha-natural']) {
-  test(`Plantilla: la tarjeta "Estilo de las imágenes" del preset "${preset}" tiene miniatura en vivo y botón Editar`, async ({
+  test(`Plantillas: la tarjeta del preset "${preset}" tiene miniatura en vivo y botón Editar`, async ({
     page,
   }) => {
     await page.goto('/');
     await crearProducto(page, { nombre: 'Producto presets', precio: '8000' });
-    await page.goto('/#/plantilla');
+    await page.goto('/#/plantillas');
     const tarjeta = page.locator('.grilla-estilos--general .tarjeta-estilo', {
       has: page.locator(`[data-accion="estilo-general-${preset}"]`),
     });
@@ -59,44 +59,61 @@ for (const preset of ['banner-inferior', 'editorial', 'polaroid', 'story-inmersi
   });
 }
 
-test('Plantilla: la galería de presets tiene las 6 miniaturas en vivo del producto de ejemplo', async ({ page }) => {
-  await page.goto('/');
-  await crearProducto(page, { nombre: 'Ejemplo galería', precio: '6000' });
-  await page.goto('/#/plantilla?estilo=editorial');
-  const galeria = page.locator('.grilla-estilos--galeria .tarjeta-estilo');
-  await expect(galeria).toHaveCount(6);
-  for (const tarjeta of await galeria.all()) {
-    await expect(tarjeta.locator('img')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
-  }
+// Pedido 2026-10-07: las plantillas tienen pantalla propia con favoritas (antes eran dos galerías
+// dentro del editor, con un "Deshacer preset" que ya no existe: elegir otra es un toque).
+test('Plantillas: la estrella marca favoritas y el filtro "Favoritas" muestra solo esas', async ({ page }) => {
+  await page.goto('/#/plantillas');
+  const visibles = page.locator('.tarjeta-estilo:visible');
+  await expect(page.locator('[data-accion="filtro-todas"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(visibles).toHaveCount(10);
+
+  // Sin favoritas el filtro muestra un estado vacío con salida, no una pantalla en blanco.
+  await page.locator('[data-accion="filtro-favoritas"]').click();
+  await expect(page.locator('[data-estado="sin-favoritas"]')).toBeVisible();
+  await expect(visibles).toHaveCount(0);
+  await page.locator('[data-accion="ver-todas-plantillas"]').click();
+  await expect(visibles).toHaveCount(10);
+
+  const estrella = page.locator('[data-accion="favorita-polaroid"]');
+  const caja = await estrella.boundingBox();
+  expect(caja.width).toBeGreaterThanOrEqual(32);
+  await estrella.click();
+  await expect(estrella).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#toast')).toHaveText(/Polaroid: en Favoritas/);
+  // marcar favorita no cambia la plantilla en uso
+  await expect(page.locator('[data-accion="estilo-general-solo-foto"]')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.locator('[data-accion="filtro-favoritas"]').click();
+  await expect(visibles).toHaveCount(1);
+  await expect(page.locator('[data-accion="filtro-favoritas"]')).toContainText('1');
+
+  // Persiste, y con favoritas guardadas la pantalla abre directamente en ese filtro.
+  await page.reload();
+  await expect(page.locator('[data-accion="filtro-favoritas"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(visibles).toHaveCount(1);
+  await expect(page.locator('[data-accion="favorita-polaroid"]')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.locator('[data-accion="favorita-polaroid"]').click();
+  await expect(page.locator('[data-estado="sin-favoritas"]')).toBeVisible();
 });
 
-test('Plantilla: elegir un preset de la galería lo aplica con un toque, pasa a editarlo y ofrece Deshacer', async ({ page }) => {
+test('Plantillas: tocar una la deja en uso (se ve en Ajustes) y el editor ya no trae galerías', async ({ page }) => {
   await page.goto('/');
-  await crearProducto(page, { nombre: 'Elegir preset', precio: '4500' });
+  await crearProducto(page, { nombre: 'Elegir plantilla', precio: '4500' });
+  await page.goto('/#/plantillas');
+  await page.locator('[data-accion="estilo-general-polaroid"]').click();
+  await expect(page.locator('#toast')).toHaveText(/Plantilla en uso: Polaroid/);
 
-  // "Deshacer preset" vuelve al ESTILO GENERAL anterior (no a "lo que se estaba mirando en el
-  // editor" — son cosas distintas): se fija a propósito el estilo general en "editorial" primero
-  // (como si el usuario ya lo hubiera elegido antes, en "Estilo de las imágenes" o en la propia
-  // galería de presets) para poder comprobar que deshacer vuelve exactamente ahí.
-  await page.goto('/#/plantilla');
-  await page.locator('[data-accion="estilo-general-editorial"]').click();
-  await expect(page.locator('[data-accion="estilo-general-editorial"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.goto('/#/ajustes');
+  await expect(page.locator('[data-dato="plantilla-en-uso"]')).toHaveText('Polaroid');
+  await page.locator('[data-accion="ir-plantilla"]').click();
+  await expect(page).toHaveURL(/#\/plantilla$/);
+  await expect(page.locator('#editor-vista-previa-estilo')).toHaveValue('polaroid');
+  await expect(page.locator('.tarjeta-estilo')).toHaveCount(0);
 
-  await page.goto('/#/plantilla?estilo=editorial');
-  await expect(page.locator('[data-accion="deshacer-preset"]')).toBeHidden();
-
-  await page.locator('[data-accion="estilo-polaroid"]').scrollIntoViewIfNeeded();
-  await page.locator('[data-accion="estilo-polaroid"]').click();
-  await expect(page).toHaveURL(/estilo=polaroid/);
-  await expect(page.locator('#toast')).toHaveText(/Preset aplicado: Polaroid/);
-
-  // Un preset DISTINTO del estilo general anterior (editorial → polaroid) es lo que dispara
-  // "Deshacer preset" — reaplicar el mismo no cambia nada, no tiene sentido ofrecer deshacer.
-  await expect(page.locator('[data-accion="deshacer-preset"]')).toBeVisible();
-  await page.locator('[data-accion="deshacer-preset"]').scrollIntoViewIfNeeded();
-  await page.locator('[data-accion="deshacer-preset"]').click();
-  await expect(page).toHaveURL(/estilo=editorial/);
-  await expect(page.locator('#toast')).toHaveText(/Preset deshecho/);
+  await page.locator('[data-accion="ir-plantillas"]').click();
+  await expect(page).toHaveURL(/#\/plantillas$/);
+  await expect(page.locator('[data-accion="estilo-general-polaroid"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('Publicar con un preset de composición elegido genera una imagen final 1080×1920 real', async ({ page }) => {

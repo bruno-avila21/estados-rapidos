@@ -305,8 +305,12 @@ export async function obtenerAjustesGenerales() {
     // esta ronda no los trae, quedan en sus defaults (nombre vacío = no se dibuja).
     nombreNegocio: NOMBRE_NEGOCIO_POR_DEFECTO,
     textoBoton: TEXTO_BOTON_POR_DEFECTO,
+    // Plantillas marcadas con la estrella en la pantalla "Plantillas" (2026-10-07).
+    plantillasFavoritas: [],
   };
-  return guardado ? { ...base, ...guardado } : base;
+  const config = guardado ? { ...base, ...guardado } : base;
+  if (!Array.isArray(config.plantillasFavoritas)) config.plantillasFavoritas = [];
+  return config;
 }
 
 export async function guardarEstiloGeneral(estiloGeneral) {
@@ -372,6 +376,13 @@ export function guardarTextoBoton(textoBoton) {
   });
 }
 
+/** Plantillas favoritas (pantalla "Plantillas"): lista de estilos, sin repetidos. */
+export function guardarPlantillasFavoritas(plantillasFavoritas) {
+  return actualizarGeneralEnCola((config) => {
+    config.plantillasFavoritas = [...new Set((plantillasFavoritas ?? []).map(String))];
+  });
+}
+
 // Los dos campos de arriba se guardan con debounce desde la misma pantalla: si los dos timers caen
 // juntos, cada uno leía el registro 'general' ANTES de que el otro escribiera y el último pisaba al
 // primero (BUGS.md #64). En cola, cada leer-modificar-escribir espera al anterior.
@@ -413,6 +424,7 @@ export async function exportarRespaldo() {
       calidadImagen: general.calidadImagen,
       nombreNegocio: general.nombreNegocio,
       textoBoton: general.textoBoton,
+      plantillasFavoritas: general.plantillasFavoritas,
     },
     secciones,
   });
@@ -487,5 +499,6 @@ export async function importarRespaldo(respaldo) {
     calidadImagen: respaldo.general?.calidadImagen || CALIDAD_IMAGEN_POR_DEFECTO,
     nombreNegocio: respaldo.general?.nombreNegocio ?? NOMBRE_NEGOCIO_POR_DEFECTO,
     textoBoton: respaldo.general?.textoBoton || TEXTO_BOTON_POR_DEFECTO,
+    plantillasFavoritas: Array.isArray(respaldo.general?.plantillasFavoritas) ? respaldo.general.plantillasFavoritas : [],
   });
 }

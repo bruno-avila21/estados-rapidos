@@ -36,6 +36,13 @@ async function asegurarLienzoVisible(page) {
   });
 }
 
+// Con el lienzo en edición la zona del lienzo ocupa toda la pantalla (2026-10-07): para tocar el
+// panel de propiedades, las capas o la barra de controles primero hay que salir con "Listo".
+async function listo(page) {
+  const modo = page.locator('[data-accion="editar-lienzo"]');
+  if ((await modo.count()) && (await modo.getAttribute('aria-pressed')) === 'true') await modo.click();
+}
+
 async function crearProducto(page) {
   await page.locator('[data-accion="agregar"]').click();
   await page.locator('#campo-nombre').fill('Producto editor');
@@ -143,6 +150,7 @@ test('cambiar tamaño, color y tipografía en el panel se ve al instante', async
 
   // Tamaño de letra (slider): .fill() no dispara bien el evento input en type=range (BUGS.md #15);
   // se fija el valor y se despacha el evento a mano, como haría un usuario arrastrándolo.
+  await listo(page);
   await panel.locator('input[type="range"]').first().evaluate((el, val) => {
     el.value = val;
     el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -152,11 +160,13 @@ test('cambiar tamaño, color y tipografía en el panel se ve al instante', async
 
   // Tipografía
   const revisionTrasTamano = await revisionDibujo(page);
+  await listo(page);
   await panel.locator('select[data-accion="editor-fuente"]').selectOption('pacifico');
   await expect.poll(() => revisionDibujo(page), { timeout: 5_000 }).toBeGreaterThan(revisionTrasTamano);
 
   // Color rápido (swatch)
   const revisionTrasFuente = await revisionDibujo(page);
+  await listo(page);
   await panel.locator('.editor-plantilla__swatch').first().click();
   await expect.poll(() => revisionDibujo(page), { timeout: 5_000 }).toBeGreaterThan(revisionTrasFuente);
 });
@@ -177,6 +187,7 @@ async function posicion(page, clave) {
 }
 
 async function arrastrar(page, clave, dx, dy) {
+  await asegurarLienzoVisible(page);
   const caja = await page.locator(`[data-elemento="${clave}"]`).boundingBox();
   const x = caja.x + caja.width / 2;
   const y = caja.y + caja.height / 2;
@@ -199,10 +210,12 @@ test('deshacer devuelve el elemento a donde estaba y rehacer lo vuelve a mover',
   const movido = await posicion(page, 'nombre');
   expect(movido.top).not.toBe(inicial.top);
 
+  await listo(page);
   await page.locator('[data-accion="deshacer"]').click();
   await expect.poll(() => posicion(page, 'nombre')).toEqual(inicial);
   await expect(page.locator('[data-accion="rehacer"]')).toBeEnabled();
 
+  await listo(page);
   await page.locator('[data-accion="rehacer"]').click();
   await expect.poll(() => posicion(page, 'nombre')).toEqual(movido);
 });
@@ -216,8 +229,10 @@ test('deshacer revierte la tipografía y el tamaño de letra', async ({ page }) 
   await page.locator('[data-elemento="nombre"]').click();
   const selectFuente = page.locator('.editor-plantilla__panel select[data-accion="editor-fuente"]');
   const fuenteInicial = await selectFuente.inputValue();
+  await listo(page);
   await selectFuente.selectOption('pacifico');
   await page.waitForTimeout(500); // debounce del historial
+  await listo(page);
   await page.locator('[data-accion="deshacer"]').click();
   await expect(page.locator('.editor-plantilla__panel select[data-accion="editor-fuente"]')).toHaveValue(fuenteInicial);
 });
@@ -231,6 +246,7 @@ test('restablecer vuelve a la posición de fábrica', async ({ page }) => {
 
   const inicial = await posicion(page, 'nombre');
   await arrastrar(page, 'nombre', 0, 150);
+  await listo(page);
   await page.locator('[data-accion="restablecer-plantilla"]').click();
   await page.locator('[data-accion="confirmar-borrar"]').click();
   await expect(page.locator('#toast')).toHaveText(/restablecida/i);
@@ -246,6 +262,7 @@ test('arrastrar el deslizador de tamaño recorre todo el rango', async ({ page }
   await asegurarLienzoVisible(page);
   await page.locator('[data-elemento="nombre"]').click();
   const deslizador = page.locator('.editor-plantilla__panel input[type="range"]').first();
+  await listo(page);
   await deslizador.scrollIntoViewIfNeeded();
   const caja = await deslizador.boundingBox();
   await page.mouse.move(caja.x + caja.width * 0.3, caja.y + caja.height / 2);
@@ -274,11 +291,13 @@ test('Deshacer sigue existiendo y funcionando aunque ya no sea sticky al bajar p
   await page.mouse.up();
   await expect.poll(() => posicion(page, 'nombre')).not.toEqual(inicial);
 
+  await listo(page);
   await page.locator('.editor-plantilla__panel input[type="range"]').last().scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => scrollY)).toBeGreaterThan(200);
   // Ya no está pegada arriba del viewport (no sticky) — pero sigue en el DOM, visible más arriba
   // en su tarjeta, y el clic (que auto-scrollea) la sigue alcanzando y funcionando sin problema.
   await expect(page.locator('[data-accion="deshacer"]')).toBeEnabled();
+  await listo(page);
   await page.locator('[data-accion="deshacer"]').click();
   await expect.poll(() => posicion(page, 'nombre')).toEqual(inicial);
 });
@@ -300,6 +319,7 @@ test('el ojo de una capa la oculta: desaparece del lienzo, queda "Oculto en este
   await expect(ojoNombre).toHaveAttribute('aria-pressed', 'true'); // visible por defecto
   await expect(page.locator('[data-elemento="nombre"]')).toBeVisible();
 
+  await listo(page);
   await ojoNombre.click();
   await expect(ojoNombre).toHaveAttribute('aria-pressed', 'false');
   // ya no hay caja para "nombre" en el lienzo: ni punteada ni de ningún tipo.
@@ -310,9 +330,11 @@ test('el ojo de una capa la oculta: desaparece del lienzo, queda "Oculto en este
 
   // se puede seguir seleccionando DESDE CAPAS (ya no hay caja en el lienzo para tocar) y el panel
   // ofrece "Mostrar" arriba, no un checkbox al final.
+  await listo(page);
   await page.locator('[data-accion="capa-nombre"]').click();
   const btnOcultar = page.locator('[data-accion="editor-toggle-visible"]');
   await expect(btnOcultar).toHaveText('Mostrar');
+  await listo(page);
   await btnOcultar.click();
   await expect(ojoNombre).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-elemento="nombre"]')).toBeVisible();
@@ -330,6 +352,7 @@ test('cambiar el selector navega a editar ese estilo, cada uno con sus propios d
   await expect(page.locator('[data-accion="capa-ojo-nombre"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-accion="capa-ojo-descripcion"]')).toHaveAttribute('aria-pressed', 'false');
 
+  await listo(page);
   await page.locator('#editor-vista-previa-estilo').selectOption('foto-descripcion');
   await expect(page).toHaveURL(/estilo=foto-descripcion/);
   // foto-descripcion: SOLO la descripción visible (nombre y precio ocultos de fábrica).
@@ -345,6 +368,7 @@ test('"Foto con descripción": mostrar el nombre (oculto de fábrica) lo dibuja'
   await page.goto('/#/plantilla?estilo=foto-descripcion');
   await asegurarLienzoVisible(page);
   await expect(page.locator('[data-accion="capa-ojo-nombre"]')).toHaveAttribute('aria-pressed', 'false');
+  await listo(page);
   await page.locator('[data-accion="capa-ojo-nombre"]').click();
   await expect
     .poll(() => page.evaluate(() => window.__editorDebugPlantilla?.ajustes?.nombre?.visible))
@@ -371,6 +395,7 @@ test('badge de la barra superior pasa de "Por defecto" a "Personalizado" al move
   await arrastrar(page, 'nombre', 0, 120);
   await expect(badge).toHaveText('Personalizado');
 
+  await listo(page);
   await page.locator('[data-accion="restablecer-plantilla"]').click();
   await page.locator('[data-accion="confirmar-borrar"]').click();
   await expect(page.locator('#toast')).toHaveText(/restablecida/i);
@@ -384,6 +409,7 @@ test('"Volver al original de este estilo" no toca los otros 2 estilos', async ({
   await asegurarLienzoVisible(page);
   await editorListo(page);
   await arrastrar(page, 'nombre', 0, 120);
+  await listo(page);
   await page.locator('[data-accion="restablecer-plantilla"]').click();
   await page.locator('[data-accion="confirmar-borrar"]').click();
 
@@ -403,10 +429,12 @@ test('Acomodar automáticamente apila los elementos visibles centrados, de abajo
 
   // foto-precio arranca con la descripción oculta (ronda "ajustes por estilo"): se muestra para
   // probar el acomodo con los 3 elementos, igual que antes de esa ronda.
+  await listo(page);
   await page.locator('[data-accion="capa-ojo-descripcion"]').click();
   // Se descentra el nombre a propósito para verificar que el botón lo vuelve a centrar.
   await arrastrar(page, 'nombre', 200, 0);
 
+  await listo(page);
   await page.locator('[data-accion="acomodar-automatico"]').click();
   await expect(page.locator('#toast')).toHaveText(/acomodados/i);
 
@@ -436,6 +464,7 @@ test('Centrar horizontal (panel) centra el elemento seleccionado sin tocar los d
 
   await arrastrar(page, 'nombre', -150, 0); // lo descentra
   await page.locator('[data-elemento="nombre"]').click();
+  await listo(page);
   await page.locator('[data-accion="editor-centrar-horizontal"]').click();
 
   // Mismo motivo que en el test de "Acomodar automáticamente": esperar el próximo dibujo real.
@@ -486,6 +515,7 @@ test('la capa seleccionada queda resaltada', async ({ page }) => {
 
   const filaNombre = page.locator('.editor-plantilla__fila-capa', { has: page.locator('[data-accion="capa-nombre"]') });
   await expect(filaNombre).not.toHaveClass(/editor-plantilla__fila-capa--activa/);
+  await listo(page);
   await page.locator('[data-accion="capa-nombre"]').click();
   await expect(filaNombre).toHaveClass(/editor-plantilla__fila-capa--activa/);
 });
@@ -502,6 +532,7 @@ test('un preset de fondo aplica color+opacidad+radio juntos y se ve al instante'
   await page.locator('[data-elemento="nombre"]').click();
   const revisionInicial = await revisionDibujo(page);
 
+  await listo(page);
   await page.locator('[data-accion="preset-fondo-lino-claro"]').click();
   await expect.poll(() => revisionDibujo(page), { timeout: 5_000 }).toBeGreaterThan(revisionInicial);
 
@@ -525,15 +556,18 @@ test('un preset de fondo es UN solo paso de deshacer (los 3 campos juntos)', asy
   await page.locator('[data-elemento="nombre"]').click();
   const fondoInicial = await page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.fondoColor);
 
+  await listo(page);
   await page.locator('[data-accion="preset-fondo-contraste-alto"]').click();
   await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.fondoRadio)).toBe(4);
 
+  await listo(page);
   await page.locator('[data-accion="deshacer"]').click();
   // UN deshacer alcanza para volver a los 3 campos de antes del preset (no hace falta deshacer 3 veces).
   await expect
     .poll(() => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.fondoColor))
     .toBe(fondoInicial);
 
+  await listo(page);
   await page.locator('[data-accion="rehacer"]').click();
   await expect
     .poll(() => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.fondoRadio))
@@ -659,4 +693,47 @@ test('tocar un texto del lienzo bloqueado entra a editar con ese texto seleccion
   await expect(page.locator('[data-accion="editar-lienzo"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-elemento="precio"]')).toHaveClass(/editor-plantilla__caja--activa/);
   await expect(page.locator('.editor-plantilla__mini')).toBeVisible();
+});
+
+// --- Edición a pantalla completa (2026-10-07) ---
+
+test('al editar, el lienzo ocupa toda la pantalla (entra entero, sin scroll) y "Listo" lo devuelve a la página', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=foto-precio');
+  const zona = page.locator('.editor-plantilla__zona');
+  await expect(zona).not.toHaveClass(/editor-plantilla__zona--pantalla/);
+  await expect(page.locator('[data-accion="deshacer-pantalla"]')).toBeHidden();
+
+  await page.locator('[data-accion="editar-lienzo"]').click();
+  await expect(zona).toHaveClass(/editor-plantilla__zona--pantalla/);
+  const vista = page.viewportSize();
+  const cajaZona = await zona.boundingBox();
+  expect(cajaZona).toMatchObject({ x: 0, y: 0, width: vista.width, height: vista.height });
+  // El lienzo entra ENTERO, con "Listo" abajo, y la nav inferior queda tapada.
+  const lienzo = await page.locator('.editor-plantilla__lienzo').boundingBox();
+  expect(lienzo.y).toBeGreaterThanOrEqual(0);
+  expect(lienzo.y + lienzo.height).toBeLessThanOrEqual(vista.height);
+  expect(lienzo.width / lienzo.height).toBeCloseTo(1080 / 1920, 1);
+  await expect(page.locator('[data-accion="terminar-edicion-lienzo"]')).toBeInViewport();
+  const tapaNav = await page.evaluate(() => {
+    const nav = document.querySelector('.nav-inferior').getBoundingClientRect();
+    return !!document.elementFromPoint(nav.left + nav.width / 2, nav.top + nav.height / 2)?.closest('.editor-plantilla__zona');
+  });
+  expect(tapaNav).toBe(true);
+
+  // Deshacer/rehacer están a mano sin salir.
+  const leer = () => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.y);
+  const antes = await leer();
+  await arrastrar(page, 'nombre', 0, -80);
+  await page.waitForTimeout(500); // debounce del historial
+  expect(await leer()).toBeLessThan(antes);
+  await page.locator('[data-accion="deshacer-pantalla"]').click();
+  await expect.poll(leer).toBe(antes);
+  await page.locator('[data-accion="rehacer-pantalla"]').click();
+  await expect.poll(leer).toBeLessThan(antes);
+
+  await page.locator('[data-accion="terminar-edicion-lienzo"]').click();
+  await expect(zona).not.toHaveClass(/editor-plantilla__zona--pantalla/);
+  await expect(page.locator('[data-accion="deshacer"]')).toBeVisible();
 });

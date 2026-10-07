@@ -311,6 +311,9 @@ const TRAZOS = Object.freeze({
     ['path', { d: 'M19.5 19.5v-5h-5' }],
     ['path', { d: 'M19.5 14.5A8 8 0 0 1 5 16' }],
   ],
+  // Estrella de "Favoritas" (pantalla Plantillas): de línea sin marcar, rellena al marcarla.
+  estrella: [['polygon', { points: '12,3.5 14.6,9 20.5,9.8 16.2,13.9 17.3,19.8 12,17 6.7,19.8 7.8,13.9 3.5,9.8 9.4,9' }]],
+  'estrella-llena': [['polygon', { points: '12,3.5 14.6,9 20.5,9.8 16.2,13.9 17.3,19.8 12,17 6.7,19.8 7.8,13.9 3.5,9.8 9.4,9', fill: 'currentColor' }]],
 });
 
 /**

@@ -8,6 +8,8 @@ import * as detalle from './vistas/detalle.js';
 import * as secciones from './vistas/secciones.js';
 import * as ajustes from './vistas/ajustes.js';
 import * as plantilla from './vistas/plantilla.js';
+import * as plantillas from './vistas/plantillas.js';
+import { aplicarTema } from './utils/tema.js';
 import * as respaldo from './vistas/respaldo.js';
 import * as repo from './repositorio.js';
 import { pedirAlmacenamientoPersistente } from './db.js';
@@ -29,6 +31,8 @@ const navBotones = Array.from(document.querySelectorAll('.nav-inferior__item'));
 document.querySelectorAll('[data-icono]').forEach((cont) => {
   cont.append(crearIcono(cont.dataset.icono));
 });
+
+aplicarTema(); // modo y tono guardados + seguir al sistema si está en automático
 
 const RUTAS = [
   // El h1 dice "Estados Rápidos" (no "Productos"): así lo pinta el TopAppBar de
@@ -61,6 +65,9 @@ const RUTAS = [
   // editar_plantilla_natural: sin header de app (mismo criterio que Editar Producto) — plantilla.js
   // dibuja su propia barra "Volver a Ajustes" / "Plantilla" (serif, centrado) / badge de estado.
   { patron: /^#\/plantilla$/, modulo: plantilla, titulo: 'Plantilla', ruta: null, headerOculto: true },
+  // Galería de plantillas con favoritas (2026-10-07): se llega desde Ajustes → "Cambiar plantilla"
+  // o desde el editor. Misma barra propia que el editor (sin header de app).
+  { patron: /^#\/plantillas$/, modulo: plantillas, titulo: 'Plantillas', ruta: null, headerOculto: true },
   // respaldo_natural: mismo criterio que Secciones — header con la MARCA, H1 "Respaldo" en el
   // contenido (respaldo.js). La marca acá va en NEGRITA (code.html línea 135: "font-bold"),
   // a la izquierda (sin centrar) — distinto de Secciones.
@@ -152,12 +159,8 @@ navBotones.forEach((b) => {
   });
 });
 
-// Header (reskin "Organic Minimalist", Interfaz/stitch_.../productos_lista_natural): el botón
-// izquierdo del diseño es un menú hamburguesa sin destino real (la app no tiene cajón lateral) —
-// se conecta a "ir al inicio" (acción real y trivial) en vez de dejarlo muerto. El de la derecha
-// replica el "+" que ya existe como FAB (mismo destino, dos entradas al mismo lugar como en el
-// diseño original).
-document.querySelector('[data-accion="ir-inicio"]')?.addEventListener('click', () => navegar('#/'));
+// Header: a la izquierda va la marca (el menú hamburguesa del diseño no tenía destino real y se
+// sacó, pedido 2026-10-07). El "+" de la derecha replica el FAB (mismo destino).
 document.querySelector('[data-accion="agregar-header"]')?.addEventListener('click', () => navegar('#/producto/nuevo'));
 
 window.addEventListener('error', () => {

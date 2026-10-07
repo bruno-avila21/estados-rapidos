@@ -723,6 +723,7 @@ export function construirRespaldo({ productos, plantilla, general, secciones }) 
           calidadImagen: general.calidadImagen ?? CALIDAD_IMAGEN_POR_DEFECTO,
           nombreNegocio: general.nombreNegocio ?? NOMBRE_NEGOCIO_POR_DEFECTO,
           textoBoton: general.textoBoton ?? TEXTO_BOTON_POR_DEFECTO,
+          plantillasFavoritas: Array.isArray(general.plantillasFavoritas) ? general.plantillasFavoritas : [],
         }
       : null,
   };

@@ -16,11 +16,10 @@ import * as repo from '../repositorio.js';
 import { ETIQUETA_ESTILO, ENCUADRES_FOTO, ETIQUETA_ENCUADRE_FOTO, aplicarPlantillaDescripcion } from '../modelo.js';
 import { mostrarToast } from '../utils/toast.js';
 import { crearIcono } from '../utils/iconos.js';
-import { abrirVisorImagen } from '../utils/visor-imagen.js';
-import { componerVistaCompleta } from '../utils/vista-completa.js';
 import { crearVistaPrevia } from '../utils/vista-previa-viva.js';
 import { ESTILOS_CON_DESCRIPCION } from '../componer.js';
 import { seccionLaApp } from './ajustes-la-app.js';
+import { MODOS, TONOS, leerTema, guardarTema } from '../utils/tema.js';
 
 let debounce = null;
 
@@ -54,52 +53,46 @@ export async function render(contenedor, { navegar }) {
   cabeceraPagina.append(textosPagina);
   wrap.append(cabeceraPagina);
 
-  // --- 0) Tu plantilla: lo primero al entrar (pedido de Bruno 2026-10-03 — antes el editor quedaba
-  // al fondo de la pantalla, debajo de Encuadre/Texto/Moneda, y había que scrollear para llegar).
-  // Junta en un solo panel el estilo actual (la fila "Estilo de las imágenes: <actual> ›" que antes
-  // cerraba la pantalla), "Ver completa" (el estado 1080×1920 entero, en el visor) y el botón del
-  // editor. La galería de estilos sigue viviendo en Plantilla (ronda "orden del diseño"). ---
+  // --- 0) Tu plantilla: lo PRIMERO es la vista previa (pedido 2026-10-07 — "para ver cómo queda"):
+  // el estado tal cual saldría hoy, con el nombre de la plantilla en uso y dos salidas: cambiarla
+  // (pantalla "Plantillas", con favoritas) o editarla (editor). Tocar la imagen la abre completa.
   const panelPlantilla = panel('lapiz', 'Tu plantilla', {
-    subtitulo: 'Elegí el estilo de tus estados y ajustá dónde va el nombre, el precio y la descripción.',
+    subtitulo: 'Así salen tus estados ahora. Tocá la imagen para verla completa.',
   });
-  const filaAccesoEstilo = document.createElement('button');
-  filaAccesoEstilo.type = 'button';
-  filaAccesoEstilo.className = 'fila-acceso';
-  filaAccesoEstilo.setAttribute('data-accion', 'ir-plantilla-estilo');
-  const textosAccesoEstilo = document.createElement('span');
-  textosAccesoEstilo.className = 'fila-acceso__textos';
-  const tituloAccesoEstilo = document.createElement('span');
-  tituloAccesoEstilo.className = 'fila-acceso__titulo';
-  tituloAccesoEstilo.textContent = 'Estilo de las imágenes';
-  const valorAccesoEstilo = document.createElement('span');
-  valorAccesoEstilo.className = 'fila-acceso__valor';
+  const vistaPlantilla = crearVistaPrevia({ titulo: 'Así se ve tu estado', accion: 'ver-completa', obtenerOpciones: () => ({}) });
+  vistaPlantilla.actualizar({ inmediato: true });
+  const enUso = document.createElement('p');
+  enUso.className = 'ajustes__plantilla-en-uso';
+  const etiquetaEnUso = document.createElement('span');
+  etiquetaEnUso.className = 'texto-tenue';
+  etiquetaEnUso.textContent = 'Plantilla en uso';
+  const valorAccesoEstilo = document.createElement('strong');
+  valorAccesoEstilo.setAttribute('data-dato', 'plantilla-en-uso');
   valorAccesoEstilo.textContent = ETIQUETA_ESTILO[general.estiloGeneral] ?? ETIQUETA_ESTILO['solo-foto'];
-  textosAccesoEstilo.append(tituloAccesoEstilo, valorAccesoEstilo);
-  filaAccesoEstilo.append(textosAccesoEstilo, crearIcono('chevron-derecha'));
-  filaAccesoEstilo.addEventListener('click', () => navegar('#/plantilla'));
+  enUso.append(etiquetaEnUso, valorAccesoEstilo);
 
   const accionesPlantilla = document.createElement('div');
-  accionesPlantilla.className = 'panel__acciones';
-  const btnVerCompleta = document.createElement('button');
-  btnVerCompleta.type = 'button';
-  btnVerCompleta.className = 'boton boton--ancho';
-  btnVerCompleta.setAttribute('data-accion', 'ver-completa');
-  btnVerCompleta.append(crearIcono('pantalla-completa'), document.createTextNode('Ver completa'));
-  btnVerCompleta.addEventListener('click', () =>
-    abrirVisorImagen({ titulo: 'Así se ve tu estado', obtenerBlob: () => componerVistaCompleta() })
-  );
+  accionesPlantilla.className = 'panel__acciones panel__acciones--par';
+  const btnCambiar = document.createElement('button');
+  btnCambiar.type = 'button';
+  btnCambiar.className = 'boton';
+  btnCambiar.setAttribute('data-accion', 'ir-plantillas');
+  btnCambiar.append(crearIcono('grilla'), document.createTextNode('Cambiar'));
+  btnCambiar.addEventListener('click', () => navegar('#/plantillas'));
   const enlacePlantilla = document.createElement('button');
   enlacePlantilla.type = 'button';
-  enlacePlantilla.className = 'boton boton--primario boton--ancho';
+  enlacePlantilla.className = 'boton boton--primario';
   enlacePlantilla.setAttribute('data-accion', 'ir-plantilla');
-  enlacePlantilla.textContent = 'Abrir editor de plantilla';
+  enlacePlantilla.append(crearIcono('lapiz'), document.createTextNode('Editar'));
   enlacePlantilla.addEventListener('click', () => navegar('#/plantilla'));
-  accionesPlantilla.append(btnVerCompleta, enlacePlantilla);
-  panelPlantilla.append(filaAccesoEstilo, accionesPlantilla);
+  accionesPlantilla.append(btnCambiar, enlacePlantilla);
+  panelPlantilla.append(vistaPlantilla.raiz, enUso, accionesPlantilla);
   wrap.append(panelPlantilla);
 
+  // El resto de Ajustes va PLEGADO, un bloque por responsabilidad (pedido 2026-10-07: "dividir los
+  // sectores… ocultos a mostrar… menos caótico"): se abre solo el que se necesita.
   // --- 1) Encuadre de la foto: selector segmentado (2 opciones) ---
-  const panelEncuadre = panel('recortar', 'Encuadre de la foto', { badge: 'Relación de aspecto' });
+  const panelEncuadre = panel('recortar', 'Encuadre de la foto', { plegable: 'encuadre', badge: ETIQUETA_ENCUADRE_FOTO[general.encuadreFoto] });
   const segmentado = document.createElement('div');
   segmentado.className = 'segmentado';
   segmentado.setAttribute('role', 'radiogroup');
@@ -125,6 +118,8 @@ export async function render(contenedor, { navegar }) {
         b.setAttribute('aria-checked', String(esEste));
         b.setAttribute('aria-pressed', String(esEste));
       });
+      panelEncuadre.querySelector('.panel__badge').textContent = ETIQUETA_ENCUADRE_FOTO[valor];
+      vistaPlantilla.actualizar({ inmediato: true });
       mostrarToast(`Encuadre: ${ETIQUETA_ENCUADRE_FOTO[valor]}`);
     });
     segmentado.append(btn);
@@ -138,7 +133,8 @@ export async function render(contenedor, { navegar }) {
 
   // --- 2) Texto que acompaña: chips de variable (insertan en el editor), plantilla de
   // descripción con contador real y vista previa de copia, + formato de precio. ---
-  const panelTexto = panel('portapapeles', 'TEXTO QUE ACOMPAÑA', {
+  const panelTexto = panel('portapapeles', 'Texto que acompaña', {
+    plegable: 'texto',
     subtitulo:
       'La leyenda que se copia al portapapeles y se ve en los estilos con descripción. Se usa si el producto no tiene su propia descripción cargada.',
   });
@@ -247,6 +243,7 @@ export async function render(contenedor, { navegar }) {
     debounce = setTimeout(async () => {
       await repo.guardarDescripcionModelo(textareaModelo.value);
       general.descripcionModelo = textareaModelo.value;
+      vistaPlantilla.actualizar();
     }, 350);
   });
 
@@ -299,6 +296,7 @@ export async function render(contenedor, { navegar }) {
     clearTimeout(debounce);
     debounce = setTimeout(async () => {
       await repo.guardarFormatoPrecio(formatoPrecio);
+      vistaPlantilla.actualizar();
     }, 300);
   }
   casillasPrecision.append(
@@ -311,12 +309,13 @@ export async function render(contenedor, { navegar }) {
   wrap.append(panelTexto);
 
   // --- 4) Prefijo y puntuación monetaria: panel propio (mismo orden que el mock). ---
-  const panelMoneda = panel('moneda', 'Prefijo y puntuación monetaria');
+  const panelMoneda = panel('moneda', 'Formato del precio', { plegable: 'moneda' });
   panelMoneda.append(grupoFormato);
   wrap.append(panelMoneda);
 
   // --- 6) Datos (no está en el mock — se mantiene igual que arriba). ---
   const panelDatos = panel('carpeta', 'Datos', {
+    plegable: 'datos',
     subtitulo: 'Todo vive en este celular. Para exportar, importar o borrar todo, andá a Respaldo.',
   });
   const resumenDatos = document.createElement('p');
@@ -331,18 +330,107 @@ export async function render(contenedor, { navegar }) {
   panelDatos.append(resumenDatos, btnRespaldo);
   wrap.append(panelDatos);
 
+  // --- Apariencia (pedido 2026-10-07): modo claro/oscuro/automático y tono de la app. Se aplica
+  // al toque y se recuerda en este celular. ---
+  const panelApariencia = panel('chispa', 'Apariencia', { plegable: 'apariencia', badge: TONOS[leerTema().tono] });
+  const tituloModo = document.createElement('span');
+  tituloModo.className = 'apariencia__titulo';
+  tituloModo.textContent = 'Modo';
+  const segmentadoModo = document.createElement('div');
+  segmentadoModo.className = 'segmentado segmentado--3';
+  segmentadoModo.setAttribute('role', 'group');
+  segmentadoModo.setAttribute('aria-label', 'Modo claro u oscuro');
+  const tituloTono = document.createElement('span');
+  tituloTono.className = 'apariencia__titulo';
+  tituloTono.textContent = 'Tono';
+  const grillaTonos = document.createElement('div');
+  grillaTonos.className = 'apariencia__tonos';
+  grillaTonos.setAttribute('role', 'group');
+  grillaTonos.setAttribute('aria-label', 'Tono de la app');
+  const pintarApariencia = () => {
+    const tema = leerTema();
+    segmentadoModo.querySelectorAll('button').forEach((b) => {
+      const activo = b.dataset.modo === tema.modo;
+      b.classList.toggle('segmentado__opcion--activa', activo);
+      b.setAttribute('aria-pressed', String(activo));
+    });
+    grillaTonos.querySelectorAll('button').forEach((b) => {
+      const activo = b.dataset.tono === tema.tono;
+      b.classList.toggle('apariencia__tono--activo', activo);
+      b.setAttribute('aria-pressed', String(activo));
+    });
+    panelApariencia.querySelector('.panel__badge').textContent = TONOS[tema.tono];
+  };
+  for (const [modo, etiqueta] of Object.entries(MODOS)) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'segmentado__opcion';
+    btn.dataset.modo = modo;
+    btn.setAttribute('data-accion', `modo-${modo}`);
+    btn.textContent = etiqueta;
+    btn.addEventListener('click', () => {
+      guardarTema({ modo });
+      pintarApariencia();
+    });
+    segmentadoModo.append(btn);
+  }
+  for (const [tono, etiqueta] of Object.entries(TONOS)) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'apariencia__tono';
+    btn.dataset.tono = tono;
+    btn.setAttribute('data-accion', `tono-${tono}`);
+    const muestra = document.createElement('span');
+    muestra.className = `apariencia__muestra apariencia__muestra--${tono}`;
+    btn.append(muestra, document.createTextNode(etiqueta));
+    btn.addEventListener('click', () => {
+      guardarTema({ tono });
+      pintarApariencia();
+      mostrarToast(`Tono: ${etiqueta}`);
+    });
+    grillaTonos.append(btn);
+  }
+  pintarApariencia();
+  panelApariencia.append(tituloModo, segmentadoModo, tituloTono, grillaTonos);
+  wrap.append(panelApariencia);
+
   wrap.append(seccionLaApp());
   contenedor.append(wrap);
 }
 
 /** Tarjeta `.panel` con ícono + título (igual que Secciones/Respaldo), badge opcional a la derecha
  * y párrafo de subtítulo opcional — mismo componente que main.js/secciones.js ya establecieron. */
-function panel(icono, titulo, { badge, subtitulo } = {}) {
-  const sec = document.createElement('section');
-  sec.className = 'panel';
+function panel(icono, titulo, { badge, subtitulo, plegable = null } = {}) {
   const rotulo = document.createElement('span');
   rotulo.className = 'panel__rotulo';
   rotulo.append(crearIcono(icono), document.createTextNode(titulo));
+  // `plegable` (2026-10-07): el panel es un <details> cerrado, con el rótulo como <summary> (y el
+  // badge, si hay, mostrando el valor actual). El valor de `plegable` es su `data-panel`.
+  if (plegable) {
+    const det = document.createElement('details');
+    det.className = 'panel panel--plegable';
+    det.setAttribute('data-panel', plegable);
+    const resumen = document.createElement('summary');
+    resumen.className = 'panel__resumen';
+    resumen.append(rotulo);
+    if (badge) {
+      const b = document.createElement('span');
+      b.className = 'panel__badge';
+      b.textContent = badge;
+      resumen.append(b);
+    }
+    resumen.append(crearIcono('chevron-derecha', { clase: 'icono panel__chevron' }));
+    det.append(resumen);
+    if (subtitulo) {
+      const p = document.createElement('p');
+      p.className = 'panel__subtitulo';
+      p.textContent = subtitulo;
+      det.append(p);
+    }
+    return det;
+  }
+  const sec = document.createElement('section');
+  sec.className = 'panel';
   if (badge) {
     const cabecera = document.createElement('div');
     cabecera.className = 'panel__cabecera';

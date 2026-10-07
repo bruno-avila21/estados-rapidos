@@ -71,7 +71,7 @@ test('mínimo del día 1: cargar producto, precio en línea, plantilla y publica
   // Ajustes → Plantilla → "Mi plantilla": vista previa en vivo (ronda "orden del diseño"
   // 2026-09-29: la galería de estilos se mudó de Ajustes a Plantilla, namespace `estilo-general-*`).
   await page.locator('[data-accion="ir-ajustes"]').first().click();
-  await page.locator('[data-accion="ir-plantilla"]').click();
+  await page.locator('[data-accion="ir-plantillas"]').click(); // la galería vive en "Plantillas" (2026-10-07)
   await page.locator('[data-accion="estilo-general-mi-plantilla"]').click(); // fija el estilo general (para "Publicar" más abajo)
   await page.locator('[data-accion="editar-estilo-general-mi-plantilla"]').click(); // entra a verla en vivo
   await expect(page).toHaveURL(/estilo=mi-plantilla/);

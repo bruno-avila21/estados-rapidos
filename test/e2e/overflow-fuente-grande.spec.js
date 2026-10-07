@@ -45,6 +45,13 @@ async function asegurarLienzoVisible(page) {
   });
 }
 
+// Con el lienzo en edición la zona del lienzo ocupa toda la pantalla (2026-10-07): para tocar el
+// panel de propiedades, las capas o la barra de controles primero hay que salir con "Listo".
+async function listo(page) {
+  const modo = page.locator('[data-accion="editar-lienzo"]');
+  if ((await modo.count()) && (await modo.getAttribute('aria-pressed')) === 'true') await modo.click();
+}
+
 /** Deja "Foto con precio" en estado "Personalizado" (badge de la barra superior) moviendo el
  * elemento "nombre" en el editor — mismo gesto que ajustes.spec.js. Necesario porque el badge +
  * "Editar" en la misma fila es justo lo que hacía overflow (grid 1fr sin minmax(0, ...)). */

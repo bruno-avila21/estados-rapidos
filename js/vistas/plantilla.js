@@ -18,18 +18,14 @@
 // `requestAnimationFrame` (máximo 1 dibujo por frame) y a resolución de pantalla (ancho CSS ×
 // devicePixelRatio, escalando el contexto — las coordenadas siguen siendo las lógicas 1080×1920).
 //
-// Galería de presets de composición (Fase 4, "catálogo de presets", 2026-09-28): banner inferior/
-// editorial/polaroid/story inmersiva son, para el modelo, 4 estilos de imagen más (mismo
-// `ESTILOS_CON_AJUSTES`/`AJUSTES_POR_DEFECTO_POR_ESTILO` que foto-precio/foto-descripcion/
-// mi-plantilla — ver modelo.js) — lo único nuevo es la fila `PRESETS_COMPOSICION` con miniaturas EN
-// VIVO (mismo `tarjetaEstilo`/`componerMiniatura` que Ajustes) para elegirlos con un toque sin salir
-// del editor, con un "Deshacer" corto para el estilo general anterior.
+// Las galerías para ELEGIR estilo/preset se mudaron a la pantalla "Plantillas"
+// (js/vistas/plantillas.js, 2026-10-07): acá solo se edita UN estilo. El lienzo arranca bloqueado
+// y, al tocar "Editar" o un texto, pasa a pantalla completa hasta tocar "Listo".
 import * as repo from '../repositorio.js';
-import { dibujarSegunEstilo, resolverCajasTexto, componerMiniatura, componerSegunEstilo, ANCHO, ALTO } from '../componer.js';
+import { dibujarSegunEstilo, resolverCajasTexto, ANCHO, ALTO } from '../componer.js';
 import { cargarFuentes } from '../fuentes.js';
 import { elementoEnPunto, moverCaja, redimensionarCaja, aplicarSnap, acomodarAutomatico } from '../editor-geometria.js';
 import {
-  ESTILOS_IMAGEN,
   ESTILOS_CON_AJUSTES,
   ETIQUETA_ESTILO,
   FUENTES_DISPONIBLES,
@@ -39,7 +35,6 @@ import {
   resolverDescripcion,
   PRESETS_FONDO_TEXTO,
   aplicarPresetFondo,
-  PRESETS_COMPOSICION,
   resolverSeccionNombre,
   TEXTO_BOTON_POR_DEFECTO,
 } from '../modelo.js';
@@ -47,8 +42,6 @@ import { pedirConfirmacion } from '../utils/confirmar.js';
 import { crearIcono } from '../utils/iconos.js';
 import { mostrarToast } from '../utils/toast.js';
 import { fotoDeEjemploPorDefecto } from '../utils/foto-ejemplo.js';
-import { abrirVisorImagen } from '../utils/visor-imagen.js';
-import { tarjetaEstilo, mostrarMiniatura } from './ajustes.js';
 
 const COLORES_RAPIDOS = ['#ffffff', '#242220', '#3a4d39', '#6e5b49', '#f5a623', '#3f5c38'];
 const CLAVES_TEXTO = ['nombre', 'precio', 'descripcion'];
@@ -70,23 +63,8 @@ const ICONO_ALINEACION = { left: 'alinear-izquierda', center: 'alinear-centro', 
 const ESTILOS_CON_NOMBRE_NEGOCIO = ['banner-inferior', 'editorial'];
 const ESTILOS_CON_TEXTO_BOTON = ['banner-inferior'];
 
-// Blobs de las miniaturas de la galería de presets (Fase 4): urls de objeto que hay que revocar
-// para no perder memoria — mismo criterio que `urlsMiniaturas` en ajustes.js.
-let urlsGaleriaPresets = [];
-function limpiarUrlsGaleriaPresets() {
-  urlsGaleriaPresets.forEach((u) => URL.revokeObjectURL(u));
-  urlsGaleriaPresets = [];
-}
-
-// El "Deshacer preset" de la galería tiene que sobrevivir a `render()`: aplicar un preset DISTINTO
-// del que se está editando navega a `#/plantilla?estilo=<preset>` (ronda "editar ahí mismo"), lo
-// que destruye y reconstruye toda la pantalla — un `let` local se perdería en esa reconstrucción
-// justo antes de mostrarse. Vive a nivel de módulo, como `urlsGaleriaPresets`.
-let deshacerPresetPendiente = null; // { anterior } — null si no hay nada para deshacer
-
 export async function render(contenedor, { navegar, params } = {}) {
   contenedor.textContent = '';
-  limpiarUrlsGaleriaPresets();
 
   const config = await repo.obtenerPlantillaConfig();
   const general = await repo.obtenerAjustesGenerales();
@@ -127,8 +105,8 @@ export async function render(contenedor, { navegar, params } = {}) {
   let arrastrando = false;
   let guiasActivas = [];
   // El lienzo arranca BLOQUEADO (pedido 2026-10-07): deslizar el dedo por encima hace scroll de la
-  // página y no mueve nada. Se edita recién después de tocar "Editar" o uno de los textos; "Listo"
-  // (o irse con el scroll hasta que el lienzo casi no se vea) lo vuelve a bloquear.
+  // página y no mueve nada. Se edita recién después de tocar "Editar" o uno de los textos: ahí el
+  // lienzo pasa a pantalla completa (sin scroll alrededor) hasta tocar "Listo".
   let editando = false;
   let miniColorAbierto = false;
   // Declarados acá (y no más abajo, junto a `solicitarRedibujo`) para que la llamada inicial de
@@ -167,48 +145,6 @@ export async function render(contenedor, { navegar, params } = {}) {
   badgeEstado.className = 'editor-plantilla__badge';
   barraSuperior.append(btnVolver, tituloBarra, badgeEstado);
 
-  // --- Galería "Estilo de las imágenes" (los 8 estilos, elegís cuál se aplica por defecto a cada
-  // producto) — vivía en Ajustes hasta la ronda "orden del diseño" (CREAR-BRIEF.md 2026-09-29): el
-  // mock de Ajustes no la tiene entre Encuadre y Texto que acompaña, así que se muda acá entera, con
-  // el MISMO componente (`tarjetaEstilo`/`mostrarMiniatura` de ajustes.js) y el mismo criterio
-  // (seleccionar = solo fijar el estilo general, sin navegar; "Editar" navega a afinarlo acá mismo).
-  // Namespaced como `estilo-general-*`/`editar-estilo-general-*` para no chocar con los
-  // `estilo-*` de "Presets de composición" (grilla más abajo, que sí selecciona-y-navega-y-permite-
-  // deshacer: una interacción distinta, pensada para probar rápido sin salir del editor). ---
-  const panelEstiloGeneral = document.createElement('div');
-  panelEstiloGeneral.className = 'panel';
-  const tituloEstiloGeneral = document.createElement('div');
-  tituloEstiloGeneral.className = 'grupo__titulo';
-  tituloEstiloGeneral.textContent = 'Estilo de las imágenes';
-  const subtituloEstiloGeneral = document.createElement('p');
-  subtituloEstiloGeneral.className = 'panel__subtitulo';
-  subtituloEstiloGeneral.textContent =
-    'Elegís cómo se ve el estado de cada producto por defecto. Podés cambiarlo por producto en "Opciones avanzadas" del alta/edición.';
-  const grillaEstiloGeneral = document.createElement('div');
-  grillaEstiloGeneral.className = 'grilla-estilos grilla-estilos--general';
-  const tarjetasEstiloGeneral = {};
-  for (const valor of ESTILOS_IMAGEN) {
-    const editableGeneral = ESTILOS_CON_AJUSTES.includes(valor);
-    const tarjeta = tarjetaEstilo(valor, general.estiloGeneral === valor, {
-      editable: editableGeneral,
-      onSeleccionar: async () => {
-        await repo.guardarEstiloGeneral(valor);
-        general.estiloGeneral = valor;
-        for (const v of ESTILOS_IMAGEN) {
-          tarjetasEstiloGeneral[v].raiz.classList.toggle('tarjeta-estilo--activa', v === valor);
-          tarjetasEstiloGeneral[v].btnSeleccionar.setAttribute('aria-pressed', String(v === valor));
-        }
-        mostrarToast(`Estilo general: ${ETIQUETA_ESTILO[valor]}`);
-      },
-      onEditar: editableGeneral ? () => navegar(`#/plantilla?estilo=${valor}`) : null,
-      onVerCompleta: () => verEstiloCompleto(valor),
-      prefijo: 'estilo-general',
-    });
-    tarjetasEstiloGeneral[valor] = tarjeta;
-    grillaEstiloGeneral.append(tarjeta.raiz);
-  }
-  panelEstiloGeneral.append(tituloEstiloGeneral, subtituloEstiloGeneral, grillaEstiloGeneral);
-
   // --- Selector de CUÁL estilo se edita (ya no una "vista previa" sin persistir: cada estilo
   // tiene su propia configuración — cambiarlo navega al editor de ese otro estilo) ---
   const selectorEstilo = document.createElement('div');
@@ -241,90 +177,14 @@ export async function render(contenedor, { navegar, params } = {}) {
     if (selectEstilo.value === estiloEditando) return;
     navegar(`#/plantilla?estilo=${selectEstilo.value}`);
   });
-  selectorEstilo.append(filaLabelEstilo, selectEstilo);
-
-  // --- Galería de presets de composición (Fase 4, "catálogo de presets") ---
-  // Reusa la MISMA tarjeta con miniatura en vivo de Ajustes (`tarjetaEstilo`/`mostrarMiniatura`,
-  // exportadas desde ajustes.js) para no duplicar el componente. Un toque: (1) aplica el preset
-  // como estilo general — igual que elegirlo en Ajustes — y (2) pasa a editarlo acá mismo (como ya
-  // hace el selector de arriba). Queda un "Deshacer" corto para volver al estilo general anterior
-  // sin tener que ir a buscarlo a Ajustes.
-  //
-  // Va ARRIBA del lienzo, como "Presets de diseño rápidos" en editar_plantilla_natural — SIN
-  // tarjeta `.panel` propia (el mock no le pone fondo/borde a la sección, solo a cada tarjeta
-  // individual). BUGS.md #48/#50 documentaban que esto rompía el arrastre del lienzo (quedaba
-  // detrás de la nav inferior fija): la causa real era que el lienzo podía terminar en cualquier
-  // punto de la pantalla sin que nada lo garantizara visible — la solución correcta es que los
-  // tests de arrastre hagan scroll hasta el lienzo antes de leer `boundingBox()`/arrastrar (lo que
-  // hacen ahora), no esconder el diseño.
-  const galeriaPresets = document.createElement('div');
-  galeriaPresets.className = 'editor-plantilla__seccion';
-  const cabeceraGaleria = document.createElement('div');
-  cabeceraGaleria.className = 'panel__cabecera';
-  const tituloGaleria = document.createElement('span');
-  tituloGaleria.className = 'grupo__titulo';
-  tituloGaleria.textContent = 'Presets de diseño rápidos';
-  // Texto gris simple, SIN pill (editar_plantilla_natural) — antes era `.panel__badge` (pastilla
-  // con borde), que el mock no usa para este contador.
-  const contadorGaleria = document.createElement('span');
-  contadorGaleria.className = 'texto-tenue';
-  contadorGaleria.textContent = `${PRESETS_COMPOSICION.length} disponibles`;
-  cabeceraGaleria.append(tituloGaleria, contadorGaleria);
-  const filaPresets = document.createElement('div');
-  filaPresets.className = 'grilla-estilos grilla-estilos--galeria';
-  const tarjetasPresets = {};
-  const filaDeshacerPreset = document.createElement('div');
-  filaDeshacerPreset.className = 'fila';
-  filaDeshacerPreset.hidden = !deshacerPresetPendiente; // sobrevive a la navegación (ver arriba)
-  const btnDeshacerPreset = document.createElement('button');
-  btnDeshacerPreset.type = 'button';
-  btnDeshacerPreset.className = 'boton boton--chico boton--fantasma';
-  btnDeshacerPreset.setAttribute('data-accion', 'deshacer-preset');
-  btnDeshacerPreset.textContent = 'Deshacer preset';
-  btnDeshacerPreset.addEventListener('click', async () => {
-    if (!deshacerPresetPendiente) return;
-    const { anterior } = deshacerPresetPendiente;
-    await repo.guardarEstiloGeneral(anterior);
-    general.estiloGeneral = anterior;
-    deshacerPresetPendiente = null;
-    filaDeshacerPreset.hidden = true;
-    mostrarToast('Preset deshecho');
-    if (ESTILOS_CON_AJUSTES.includes(anterior) && anterior !== estiloEditando) navegar(`#/plantilla?estilo=${anterior}`);
-  });
-  filaDeshacerPreset.append(btnDeshacerPreset);
-  // Subtítulo corto por preset (editar_plantilla_natural: "nombre" + "subtítulo" + pill "Activo"
-  // en la tarjeta elegida) — mismas palabras que el mock para estos MISMOS 4 presets reales, no
-  // nombres inventados.
-  const SUBTITULO_PRESET = {
-    'banner-inferior': 'Contraste alto',
-    editorial: 'Asimétrico',
-    polaroid: 'Instantánea',
-    'story-inmersiva': 'A sangre',
-    novedad: 'Verde oscuro',
-    'ficha-natural': 'Crema',
-  };
-  for (const valor of PRESETS_COMPOSICION) {
-    const tarjeta = tarjetaEstilo(valor, general.estiloGeneral === valor, {
-      editable: false,
-      subtitulo: SUBTITULO_PRESET[valor],
-      mostrarActivoPill: true,
-      onVerCompleta: () => verEstiloCompleto(valor),
-      onSeleccionar: async () => {
-        const anterior = general.estiloGeneral;
-        await repo.guardarEstiloGeneral(valor);
-        general.estiloGeneral = valor;
-        mostrarToast(`Preset aplicado: ${ETIQUETA_ESTILO[valor]}`);
-        if (anterior !== valor) {
-          deshacerPresetPendiente = { anterior };
-          filaDeshacerPreset.hidden = false;
-        }
-        if (valor !== estiloEditando) navegar(`#/plantilla?estilo=${valor}`);
-      },
-    });
-    tarjetasPresets[valor] = tarjeta;
-    filaPresets.append(tarjeta.raiz);
-  }
-  galeriaPresets.append(cabeceraGaleria, filaPresets, filaDeshacerPreset);
+  // La galería para ELEGIR plantilla vive en su propia pantalla (2026-10-07).
+  const btnPlantillas = document.createElement('button');
+  btnPlantillas.type = 'button';
+  btnPlantillas.className = 'boton boton--ancho';
+  btnPlantillas.setAttribute('data-accion', 'ir-plantillas');
+  btnPlantillas.append(crearIcono('grilla'), document.createTextNode('Ver todas las plantillas'));
+  btnPlantillas.addEventListener('click', () => navegar('#/plantillas'));
+  selectorEstilo.append(filaLabelEstilo, selectEstilo, btnPlantillas);
 
   // --- Subida de fondo propio ---
   // Se ve SIEMPRE (editar_plantilla_natural: la caja punteada está ahí sin importar qué estilo se
@@ -435,10 +295,32 @@ export async function render(contenedor, { navegar, params } = {}) {
   btnModo.className = 'boton boton--chico editor-plantilla__modo';
   btnModo.setAttribute('data-accion', 'editar-lienzo');
   btnModo.addEventListener('click', () => fijarEdicion(!editando));
-  cabeceraPrevia.append(tituloPrevia, btnModo);
+  // Deshacer/rehacer a mano mientras el lienzo está a pantalla completa (la barra de siempre queda
+  // tapada): mismos handlers que los de la tarjeta de controles.
+  const historialPantalla = document.createElement('div');
+  historialPantalla.className = 'editor-plantilla__historial-pantalla';
+  const btnDeshacerPantalla = document.createElement('button');
+  btnDeshacerPantalla.type = 'button';
+  btnDeshacerPantalla.className = 'boton boton--chico';
+  btnDeshacerPantalla.setAttribute('data-accion', 'deshacer-pantalla');
+  btnDeshacerPantalla.setAttribute('aria-label', 'Deshacer');
+  btnDeshacerPantalla.append(crearIcono('deshacer'));
+  const btnRehacerPantalla = document.createElement('button');
+  btnRehacerPantalla.type = 'button';
+  btnRehacerPantalla.className = 'boton boton--chico';
+  btnRehacerPantalla.setAttribute('data-accion', 'rehacer-pantalla');
+  btnRehacerPantalla.setAttribute('aria-label', 'Rehacer');
+  btnRehacerPantalla.append(crearIcono('rehacer'));
+  historialPantalla.append(btnDeshacerPantalla, btnRehacerPantalla);
+  cabeceraPrevia.append(tituloPrevia, historialPantalla, btnModo);
+  const zonaLienzo = document.createElement('div');
+  zonaLienzo.className = 'editor-plantilla__zona';
+  zonaLienzo.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && editando) fijarEdicion(false);
+  });
 
-  // Estado del lienzo con palabras, debajo de la vista previa (y un segundo "Listo" a mano: con el
-  // lienzo en edición el de arriba puede haber quedado fuera de la pantalla).
+  // Estado del lienzo con palabras, debajo de la vista previa (y un segundo "Listo" abajo, al
+  // alcance del pulgar con el lienzo a pantalla completa).
   const filaModo = document.createElement('div');
   filaModo.className = 'editor-plantilla__estado-modo';
   const textoModo = document.createElement('p');
@@ -516,29 +398,20 @@ export async function render(contenedor, { navegar, params } = {}) {
   panelControles.className = 'panel pila editor-plantilla__panel-controles';
   panelControles.append(selectorEstilo, grupoSubida, grupoNegocio, filaHistorial);
 
-  // Orden final, de arriba a abajo, calcado de editar_plantilla_natural: barra superior propia →
-  // tarjeta de controles → "Presets de diseño rápidos" (tira horizontal) → cabecera de la vista
-  // previa → lienzo → Capas y visibilidad → panel de propiedades (con "Alineación y Contraste") →
-  // "Estilo de las imágenes" (galería de 8, ex-Ajustes, sin equivalente en ESTE mock puntual).
-  wrap.append(
-    barraSuperior,
-    panelControles,
-    galeriaPresets,
-    cabeceraPrevia,
-    previaContenedor,
-    filaModo,
-    capas,
-    panel,
-    panelEstiloGeneral
-  );
+  // Orden final, de arriba a abajo: barra superior propia → tarjeta de controles → cabecera de la
+  // vista previa → lienzo → Capas y visibilidad → panel de propiedades. Las galerías de estilos y
+  // presets se mudaron a la pantalla "Plantillas" (js/vistas/plantillas.js, 2026-10-07).
+  // El lienzo con su cabecera y su fila de estado van juntos en `zonaLienzo`: al editar, esa zona
+  // pasa a ocupar TODA la pantalla (`--pantalla`, pedido 2026-10-07) — sin scroll debajo del dedo,
+  // así no se mueve un texto sin querer — y "Listo" la devuelve a su lugar en la página.
+  zonaLienzo.append(cabeceraPrevia, previaContenedor, filaModo);
+  wrap.append(barraSuperior, panelControles, zonaLienzo, capas, panel);
   contenedor.append(wrap);
 
   actualizarBotonesHistorial();
   dibujarOverlay();
   ajustarResolucionCanvas();
   solicitarRedibujo();
-  generarMiniaturasPresets();
-  generarMiniaturasEstiloGeneral();
 
   const resizeObserver = new ResizeObserver(() => {
     ajustarResolucionCanvas();
@@ -546,17 +419,6 @@ export async function render(contenedor, { navegar, params } = {}) {
   });
   resizeObserver.observe(previaContenedor);
 
-  // Si el lienzo quedó casi fuera de la pantalla mientras estaba en edición, se bloquea solo: al
-  // volver con el scroll no se mueve nada sin querer.
-  if (typeof IntersectionObserver !== 'undefined') {
-    const observadorVisible = new IntersectionObserver(
-      ([entrada]) => {
-        if (editando && !arrastrando && entrada.intersectionRatio < 0.15) fijarEdicion(false);
-      },
-      { threshold: [0, 0.15] }
-    );
-    observadorVisible.observe(previaContenedor);
-  }
 
   // ================= Lógica =================
 
@@ -636,95 +498,6 @@ export async function render(contenedor, { navegar, params } = {}) {
     };
   }
 
-  // "Ver completa" de las 2 galerías: el mismo estado de ejemplo de la miniatura, pero a 1080×1920
-  // y entero en el visor (la miniatura mide ~110px en la tira de presets: no se llega a leer). Para
-  // el estilo que se está editando usa los ajustes EN MEMORIA, así se ve lo que hay en el lienzo.
-  function verEstiloCompleto(valor) {
-    return abrirVisorImagen({
-      titulo: ETIQUETA_ESTILO[valor],
-      obtenerBlob: () =>
-        componerSegunEstilo({
-          estilo: valor,
-          plantillaImagen: plantillaImagenActual,
-          fotoImagen: fotoEjemplo,
-          producto: productoEjemplo,
-          ajustes: valor === estiloEditando ? ajustes : (config.ajustesPorEstilo[valor] ?? {}),
-          formatoPrecio,
-          descripcion: descripcionEjemplo,
-          encuadreFoto: general.encuadreFoto,
-          general,
-          seccionNombre: seccionNombreEjemplo,
-          posicion: posicionEjemplo,
-        }),
-    });
-  }
-
-  // Miniaturas REALES de la galería de presets (Fase 4): mismo `componerMiniatura` de Ajustes, con
-  // el producto de ejemplo ya cargado arriba (`productoEjemplo`/`fotoEjemplo`) — nada de imágenes
-  // de relleno. Cada preset usa sus PROPIOS ajustes guardados (o sus defaults si nunca se tocó),
-  // no los de `estiloEditando`.
-  async function generarMiniaturasPresets() {
-    await Promise.all(
-      PRESETS_COMPOSICION.map(async (valor) => {
-        try {
-          const blob = await componerMiniatura({
-            estilo: valor,
-            plantillaImagen: plantillaImagenActual,
-            fotoImagen: fotoEjemplo,
-            producto: productoEjemplo,
-            ajustes: config.ajustesPorEstilo[valor] ?? AJUSTES_POR_DEFECTO_POR_ESTILO[valor],
-            formatoPrecio,
-            descripcion: descripcionEjemplo,
-            encuadreFoto: general.encuadreFoto,
-            general,
-            seccionNombre: seccionNombreEjemplo,
-            posicion: posicionEjemplo,
-          });
-          const url = URL.createObjectURL(blob);
-          urlsGaleriaPresets.push(url);
-          mostrarMiniatura(tarjetasPresets[valor].marco, url, `Vista previa del preset ${ETIQUETA_ESTILO[valor]}`);
-        } catch {
-          // una miniatura que falla no rompe el resto de la galería
-        }
-      })
-    );
-  }
-
-  // Miniaturas REALES de "Estilo de las imágenes" (los 8, ex-Ajustes — ronda "orden del diseño"):
-  // mismo criterio que `generarMiniaturasPresets`, pero para TODOS los estilos, cada uno con sus
-  // propios ajustes guardados (o `{}` para "solo-foto", que no tiene ajustes propios).
-  async function generarMiniaturasEstiloGeneral() {
-    await Promise.all(
-      ESTILOS_IMAGEN.map(async (valor) => {
-        try {
-          const ajustesEstilo = config.ajustesPorEstilo[valor] ?? null;
-          const blob = await componerMiniatura({
-            estilo: valor,
-            plantillaImagen: plantillaImagenActual,
-            fotoImagen: fotoEjemplo,
-            producto: productoEjemplo,
-            ajustes: ajustesEstilo ?? {},
-            formatoPrecio,
-            descripcion: descripcionEjemplo,
-            encuadreFoto: general.encuadreFoto,
-            general,
-            seccionNombre: seccionNombreEjemplo,
-            posicion: posicionEjemplo,
-          });
-          const url = URL.createObjectURL(blob);
-          urlsGaleriaPresets.push(url);
-          mostrarMiniatura(tarjetasEstiloGeneral[valor].marco, url, `Vista previa del estilo ${ETIQUETA_ESTILO[valor]}`);
-          if (tarjetasEstiloGeneral[valor].badge) {
-            const personalizado = ajustesEstilo ? esAjustePersonalizado(valor, ajustesEstilo) : false;
-            tarjetasEstiloGeneral[valor].badge.hidden = !personalizado;
-          }
-        } catch {
-          // una miniatura que falla no rompe el resto de la galería
-        }
-      })
-    );
-  }
-
   // `conPanel: false` redibuja el overlay/capas pero deja el panel de propiedades como está: si se
   // rehiciera, el deslizador que el dedo está arrastrando se reemplaza por uno nuevo y el gesto se
   // corta después del primer paso (QA v4, BUGS.md).
@@ -739,12 +512,13 @@ export async function render(contenedor, { navegar, params } = {}) {
 
   function pintarModo() {
     previaContenedor.classList.toggle('editor-plantilla__lienzo--editando', editando);
+    zonaLienzo.classList.toggle('editor-plantilla__zona--pantalla', editando);
     btnModo.textContent = '';
     btnModo.append(crearIcono(editando ? 'check' : 'lapiz'), document.createTextNode(editando ? 'Listo' : 'Editar'));
     btnModo.classList.toggle('boton--primario', !editando);
     btnModo.setAttribute('aria-pressed', String(editando));
     textoModo.textContent = editando
-      ? 'Editando: arrastrá los textos para moverlos. Tocá "Listo" para volver a deslizar la pantalla.'
+      ? 'Arrastrá los textos para moverlos. Tocá uno para cambiarle tamaño, color o letra.'
       : 'Bloqueado: podés deslizar sin mover nada. Tocá "Editar" o un texto de la imagen para acomodarlo.';
     btnListo.hidden = !editando;
   }
@@ -1323,24 +1097,20 @@ export async function render(contenedor, { navegar, params } = {}) {
     repo.guardarAjustesEstilo(estiloEditando, ajustes);
   }
 
-  btnDeshacer.addEventListener('click', () => {
-    if (indiceHistorial === 0) return;
-    indiceHistorial -= 1;
+  function moverHistorial(paso) {
+    const destino = indiceHistorial + paso;
+    if (destino < 0 || destino > historial.length - 1) return;
+    indiceHistorial = destino;
     ajustes = estructuraClonada(historial[indiceHistorial]);
     persistir();
     dibujarOverlay();
     solicitarRedibujo();
     actualizarBotonesHistorial();
-  });
-  btnRehacer.addEventListener('click', () => {
-    if (indiceHistorial === historial.length - 1) return;
-    indiceHistorial += 1;
-    ajustes = estructuraClonada(historial[indiceHistorial]);
-    persistir();
-    dibujarOverlay();
-    solicitarRedibujo();
-    actualizarBotonesHistorial();
-  });
+  }
+  btnDeshacer.addEventListener('click', () => moverHistorial(-1));
+  btnRehacer.addEventListener('click', () => moverHistorial(1));
+  btnDeshacerPantalla.addEventListener('click', () => moverHistorial(-1));
+  btnRehacerPantalla.addEventListener('click', () => moverHistorial(1));
   // "Acomodar automáticamente" (ronda distribución, CREAR-BRIEF.md): apila los elementos VISIBLES
   // centrados, de abajo hacia arriba (función pura `acomodarAutomatico`, testeada aparte).
   btnAcomodar.addEventListener('click', () => {
@@ -1379,6 +1149,8 @@ export async function render(contenedor, { navegar, params } = {}) {
   function actualizarBotonesHistorial() {
     btnDeshacer.disabled = indiceHistorial === 0;
     btnRehacer.disabled = indiceHistorial === historial.length - 1;
+    btnDeshacerPantalla.disabled = btnDeshacer.disabled;
+    btnRehacerPantalla.disabled = btnRehacer.disabled;
   }
 }
 

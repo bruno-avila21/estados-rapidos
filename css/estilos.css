@@ -4647,3 +4647,432 @@ details[open] > .grupo__titulo--seccion::after {
 .vista-previa-estado__pista {
   font-size: var(--tamano-12);
 }
+
+/* ---------- Ajustes en bloques plegables + pantalla Plantillas + lienzo a pantalla completa
+   (pedido 2026-10-07) ---------- */
+.panel--plegable {
+  padding: 0;
+}
+.panel--plegable > :not(summary) {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+.panel--plegable > :last-child:not(summary) {
+  margin-bottom: 16px;
+}
+.panel__resumen {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 16px;
+  border-radius: var(--radio);
+  cursor: pointer;
+  list-style: none;
+  transition: background var(--duracion) var(--ease);
+}
+.panel__resumen::-webkit-details-marker {
+  display: none;
+}
+.panel__resumen .panel__rotulo {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+.panel__resumen:hover {
+  background: var(--color-superficie-alta);
+}
+.panel__resumen:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.panel__resumen:active {
+  background: var(--color-superficie-alta);
+}
+.panel__chevron {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-right: 0;
+  color: var(--color-texto-tenue);
+  transition: transform var(--duracion) var(--ease);
+}
+.panel--plegable[open] > .panel__resumen .panel__chevron {
+  transform: rotate(90deg);
+}
+.panel--plegable[open] > .panel__resumen {
+  margin-bottom: 4px;
+}
+
+.ajustes__plantilla-en-uso {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: 10px 0 0;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  color: var(--color-texto);
+}
+.panel__acciones--par {
+  flex-direction: row;
+}
+.panel__acciones--par .boton {
+  flex: 1;
+  min-width: 0;
+}
+
+.pantalla-plantillas__filtros {
+  display: flex;
+  gap: 8px;
+}
+.pantalla-plantillas__filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 6px 16px;
+  font-size: var(--tamano-14);
+}
+.pantalla-plantillas__filtro::after {
+  inset: 0;
+}
+.pantalla-plantillas__filtro .icono {
+  width: 16px;
+  height: 16px;
+  margin-right: 0;
+}
+.pantalla-plantillas__cuenta {
+  opacity: 0.75;
+}
+.pantalla-plantillas__vacio[hidden],
+.pantalla-plantillas .grilla-estilos[hidden],
+.pantalla-plantillas .tarjeta-estilo[hidden] {
+  display: none;
+}
+.pantalla-plantillas__vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+}
+.pantalla-plantillas__vacio > .icono {
+  width: 40px;
+  height: 40px;
+  color: var(--color-acento);
+}
+.pantalla-plantillas__vacio p {
+  margin: 0;
+}
+/* La estrella flota en la otra esquina de la miniatura (la de "ver completa" está a la derecha):
+   32px a la vista, 48px de área táctil — mismo recurso que .tarjeta-estilo__ver. */
+.tarjeta-estilo__favorita {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--borde-medio);
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie-blanca);
+  color: var(--color-texto-tenue);
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), border-color var(--duracion) var(--ease),
+    color var(--duracion) var(--ease), transform var(--duracion) var(--ease);
+}
+.tarjeta-estilo__favorita::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+.tarjeta-estilo__favorita:hover {
+  border-color: var(--color-acento);
+}
+.tarjeta-estilo__favorita:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.tarjeta-estilo__favorita:active {
+  transform: scale(0.97);
+}
+.tarjeta-estilo__favorita--activa {
+  color: var(--color-acento);
+  border-color: var(--color-acento);
+}
+.tarjeta-estilo__favorita .icono {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
+}
+
+/* Lienzo del editor a pantalla completa mientras se edita: tapa todo (nav inferior incluida), no
+   hay nada que scrollear debajo del dedo. Arriba deshacer/rehacer + "Listo"; abajo la ayuda y el
+   "Listo" al alcance del pulgar. El lienzo se achica lo justo para entrar entero en el alto. */
+.editor-plantilla__historial-pantalla {
+  display: none;
+  gap: 8px;
+}
+.editor-plantilla__historial-pantalla .boton {
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+}
+.editor-plantilla__historial-pantalla .icono {
+  margin-right: 0;
+}
+.editor-plantilla__zona--pantalla {
+  position: fixed;
+  inset: 0;
+  z-index: 35; /* por encima de la nav inferior (20) y barras (≤30); debajo de diálogos (40) y visor (50) */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--color-fondo);
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+.editor-plantilla__zona--pantalla .editor-plantilla__cabecera-previa,
+.editor-plantilla__zona--pantalla .editor-plantilla__estado-modo {
+  width: 100%;
+  margin: 0;
+  flex-shrink: 0;
+}
+.editor-plantilla__zona--pantalla .editor-plantilla__cabecera-previa .grupo__titulo {
+  display: none;
+}
+.editor-plantilla__zona--pantalla .editor-plantilla__historial-pantalla {
+  display: flex;
+  flex: 1;
+}
+.editor-plantilla__zona--pantalla .editor-plantilla__modo,
+.editor-plantilla__zona--pantalla .editor-plantilla__estado-modo .boton {
+  min-height: 48px;
+}
+.editor-plantilla__zona--pantalla .editor-plantilla__lienzo {
+  /* alto disponible = pantalla − cabecera − fila de estado − separaciones (≈ 200px) */
+  width: min(100%, calc((100dvh - 200px) * 1080 / 1920));
+  margin: auto;
+  flex-shrink: 0;
+}
+
+/* ---------- Apariencia: tonos elegibles (pedido 2026-10-07) ----------
+   El tono cambia la familia del color primario (botones, chips activos, títulos); las superficies
+   y el acento umber son los mismos en todos. "Ciprés" es el de siempre (sin `data-tono`). El modo
+   claro/oscuro forzado usa `data-theme`, que ya existía. Contraste AA (≥ 4.5:1) calculado para el
+   texto sobre el primario y para el primario oscuro sobre el fondo, en claro y en oscuro. */
+[data-tono='oceano'] {
+  --color-primario: #2f4f6b;
+  --color-primario-fuerte: #264158;
+  --color-primario-texto: #ffffff;
+  --color-primario-tinte: rgba(47, 79, 107, 0.1);
+  --color-primario-oscuro: #1c3349;
+  --color-primario-tinte-suave: #cfe3f2;
+  --color-primario-tinte-suave-texto: #2c4a63;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-tono='oceano'] {
+    --color-primario: #a4bfd6;
+    --color-primario-fuerte: #8fadc6;
+    --color-primario-texto: #0f1d29;
+    --color-primario-tinte: rgba(164, 191, 214, 0.16);
+    --color-primario-oscuro: #a4bfd6;
+    --color-primario-tinte-suave: #2c4a63;
+    --color-primario-tinte-suave-texto: #cfe3f2;
+  }
+}
+[data-theme='dark'][data-tono='oceano'] {
+  --color-primario: #a4bfd6;
+  --color-primario-fuerte: #8fadc6;
+  --color-primario-texto: #0f1d29;
+  --color-primario-tinte: rgba(164, 191, 214, 0.16);
+  --color-primario-oscuro: #a4bfd6;
+  --color-primario-tinte-suave: #2c4a63;
+  --color-primario-tinte-suave-texto: #cfe3f2;
+}
+[data-tono='terracota'] {
+  --color-primario: #8a4a32;
+  --color-primario-fuerte: #733c28;
+  --color-primario-texto: #ffffff;
+  --color-primario-tinte: rgba(138, 74, 50, 0.1);
+  --color-primario-oscuro: #5e2f1e;
+  --color-primario-tinte-suave: #f6dccf;
+  --color-primario-tinte-suave-texto: #7a3f2a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-tono='terracota'] {
+    --color-primario: #e0b3a0;
+    --color-primario-fuerte: #d09d88;
+    --color-primario-texto: #2b130a;
+    --color-primario-tinte: rgba(224, 179, 160, 0.16);
+    --color-primario-oscuro: #e0b3a0;
+    --color-primario-tinte-suave: #7a3f2a;
+    --color-primario-tinte-suave-texto: #f6dccf;
+  }
+}
+[data-theme='dark'][data-tono='terracota'] {
+  --color-primario: #e0b3a0;
+  --color-primario-fuerte: #d09d88;
+  --color-primario-texto: #2b130a;
+  --color-primario-tinte: rgba(224, 179, 160, 0.16);
+  --color-primario-oscuro: #e0b3a0;
+  --color-primario-tinte-suave: #7a3f2a;
+  --color-primario-tinte-suave-texto: #f6dccf;
+}
+[data-tono='ciruela'] {
+  --color-primario: #5e3f5c;
+  --color-primario-fuerte: #4d334b;
+  --color-primario-texto: #ffffff;
+  --color-primario-tinte: rgba(94, 63, 92, 0.1);
+  --color-primario-oscuro: #3d263b;
+  --color-primario-tinte-suave: #ecd9ea;
+  --color-primario-tinte-suave-texto: #553853;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-tono='ciruela'] {
+    --color-primario: #cdb0ca;
+    --color-primario-fuerte: #bb9bb8;
+    --color-primario-texto: #24121f;
+    --color-primario-tinte: rgba(205, 176, 202, 0.16);
+    --color-primario-oscuro: #cdb0ca;
+    --color-primario-tinte-suave: #553853;
+    --color-primario-tinte-suave-texto: #ecd9ea;
+  }
+}
+[data-theme='dark'][data-tono='ciruela'] {
+  --color-primario: #cdb0ca;
+  --color-primario-fuerte: #bb9bb8;
+  --color-primario-texto: #24121f;
+  --color-primario-tinte: rgba(205, 176, 202, 0.16);
+  --color-primario-oscuro: #cdb0ca;
+  --color-primario-tinte-suave: #553853;
+  --color-primario-tinte-suave-texto: #ecd9ea;
+}
+[data-tono='grafito'] {
+  --color-primario: #3d4247;
+  --color-primario-fuerte: #303438;
+  --color-primario-texto: #ffffff;
+  --color-primario-tinte: rgba(61, 66, 71, 0.1);
+  --color-primario-oscuro: #23272a;
+  --color-primario-tinte-suave: #dfe3e6;
+  --color-primario-tinte-suave-texto: #393e43;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-tono='grafito'] {
+    --color-primario: #c3c8cc;
+    --color-primario-fuerte: #adb3b8;
+    --color-primario-texto: #15181a;
+    --color-primario-tinte: rgba(195, 200, 204, 0.16);
+    --color-primario-oscuro: #c3c8cc;
+    --color-primario-tinte-suave: #393e43;
+    --color-primario-tinte-suave-texto: #dfe3e6;
+  }
+}
+[data-theme='dark'][data-tono='grafito'] {
+  --color-primario: #c3c8cc;
+  --color-primario-fuerte: #adb3b8;
+  --color-primario-texto: #15181a;
+  --color-primario-tinte: rgba(195, 200, 204, 0.16);
+  --color-primario-oscuro: #c3c8cc;
+  --color-primario-tinte-suave: #393e43;
+  --color-primario-tinte-suave-texto: #dfe3e6;
+}
+
+/* Marca del header (reemplaza al botón de tres rayas, que no abría nada): el logo, con los colores
+   del tono elegido. No es un control. */
+.encabezado__marca {
+  flex-shrink: 0;
+  width: var(--toque-min);
+  height: var(--toque-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.encabezado__marca svg {
+  width: 28px;
+  height: 28px;
+}
+.encabezado__marca circle {
+  fill: none;
+  stroke: var(--color-primario-oscuro);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.encabezado__marca path {
+  fill: var(--color-acento);
+}
+
+/* Selector de tono: muestra de color + nombre, 2 por fila, ≥ 48px de alto. */
+.apariencia__titulo {
+  display: block;
+  margin: 12px 0 6px;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-12);
+  font-weight: 600;
+  color: var(--color-texto-tenue);
+}
+.apariencia__tonos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.apariencia__tono {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--toque-min);
+  padding: 8px 12px;
+  border: 1px solid var(--borde-medio);
+  border-radius: var(--radio);
+  background: var(--color-superficie-blanca);
+  color: var(--color-texto);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--duracion) var(--ease), background var(--duracion) var(--ease), transform var(--duracion) var(--ease);
+}
+.apariencia__tono:hover {
+  border-color: var(--color-acento);
+}
+.apariencia__tono:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.apariencia__tono:active {
+  transform: scale(0.98);
+}
+.apariencia__tono--activo {
+  border-color: var(--color-primario);
+  box-shadow: inset 0 0 0 1px var(--color-primario);
+}
+.apariencia__muestra {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--borde-medio);
+}
+.apariencia__muestra--oceano {
+  background: #2f4f6b;
+}
+.apariencia__muestra--terracota {
+  background: #8a4a32;
+}
+.apariencia__muestra--ciruela {
+  background: #5e3f5c;
+}
+.apariencia__muestra--grafito {
+  background: #3d4247;
+}
+.apariencia__muestra--cipres {
+  background: #3a4d39;
+}

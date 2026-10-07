@@ -148,6 +148,7 @@ test('formato de precio con decimales (configurado en Ajustes) se refleja en la 
   await page.locator('[data-accion="ir-ajustes"]').first().click();
   // ajustes.js (reskin "Organic Minimalist"): la casilla es `.casilla-fila` (input + un <div> con
   // el título y la ayuda) — el título ya no es el hermano directo del checkbox.
+  await page.locator('[data-panel="moneda"] > summary').click(); // Ajustes va plegado (2026-10-07)
   const casillaDecimales = page.locator('.casilla-fila', { hasText: 'Mostrar decimales' }).locator('input[type="checkbox"]');
   await casillaDecimales.check();
   await page.waitForTimeout(400); // debounce del guardado

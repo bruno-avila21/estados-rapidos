@@ -9,12 +9,13 @@ uno o varios archivos juntos) para elegir WhatsApp → Mi estado. Sin backend, s
 dependencias de runtime. Todo el dato vive en el IndexedDB del celular de quien la usa — el repo es
 público pero solo tiene código, nunca datos de producto.
 
-Diez estilos de imagen (`js/modelo.js`, `ESTILOS_IMAGEN`; Ajustes → tarjetas con miniatura en vivo,
-con override opcional por producto). Los 4 originales, configuraciones libres: **Solo la foto** (por
+Diez estilos de imagen (`js/modelo.js`, `ESTILOS_IMAGEN`; se eligen en la pantalla **Plantillas**
+(`#/plantillas`: tarjetas con miniatura en vivo, estrella de favoritas y filtro Todas/Favoritas), con
+override opcional por producto). Los 4 originales, configuraciones libres: **Solo la foto** (por
 defecto, sin textos), **Foto con precio**, **Foto con descripción** (cada estado lleva su propio
 texto aunque se publiquen varios juntos) y **Mi plantilla** (fondo PNG propio). Los 4 de Fase 4,
 composiciones prediseñadas de geometría fija (`js/geometria-presets.js`, `PRESETS_COMPOSICION`,
-elegibles desde una galería en el editor de plantilla): **Banner inferior** (franja sólida anclada
+elegibles desde la pantalla Plantillas): **Banner inferior** (franja sólida anclada
 abajo), **Editorial** (marco con nombre/precio arriba), **Polaroid** (tarjeta blanca con foto
 recortada y textos abajo) y **Story inmersiva** (scrim degradado sobre la foto a pantalla completa).
 Más 2 presets replicados de diseños que entregó Bruno (2026-10-07): **Novedad** (foto a sangre,
@@ -30,7 +31,14 @@ fondo/etiqueta, visible), capas, deshacer/rehacer y restablecer. Al arrastrar se
 centro (se encienden y dicen "Centrado" al engancharse) y el elemento seleccionado trae un mini
 menú flotante (tamaño, alineación, color, tipografía). El lienzo arranca **bloqueado** (deslizar
 por encima hace scroll y no mueve nada): se edita después de tocar "Editar" o un texto de la
-imagen, y "Listo" (o irse con el scroll) lo vuelve a bloquear.
+imagen: ahí el lienzo pasa a **pantalla completa** (sin scroll alrededor, con deshacer/rehacer a
+mano) hasta tocar "Listo". Ajustes arranca con la **vista previa** del estado y "Cambiar"/"Editar";
+el resto (encuadre, texto que acompaña, formato del precio, datos) va en bloques plegables.
+
+Apariencia elegible (Ajustes → Apariencia, `js/utils/tema.js` + `js/tema-inicial.js`, guardada en
+`localStorage` de ese celular): modo automático/claro/oscuro (`data-theme`) y tono del color primario
+(`data-tono`: Ciprés por defecto, Océano, Terracota, Ciruela, Grafito — `node scripts/capturas-tonos.mjs
+<carpeta>` para verlos).
 
 Identidad visual "Organic Minimalist" (reskin 2026-09-28): paleta verde ciprés + umber sobre
 superficies de alabastro/lino (verde ciprés primario `--color-primario`, umber `--color-acento`;
@@ -120,8 +128,8 @@ propósito desde la pestaña "Respaldo" — y ese archivo tampoco se commitea (v
   (APK + PWA) a la carpeta pública, con rotación (máximo 7 copias).
 - `js/vistas/*.js` — pantallas: `lista` (productos + selección + barra "Publicar N"), `detalle`
   (alta/edición, con override de estilo en "Opciones avanzadas"), `ajustes` (tarjetas de estilo con
-  miniatura en vivo, descripción modelo, formato de precio), `plantilla` (editor de plantilla
-  interactivo), `respaldo` (exportar/importar/borrar todo), `revision` (hoja de revisión antes de publicar).
+  miniatura en vivo, descripción modelo, formato de precio), `plantillas` (galería de estilos con
+  favoritas), `plantilla` (editor de plantilla interactivo), `respaldo` (exportar/importar/borrar todo), `revision` (hoja de revisión antes de publicar).
 - `js/utils/*.js` — toast, confirmación propia (nunca `confirm()` nativo), compartir (con timeout
   de seguridad y soporte multi-archivo), achicar fotos.
 - `sw.js` + `js/sw-estrategia.js` — Service Worker network-first, con la decisión de cacheo separada como función pura y testeada.

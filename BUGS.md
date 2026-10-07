@@ -926,3 +926,21 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** actualizar el test a 10 estilos (4 de siempre + 6 presets). Mismo caso en 2 E2E que también contaban a mano: `ajustes.spec.js:64` (8 tarjetas → 10) y `revision.spec.js:152` (9 opciones → 11).
 - **Resuelto:** sí — ver la corrida de `npm test` posterior.
 - ¿Se repetiría en otro proyecto? Sí, pero es esperable: un test que fija una cantidad se rompe a propósito cuando el catálogo crece; alcanza con actualizarlo.
+
+### 68. 20 E2E fallan tras mudar las galerías a "Plantillas", plegar Ajustes y pasar el lienzo a pantalla completa
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js` (2026-10-07), después del pedido de Bruno: vista previa primero en Ajustes, bloques plegables, pantalla propia de plantillas con favoritas y edición del lienzo a pantalla completa.
+- **Error exacto:** `20 failed, 104 passed`. Ej.: `expect(locator).toContainText(expected) failed — Locator: locator('[data-accion="ir-plantilla-estilo"]') — Expected substring: "Estilo de las imágenes"` (`ajustes.spec.js:62`). Fallan `ajustes.spec.js` (10), `presets.spec.js` (8), `botones.spec.js:146`, `minimo.spec.js:39`.
+- **Reproducir:** correr la suite con el árbol de esta ronda.
+- **Causa:** no es un bug de la app: los tests apuntaban a la estructura anterior — galerías dentro de `#/plantilla` (ahora `#/plantillas`), fila `ir-plantilla-estilo` (ahora `ir-plantillas`), controles de Ajustes a la vista (ahora dentro de `<details data-panel=…>` cerrados), dos `.vista-previa-estado__imagen` en Ajustes, y panel de propiedades/capas tocados con el lienzo en edición (ahora la zona del lienzo tapa la pantalla).
+- **Arreglo:** tests adaptados: helper `listo(page)` antes de tocar panel/capas/controles, `arrastrar` vuelve a habilitar la edición, abrir el bloque plegable antes de usarlo, rutas a `#/plantillas`. Se reemplazaron los 2 tests de la galería de presets del editor ("Deshacer preset" ya no existe) por 2 de Plantillas (favoritas y plantilla en uso), y se sumaron el de bloques plegados y el de pantalla completa.
+- **Resuelto:** sí — ver la corrida completa posterior.
+- ¿Se repetiría en otro proyecto? Sí, es esperable al reorganizar pantallas; lo que ayuda es que los tests entren por helpers (`asegurarLienzoVisible`, `listo`) y no repitan la navegación a mano.
+
+### 69. "Las tres rayas arriba a la izquierda no hacen nada"
+- **Paso:** reportado por Bruno en el chat (2026-10-07), usando el APK 1.9.
+- **Error exacto:** no hay; el botón no produce ningún cambio visible.
+- **Reproducir:** en Productos, tocar el ícono de tres rayas del header.
+- **Causa:** el diseño Stitch traía un menú hamburguesa, pero la app no tiene cajón lateral; se lo había conectado a "ir al inicio" (`data-accion="ir-inicio"`), que estando en Productos no hace nada.
+- **Arreglo:** se sacó el botón; en su lugar va la marca (logo en SVG, sin interacción).
+- **Resuelto:** sí — E2E "Apariencia…" verifica que `ir-inicio` ya no existe y que la marca se ve.
+- ¿Se repetiría en otro proyecto? Sí — un control copiado de un mock sin destino real no se "conecta a algo trivial": se saca o se le da una función.

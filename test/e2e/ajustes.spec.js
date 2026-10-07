@@ -35,11 +35,19 @@ async function asegurarLienzoVisible(page) {
   });
 }
 
+// Con el lienzo en edición la zona del lienzo ocupa toda la pantalla (2026-10-07): para tocar el
+// panel de propiedades, las capas o la barra de controles primero hay que salir con "Listo".
+async function listo(page) {
+  const modo = page.locator('[data-accion="editar-lienzo"]');
+  if ((await modo.count()) && (await modo.getAttribute('aria-pressed')) === 'true') await modo.click();
+}
+
 test('Plantilla no está en la navegación principal, pero el editor se abre desde Ajustes', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('[data-accion="ir-plantilla"]')).toHaveCount(0); // no está en la lista de productos
   await expect(page.locator('[data-accion="ir-ajustes"]').first()).toBeVisible();
 
+  await listo(page);
   await page.locator('[data-accion="ir-ajustes"]').first().click();
   await page.locator('[data-accion="ir-plantilla"]').click();
   await expect(page).toHaveURL(/#\/plantilla$/);
@@ -51,20 +59,33 @@ test('Plantilla no está en la navegación principal, pero el editor se abre des
 // acompaña) — mismo componente, namespace `estilo-general-*`/`editar-estilo-general-*` para no
 // chocar con los `estilo-<preset>` de la galería "Presets de composición" de la misma pantalla.
 // En Ajustes queda solo una fila compacta ("Estilo de las imágenes: <actual> ›") que abre acá.
-test('Ajustes: la fila compacta "Estilo de las imágenes" muestra el estilo actual y abre Plantilla', async ({ page }) => {
+test('Ajustes: muestra la plantilla en uso y "Cambiar" abre la pantalla Plantillas', async ({ page }) => {
   await page.goto('/#/ajustes');
-  await expect(page.locator('.grilla-estilos')).toHaveCount(0); // ya no hay galería acá
-  const fila = page.locator('[data-accion="ir-plantilla-estilo"]');
-  await expect(fila).toContainText('Estilo de las imágenes');
-  await expect(fila).toContainText('Solo la foto');
-  await fila.click();
-  await expect(page).toHaveURL(/#\/plantilla$/);
+  await expect(page.locator('.grilla-estilos')).toHaveCount(0); // la galería no vive acá
+  await expect(page.locator('[data-dato="plantilla-en-uso"]')).toHaveText('Solo la foto');
+  await page.locator('[data-accion="ir-plantillas"]').click();
+  await expect(page).toHaveURL(/#\/plantillas$/);
+  await expect(page.locator('h1')).toHaveText('Plantillas');
+});
+
+// Pedido 2026-10-07: el resto de Ajustes va plegado, un bloque por responsabilidad.
+test('Ajustes: los bloques arrancan plegados y se abren de a uno', async ({ page }) => {
+  await page.goto('/#/ajustes');
+  for (const nombre of ['encuadre', 'texto', 'moneda', 'datos']) {
+    await expect(page.locator(`[data-panel="${nombre}"]`)).not.toHaveAttribute('open', '');
+  }
+  await expect(page.locator('#campo-prefijo-precio')).toBeHidden();
+  const resumen = page.locator('[data-panel="moneda"] > summary');
+  expect((await resumen.boundingBox()).height).toBeGreaterThanOrEqual(48);
+  await resumen.click();
+  await expect(page.locator('#campo-prefijo-precio')).toBeVisible();
+  await expect(page.locator('#campo-descripcion-modelo')).toBeHidden(); // los demás siguen cerrados
 });
 
 test('Plantilla: las 10 tarjetas de estilo (4 de siempre + 6 presets de composición) muestran una miniatura y se puede elegir una', async ({
   page,
 }) => {
-  await page.goto('/#/plantilla');
+  await page.goto('/#/plantillas');
   const tarjetas = page.locator('.grilla-estilos--general .tarjeta-estilo');
   await expect(tarjetas).toHaveCount(10);
   for (const tarjeta of await tarjetas.all()) {
@@ -82,6 +103,7 @@ test('Plantilla: las 10 tarjetas de estilo (4 de siempre + 6 presets de composic
 
 test('la descripción modelo se guarda y se ve en el ejemplo', async ({ page }) => {
   await page.goto('/#/ajustes');
+  await page.locator('[data-panel="texto"] > summary').click();
   const textarea = page.locator('#campo-descripcion-modelo');
   await textarea.fill('{nombre} — {precio}, escribinos');
   await page.waitForTimeout(400); // debounce del guardado
@@ -94,7 +116,7 @@ test('la descripción modelo se guarda y se ve en el ejemplo', async ({ page }) 
 // --- "Editar" por tarjeta + badge "Personalizado" (ronda "ajustes por estilo", 2026-09-28) ---
 
 test('"Solo la foto" no tiene botón Editar (no es editable); los otros 7 sí', async ({ page }) => {
-  await page.goto('/#/plantilla');
+  await page.goto('/#/plantillas');
   await expect(page.locator('[data-accion="editar-estilo-general-solo-foto"]')).toHaveCount(0);
   for (const estilo of [
     'foto-precio',
@@ -112,7 +134,7 @@ test('"Solo la foto" no tiene botón Editar (no es editable); los otros 7 sí', 
 });
 
 test('"Editar" de una tarjeta abre el editor en ESE estilo', async ({ page }) => {
-  await page.goto('/#/plantilla');
+  await page.goto('/#/plantillas');
   await page.locator('[data-accion="editar-estilo-general-foto-descripcion"]').click();
   await expect(page).toHaveURL(/#\/plantilla\?estilo=foto-descripcion/);
   await expect(page.locator('#editor-vista-previa-estilo')).toHaveValue('foto-descripcion');
@@ -121,7 +143,7 @@ test('"Editar" de una tarjeta abre el editor en ESE estilo', async ({ page }) =>
 test('badge "Personalizado" en la tarjeta de Plantilla aparece después de editar ese estilo', async ({ page }) => {
   await page.goto('/');
   await crearProducto(page);
-  await page.goto('/#/plantilla');
+  await page.goto('/#/plantillas');
   const tarjetaFotoPrecio = page.locator('.tarjeta-estilo', { has: page.locator('[data-accion="estilo-general-foto-precio"]') });
   await expect(tarjetaFotoPrecio.locator('.tarjeta-estilo__badge')).toBeHidden();
 
@@ -150,7 +172,7 @@ test('badge "Personalizado" en la tarjeta de Plantilla aparece después de edita
   await expect(page.locator('.editor-plantilla__badge')).toHaveText('Personalizado');
   await page.waitForTimeout(100); // deja que la escritura a IndexedDB (persistir) termine antes de navegar
 
-  await page.reload();
+  await page.goto('/#/plantillas');
   await expect(tarjetaFotoPrecio.locator('.tarjeta-estilo__badge')).toBeVisible();
 });
 
@@ -158,12 +180,14 @@ test('badge "Personalizado" en la tarjeta de Plantilla aparece después de edita
 
 test('encuadre de la foto: "Entera" por defecto, se puede cambiar a "Llenar la pantalla" y persiste', async ({ page }) => {
   await page.goto('/#/ajustes');
+  await page.locator('[data-panel="encuadre"] > summary').click();
   await expect(page.locator('[data-accion="encuadre-contain"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-accion="encuadre-cover"]')).toHaveAttribute('aria-pressed', 'false');
 
   await page.locator('[data-accion="encuadre-cover"]').click();
   await expect(page.locator('[data-accion="encuadre-cover"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#toast')).toHaveText(/Llenar la pantalla/);
+  await expect(page.locator('[data-panel="encuadre"] .panel__badge')).toHaveText('Llenar la pantalla');
 
   await page.reload();
   await expect(page.locator('[data-accion="encuadre-cover"]')).toHaveAttribute('aria-pressed', 'true');
@@ -221,12 +245,14 @@ test('"Compartir la app" sin navigator.share copia el link (fallback)', async ({
 // Pedido 2026-10-03: el acceso a Plantilla es lo PRIMERO de Ajustes (antes quedaba al fondo) y hay
 // "Ver completa" (visor a pantalla completa con el estado entero) en Ajustes, en cada tarjeta de
 // estilo de Plantilla y en la foto del alta/edición de producto.
-test('Ajustes: "Tu plantilla" es el primer panel y "Ver completa" abre el estado entero', async ({ page }) => {
+test('Ajustes: lo primero es la vista previa de la plantilla; tocarla abre el estado entero', async ({ page }) => {
   await page.goto('/#/ajustes');
   const primerPanel = page.locator('.panel').first();
+  // Pedido 2026-10-07: la vista previa va primero, y debajo "Cambiar" / "Editar".
+  await expect(primerPanel.locator('.vista-previa-estado__imagen')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
+  await expect(primerPanel.locator('[data-accion="ver-completa"]')).toBeInViewport();
+  await expect(primerPanel.locator('[data-accion="ir-plantillas"]')).toBeVisible();
   await expect(primerPanel.locator('[data-accion="ir-plantilla"]')).toBeVisible();
-  await expect(primerPanel.locator('[data-accion="ir-plantilla-estilo"]')).toBeVisible();
-  await expect(primerPanel.locator('[data-accion="ir-plantilla"]')).toBeInViewport();
 
   await primerPanel.locator('[data-accion="ver-completa"]').click();
   const imagen = page.locator('.visor-imagen__imagen');
@@ -242,7 +268,7 @@ test('Ajustes: "Tu plantilla" es el primer panel y "Ver completa" abre el estado
 });
 
 test('Plantilla: cada tarjeta de estilo tiene "Ver completa" y no cambia el estilo elegido', async ({ page }) => {
-  await page.goto('/#/plantilla');
+  await page.goto('/#/plantillas');
   await page.locator('[data-accion="ver-estilo-general-polaroid"]').click();
   await expect(page.locator('.visor-imagen__imagen')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
   await page.keyboard.press('Escape');
@@ -303,7 +329,8 @@ test('Alta de producto: la vista previa en vivo se rearma al escribir', async ({
 
 test('Ajustes: vista previa de la imagen junto al texto, con aviso si el estilo no dibuja la descripción', async ({ page }) => {
   await page.goto('/#/ajustes');
-  await expect(page.locator('.vista-previa-estado__imagen')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
+  await page.locator('[data-panel="texto"] > summary').click();
+  await expect(page.locator('[data-panel="texto"] .vista-previa-estado__imagen')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
   await expect(page.locator('[data-nota="estilo-sin-descripcion"]')).toContainText('Solo la foto');
 
   await page.evaluate(async () => {
@@ -311,7 +338,8 @@ test('Ajustes: vista previa de la imagen junto al texto, con aviso si el estilo 
     await repo.guardarEstiloGeneral('foto-descripcion');
   });
   await page.reload();
-  await expect(page.locator('.vista-previa-estado__imagen')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
+  await page.locator('[data-panel="texto"] > summary').click();
+  await expect(page.locator('[data-panel="texto"] .vista-previa-estado__imagen')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
   await expect(page.locator('[data-nota="estilo-sin-descripcion"]')).toHaveCount(0);
 });
 
@@ -377,4 +405,42 @@ test('La descripción larga se parte en renglones y la caja crece (no se trunca 
     expect(r.extra, estilo).toBeGreaterThan(0); // la caja creció para que entre
     expect(r.dentro && r.nombreDentro, estilo).toBe(true);
   }
+});
+
+// --- Apariencia (pedido 2026-10-07): modo y tono, y el header sin el botón de tres rayas ---
+
+test('Apariencia: el tono y el modo se aplican al toque y se recuerdan al recargar', async ({ page }) => {
+  await page.goto('/#/ajustes');
+  // El header ya no tiene un botón que no abre nada: a la izquierda va la marca.
+  await expect(page.locator('[data-accion="ir-inicio"]')).toHaveCount(0);
+  await expect(page.locator('.encabezado__marca')).toBeVisible();
+
+  const primario = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-primario').trim());
+  const fondo = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-fondo').trim());
+  expect(await primario()).toBe('#3a4d39');
+
+  await page.locator('[data-panel="apariencia"] > summary').click();
+  await expect(page.locator('[data-accion="tono-cipres"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-accion="modo-auto"]')).toHaveAttribute('aria-pressed', 'true');
+  expect((await page.locator('[data-accion="tono-oceano"]').boundingBox()).height).toBeGreaterThanOrEqual(48);
+
+  await page.locator('[data-accion="tono-oceano"]').click();
+  await expect(page.locator('[data-accion="tono-oceano"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-panel="apariencia"] .panel__badge')).toHaveText('Océano');
+  expect(await primario()).toBe('#2f4f6b');
+
+  await page.locator('[data-accion="modo-oscuro"]').click();
+  expect(await fondo()).toBe('#201e1a');
+  expect(await primario()).toBe('#a4bfd6'); // el tono también tiene su versión oscura
+
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('html')).toHaveAttribute('data-tono', 'oceano');
+  expect(await primario()).toBe('#a4bfd6');
+
+  await page.locator('[data-panel="apariencia"] > summary').click();
+  await page.locator('[data-accion="modo-claro"]').click();
+  await page.locator('[data-accion="tono-cipres"]').click();
+  expect(await primario()).toBe('#3a4d39');
+  await expect(page.locator('html')).not.toHaveAttribute('data-tono', /.+/);
 });
