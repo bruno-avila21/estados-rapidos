@@ -26,6 +26,23 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.webkit.WebViewAssetLoader
 import java.io.File
+import java.util.concurrent.Executors
+
+// Fotos que otra app le compartió a esta ("Compartir" desde la galería): ya copiadas a
+// cache/compartidas y a la espera de que el JS las pida (PuenteArchivos.fotosCompartidas()).
+object FotosCompartidas {
+    const val CARPETA = "compartidas"
+    const val URL_BASE = "https://appassets.androidplatform.net/compartidas/"
+    private val pendientes = ArrayList<String>()
+
+    @Synchronized fun sumar(urls: List<String>) { pendientes.addAll(urls) }
+
+    @Synchronized fun tomar(): List<String> {
+        val copia = ArrayList(pendientes)
+        pendientes.clear()
+        return copia
+    }
+}
 
 class PantallaPrincipal : AppCompatActivity() {
     private lateinit var web: WebView
@@ -69,6 +86,7 @@ class PantallaPrincipal : AppCompatActivity() {
         // fotos compartidas o capturadas de sesiones viejas).
         File(cacheDir, "compartir").let { it.deleteRecursively(); it.mkdirs() }
         File(cacheDir, "camara").let { it.deleteRecursively(); it.mkdirs() }
+        if (estado == null) File(cacheDir, FotosCompartidas.CARPETA).let { it.deleteRecursively(); it.mkdirs() }
 
         // Solo en debug: deja inspeccionar la WebView por chrome://inspect / CDP remoto
         // (medir scrollWidth con font_scale y densidad alterados). El release no la toca.
@@ -116,6 +134,12 @@ class PantallaPrincipal : AppCompatActivity() {
 
         val cargador = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            // Las fotos compartidas desde la galería se sirven por el MISMO origen que la app: el
+            // JS las baja con fetch() como cualquier archivo propio (la CSP no deja otro origen).
+            .addPathHandler(
+                "/" + FotosCompartidas.CARPETA + "/",
+                WebViewAssetLoader.InternalStoragePathHandler(this, File(cacheDir, FotosCompartidas.CARPETA))
+            )
             .build()
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(v: WebView, req: WebResourceRequest): WebResourceResponse? =
@@ -140,9 +164,63 @@ class PantallaPrincipal : AppCompatActivity() {
         web.addJavascriptInterface(PuenteArchivos(this, web), "Android")
 
         if (estado == null) {
+            // Si la app se abrió PORQUE le compartieron fotos, se copian ya: el JS las pide al arrancar.
+            recibirCompartidas(intent)
             web.loadUrl("https://appassets.androidplatform.net/assets/app/index.html")
         } else {
             web.restoreState(estado)
+        }
+    }
+
+    // La app ya estaba abierta y le comparten fotos (launchMode singleTask).
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        recibirCompartidas(intent)
+    }
+
+    private val hiloCompartidas = Executors.newSingleThreadExecutor()
+
+    // Copia las imágenes del "Compartir" a cache/compartidas (el permiso sobre esas Uri es
+    // temporal: hay que leerlas ahora) y le avisa al JS, que las abre en "Agregar varios".
+    private fun recibirCompartidas(intent: Intent?) {
+        if (intent == null) return
+        val tipo = intent.type ?: return
+        if (!tipo.startsWith("image/")) return
+        val uris = ArrayList<Uri>()
+        @Suppress("DEPRECATION")
+        when (intent.action) {
+            Intent.ACTION_SEND -> intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris.add(it) }
+            Intent.ACTION_SEND_MULTIPLE -> intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris.addAll(it) }
+            else -> return
+        }
+        if (uris.isEmpty()) return
+        // Para que una recreación de la Activity no vuelva a importar las mismas fotos.
+        intent.action = Intent.ACTION_MAIN
+        hiloCompartidas.execute {
+            val carpeta = File(cacheDir, FotosCompartidas.CARPETA).apply { mkdirs() }
+            val marca = System.currentTimeMillis()
+            val urls = ArrayList<String>()
+            uris.forEachIndexed { indice, uri ->
+                try {
+                    val nombre = "c_${marca}_$indice.jpg"
+                    contentResolver.openInputStream(uri)?.use { entrada ->
+                        File(carpeta, nombre).outputStream().use { salida -> entrada.copyTo(salida) }
+                    } ?: return@forEachIndexed
+                    urls.add(FotosCompartidas.URL_BASE + nombre)
+                } catch (e: Exception) {
+                    // esa foto no se pudo leer: se sigue con las demás
+                }
+            }
+            if (urls.isEmpty()) return@execute
+            FotosCompartidas.sumar(urls)
+            runOnUiThread {
+                // Si la página todavía no cargó, la función no existe y no pasa nada: main.js las
+                // pide solo al arrancar.
+                web.evaluateJavascript(
+                    "window.estadosRapidosFotosCompartidas && window.estadosRapidosFotosCompartidas()", null
+                )
+            }
         }
     }
 

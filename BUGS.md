@@ -953,3 +953,107 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `expect.poll` en la lectura y tolerancia de 1 px en el centro.
 - **Resuelto:** sí — ver la corrida posterior.
 - ¿Se repetiría en otro proyecto? Sí — ya figura en este archivo: todo lo que se lee de un canvas coalescido con rAF se espera con `expect.poll`.
+
+### 71. El "Guardar" nuevo de la barra superior desborda el alta de producto con letra grande
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js` (2026-10-07), tras sumar el botón "Guardar" a `.barra-volver` del alta/edición.
+- **Error exacto:** `overflow-fuente-grande.spec.js:125 — Error: Alta de producto: scrollOverflow=false — Expected: 1, Received: 3` (a 320px y a 360px con fuente al 160%; a 130% y a 412px pasa).
+- **Reproducir:** viewport 320 o 360, `document.documentElement.style.fontSize = '160%'`, abrir `#/producto/nuevo` y comparar `scrollWidth` con `clientWidth`.
+- **Causa:** el grupo de acciones de la derecha (`.barra-volver__acciones`) podía encogerse pero "Guardar" adentro no (`flex-shrink: 0`): el encogido se repartía entre "Volver a Productos" y el grupo, y el botón se salía del grupo y del viewport.
+- **Arreglo:** en esta barra (`.barra-volver--producto`) "Volver a Productos" cede primero (`flex-shrink: 20`, mínimo la flecha); recién después se corta "Descartar". "Guardar" nunca se corta.
+- **Resuelto:** sí — `overflow-fuente-grande.spec.js` vuelve a pasar en los 6 tamaños.
+- ¿Se repetiría en otro proyecto? Sí — al sumar un botón que no se encoge a una fila flex, decidir explícitamente quién cede el ancho; ya está la regla de probar a 320px con fuente al 160%.
+
+### 72. Atrás del teléfono salta a Productos si se toca justo después de cambiar de pantalla
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js` (2026-10-07), E2E nuevo "Atrás del teléfono…" — pasó en la primera corrida y falló en la segunda (intermitente).
+- **Error exacto:** `ajustes.spec.js:501 — expect(page).toHaveURL(expected) failed — Expected pattern: /#\/ajustes$/ — Received string: "http://127.0.0.1:8991/#/"`.
+- **Reproducir:** Ajustes → "Cambiar plantilla" y llamar a `window.estadosRapidosBack()` en el mismo instante en que cambia la URL.
+- **Causa:** la pila de pantallas se anotaba recién en `enrutar()`, que corre con el evento `hashchange` — y ese evento llega DESPUÉS de que la URL ya cambió. En esa ventana la pila todavía no tenía la pantalla nueva y "la anterior" resultaba ser Productos.
+- **Arreglo:** `estadosRapidosBack` anota primero el hash actual (`anotarPantalla(location.hash)`, idempotente) y recién ahí calcula a dónde volver.
+- **Resuelto:** sí — ver la corrida posterior (el E2E repetido 10 veces).
+- ¿Se repetiría en otro proyecto? Sí — con router por hash, el estado propio que se actualiza en `hashchange` va un paso atrás de `location.hash`; lo que decide por la pantalla actual tiene que leer la URL, no el estado.
+
+### 73. "No me deja subir una imagen": al guardar dice "No se pudo guardar: The source image could not be decoded."
+- **Paso:** en el celular (APK 1.11, 2026-10-07), Agregar producto → elegir la foto → la vista previa se arma BIEN con esa foto → "Agregar producto". Reportado por Bruno con captura; no lo capturó ningún test.
+- **Error exacto:** `No se pudo guardar: The source image could not be decoded.` (en el `[role=alert]` del pie del formulario).
+- **Reproducir:** no se reproduce en Chromium de escritorio con el fixture; pasa en el WebView del teléfono con una foto real de la galería/cámara.
+- **Causa:** la foto se decodificaba DOS veces a tamaño completo desde el archivo original: una al elegirla (la vista previa, que además dejaba el bitmap entero en memoria) y otra recién al guardar (`achicarFoto` en `repo.guardarProducto`). La segunda lectura es la que falla en el WebView (el archivo del selector ya no se puede volver a leer, o no hay memoria para un segundo bitmap de 12+ MP con el primero todavía vivo): por eso la vista previa se ve y el guardado no.
+- **Arreglo:** la foto se achica UNA sola vez, en el momento de elegirla (`detalle.js`), y ese JPEG de hasta 1600 px es lo que usan la vista previa y el guardado (`guardarProducto(..., { fotoYaAchicada: true })`): al guardar ya no se toca el archivo original. Si la foto no se puede leer se avisa ahí mismo, en español, en vez de al final. `achicarFoto` además reintenta con un `<img>` si `createImageBitmap` falla.
+- **Resuelto:** a confirmar en el teléfono con el APK nuevo (en el navegador el alta con foto sigue pasando).
+- ¿Se repetiría en otro proyecto? Sí — un archivo de `<input type=file>` en un WebView se lee y se procesa una vez, al elegirlo; no se guarda la referencia para releerlo más tarde.
+
+### 74. El estado "Ningún producto coincide" del buscador nuevo se ve siempre, aunque esté `hidden`
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js` (2026-10-07), E2E nuevo "Inicio: el buscador filtra mientras se escribe…".
+- **Error exacto:** `grilla.spec.js:185 — expect(locator).toBeHidden() failed — Locator: [data-estado="sin-resultados"] — Expected: hidden — Received: visible` (el elemento tiene `hidden=""`).
+- **Reproducir:** abrir Productos con al menos un producto: debajo de la lista aparece "Ningún producto coincide" sin haber buscado nada.
+- **Causa:** la misma trampa de siempre en este archivo: `.estado` (y `.consejo`) declaran `display` propio, que le gana al `display: none` del atributo `hidden`.
+- **Arreglo:** `.estado[hidden], .consejo[hidden] { display: none; }` junto al CSS del inicio.
+- **Resuelto:** sí — ver la corrida posterior.
+- ¿Se repetiría en otro proyecto? Sí — ya es regla acá: todo bloque con `display` propio que se oculte con `hidden` necesita su `[hidden] { display: none }`. Conviene una regla global `[hidden] { display: none !important; }` en el reset de un proyecto nuevo.
+
+### 75. E2E nuevo "Filtros… queda abierto" falla de forma intermitente tras recargar
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js` (2026-10-07); pasó en una corrida y falló en la siguiente.
+- **Error exacto:** `grilla.spec.js:213 — expect(locator).toHaveAttribute(expected) failed — Locator: [data-accion="abrir-filtros"] — Expected: "true" — Received: "false"`.
+- **Reproducir:** tocar "Filtros" y recargar la página en el mismo instante.
+- **Causa:** del test, no de la app: abrir el panel guarda la preferencia en IndexedDB sin bloquear la pantalla, y el test recargaba antes de que esa escritura terminara.
+- **Arreglo:** el test espera con `expect.poll` a que `repo.obtenerPreferenciasLista()` devuelva `filtrosAbiertos: true` antes de recargar.
+- **Resuelto:** sí — ver la corrida posterior (repetido 10 veces).
+- ¿Se repetiría en otro proyecto? Sí — antes de un `reload()` en un E2E, esperar el dato persistido, no solo el cambio en pantalla.
+
+### 76. Dos E2E sin relación con el cambio mueren con "browser has been closed"
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js` (2026-10-07), corrida completa justo después de generar capturas con otro Chromium.
+- **Error exacto:** `revision.spec.js:309` y `secciones.spec.js:229 — Error: locator.click: Target page, context or browser has been closed`.
+- **Reproducir:** no determinista; los mismos tests pasan solos y en la corrida completa siguiente.
+- **Causa:** del entorno, no de la app ni de los tests: el proceso de Chromium se cerró en medio del test (la máquina venía de correr varias suites y un navegador de capturas seguidos; poca RAM).
+- **Arreglo:** ninguno en el código; se volvió a correr.
+- **Resuelto:** sí — ver la corrida posterior.
+- ¿Se repetiría en otro proyecto? Sí — un navegador y una suite a la vez; "browser has been closed" en tests distintos cada vez es del entorno, se confirma repitiendo antes de tocar código.
+
+### 77. E2E nuevo de la fila "Sección" en Capas: el clic en el ojo nunca llega
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js test/e2e/editor.spec.js` (2026-10-07).
+- **Error exacto:** `editor.spec.js:390 — locator.click: Test timeout of 30000ms exceeded — <div data-elemento="nombre" class="editor-plantilla__caja"></div> from <div class="editor-plantilla__zona editor-plantilla__zona--pantalla"> subtree intercepts pointer events`.
+- **Reproducir:** en el test, llamar a `asegurarLienzoVisible` (que toca "Editar") y después hacer clic en un ojo de "Capas y visibilidad".
+- **Causa:** del test, no de la app: con el lienzo en edición está a pantalla completa y tapa la lista de capas; los demás tests de capas llaman antes a `listo(page)`.
+- **Arreglo:** el test llama a `listo(page)` antes de tocar el ojo.
+- **Resuelto:** sí — ver la corrida posterior.
+- ¿Se repetiría en otro proyecto? No — es propio de este editor (ya hay helper `listo`).
+
+### 78. No se puede sacar la sección desde la plantilla, ni ver cómo queda al apagarla en Publicar (reportado por Bruno, en el teléfono)
+- **Síntoma (palabras de Bruno, 2026-10-07):** "No puedo sacar la seccion de la plantilla" (captura del editor: la etiqueta "TORTAS" se ve en la imagen y "Capas y visibilidad" solo lista Nombre, Precio y Descripción) y "ahi esta para desactivar lo de la seccion pero no lo puedo previsualizar en ningun lado".
+- **Reproducir:** Ajustes → Plantilla con un estilo que dibuja la sección (ej. Story inmersiva): no hay fila "Sección". En Publicar, apagar "Mostrar la sección en la imagen": la miniatura es un cuadrado de 56 px recortado donde la etiqueta no se llega a ver.
+- **Causa:** el ajuste se agregó solo como interruptor en la hoja de revisión; el editor de plantilla (y la galería de Plantillas) resolvían la sección sin mirar ese ajuste, y la miniatura de la hoja recortaba el estado.
+- **Arreglo:** fila "Sección" con ojo en "Capas y visibilidad" (mismo ajuste, vale para todos los estilos); editor y galería respetan el ajuste; en Publicar la miniatura es el estado entero (9:16) y al tocarla se abre a pantalla completa.
+- **Resuelto:** en navegador (E2E); falta que Bruno lo confirme en el teléfono.
+
+### 79. Algunas fotos pierden calidad al armar el estado (reportado por Bruno)
+- **Síntoma (palabras de Bruno, 2026-10-07):** "a algunas imagens le baja la califad al hacerlos".
+- **Reproducir:** cargar una foto apaisada o cuadrada y publicarla con un estilo que llena la pantalla.
+- **Causa:** las fotos se guardaban a 1600 px de lado mayor: una apaisada queda en 1600×1200 y para llenar 1080×1920 hay que estirarla 1,6 veces.
+- **Arreglo:** se guardan a 2560 px de lado mayor con JPEG 0.9, y el achicado/dibujo usa suavizado de alta calidad. Las fotos YA cargadas no mejoran solas (el original no se guardó): hay que volver a elegirlas.
+- **Resuelto:** sin confirmar en el teléfono.
+- ¿Se repetiría en otro proyecto? Sí — el tamaño al que se guarda una foto se calcula contra el peor caso del lienzo de salida (lado corto de la foto ≥ lado largo del lienzo), no "a ojo".
+
+### 80. Reordenar en la hoja de Publicar no se nota (reportado por Bruno)
+- **Síntoma (palabras de Bruno, 2026-10-07):** "tiene como para mover el orden, pero no tiene ninguna animacion como para indicar que se esta moviendo".
+- **Reproducir:** Publicar 2 o más productos y arrastrar una fila desde la manija, o tocar las flechas.
+- **Causa:** las filas cambiaban de lugar de golpe (se reordenaba el DOM sin transición) y la fila tomada casi no se distinguía.
+- **Arreglo:** las filas se deslizan a su lugar nuevo (FLIP con `transform`, 200 ms) y la que se arrastra se levanta con borde primario y sombra. Con `prefers-reduced-motion` no se anima.
+- **Resuelto:** en navegador; falta confirmación en el teléfono.
+
+### 81. "Agregar varios" se dibuja dos veces (dos selectores de fotos en pantalla)
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js` (2026-10-07), test "Agregar varios: salir con fotos cargadas pregunta antes".
+- **Error exacto:** `grilla.spec.js:286 — locator.setInputFiles: strict mode violation: locator('[data-accion-input="elegir-varias"]') resolved to 2 elements`.
+- **Reproducir:** entrar a `#/varias`, volver y entrar de nuevo enseguida; intermitente (pasó en la corrida anterior).
+- **Causa:** `render` de `varias.js` vaciaba el contenedor ANTES de un `await` (leer las secciones): si el router lo llama dos veces seguidas, las dos llamadas vacían, esperan, y después las dos agregan su pantalla.
+- **Arreglo:** el contenedor se vacía después del `await`, justo antes de armar la pantalla (lo que sigue es síncrono).
+- **Resuelto:** sí — ver la corrida posterior.
+- ¿Se repetiría en otro proyecto? Sí — en un render asíncrono, vaciar el contenedor en el mismo tramo síncrono en que se agrega lo nuevo, nunca antes de un `await`.
+
+### 82. E2E "reordenar arrastrando con el dedo" deja de pasar con la miniatura 9:16
+- **Paso:** misma corrida (2026-10-07), después de agrandar la miniatura de la hoja de Publicar.
+- **Error exacto:** `revision-reordenar.spec.js:121 — expect(received).toBe(expected)`: el último del carrusel no es "Alfa".
+- **Reproducir:** correr ese test con las filas de 112 px de alto.
+- **Causa:** de la app (la primera hipótesis —destino fuera de la ventana— era falsa; se vio registrando los eventos: `pointerdown, pointermove, lostpointercapture, …`): al cambiar de lugar, la fila se mueve en el DOM y la manija pierde la captura del puntero; los `pointermove` siguientes ya no le llegaban y el arrastre quedaba a mitad de camino.
+- **Arreglo:** durante el arrastre, `pointermove`/`pointerup`/`pointercancel` se escuchan en `window` (se sacan al soltar).
+- **Resuelto:** sí — ver la corrida posterior.
+- ¿Se repetiría en otro proyecto? Sí — en un arrastre que reordena el DOM, los eventos de movimiento van en `window`: la captura del puntero se pierde cuando el elemento capturado se mueve de padre/posición.
+

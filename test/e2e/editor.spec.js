@@ -376,6 +376,35 @@ test('"Foto con descripción": mostrar el nombre (oculto de fábrica) lo dibuja'
   await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla?.estilo)).toBe('foto-descripcion');
 });
 
+// Pedido 2026-10-07 ("No puedo sacar la sección de la plantilla"): los estilos que dibujan la
+// sección suman la fila "Sección" a Capas; es el mismo ajuste que el interruptor de la hoja de
+// revisión, así que se recuerda. Los que no la dibujan no muestran la fila.
+test('Capas: "Sección" se oculta desde el editor en los estilos que la dibujan, y se recuerda', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=story-inmersiva');
+  await asegurarLienzoVisible(page);
+  const ojo = page.locator('[data-accion="capa-ojo-seccion"]');
+  await expect(ojo).toHaveAttribute('aria-pressed', 'true');
+  const revision = await page.evaluate(() => window.__editorDebugPlantilla.revision);
+  await listo(page); // el lienzo en edición está a pantalla completa y tapa la lista de capas
+  await ojo.click();
+  await expect(ojo).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => page.evaluate(() => window.__editorDebugPlantilla.revision)).toBeGreaterThan(revision);
+  await expect
+    .poll(() => page.evaluate(async () => (await (await import('/js/repositorio.js')).obtenerAjustesGenerales()).mostrarSeccionEnImagen))
+    .toBe(false);
+
+  await page.reload();
+  await asegurarLienzoVisible(page);
+  await expect(page.locator('[data-accion="capa-ojo-seccion"]')).toHaveAttribute('aria-pressed', 'false');
+
+  await page.goto('/#/plantilla?estilo=foto-precio');
+  await asegurarLienzoVisible(page);
+  await expect(page.locator('[data-accion="capa-ojo-nombre"]')).toBeVisible();
+  await expect(page.locator('[data-accion="capa-ojo-seccion"]')).toHaveCount(0);
+});
+
 // --- Badge de estado (Personalizado/Por defecto) + "Volver al original de este estilo" ---
 // Ronda "reskin plantilla": el badge ahora vive en la barra superior y está SIEMPRE visible (antes
 // aparecía/desaparecía con `hidden`) — el texto es la señal, no la visibilidad.

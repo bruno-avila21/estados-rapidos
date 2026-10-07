@@ -474,3 +474,33 @@ test('esAjustePersonalizado: también funciona con los 4 presets de composición
     assert.equal(esAjustePersonalizado(preset, modificado), true);
   }
 });
+
+// --- Orden y búsqueda de la pantalla Productos (rediseño del inicio, 2026-10-07) ---
+test('ordenarProductos: por nombre, por precio (sin precio al final) y más nuevos; no muta', async () => {
+  const { ordenarProductos } = await import('../js/modelo.js');
+  const productos = [
+    { id: 'b', nombre: 'banana', precio: 300, creado: '2026-01-02' },
+    { id: 'a', nombre: 'Ánana', precio: null, creado: '2026-01-03' },
+    { id: 'c', nombre: 'Cereza', precio: 100, creado: '2026-01-01' },
+  ];
+  const ids = (orden) => ordenarProductos(productos, orden).map((p) => p.id).join('');
+  assert.equal(ids('manual'), 'bac');
+  assert.equal(ids('nombre'), 'abc');
+  assert.equal(ids('precio-asc'), 'cba');
+  assert.equal(ids('precio-desc'), 'bca');
+  assert.equal(ids('recientes'), 'abc');
+  assert.equal(ids('cualquier-cosa'), 'bac');
+  assert.equal(productos[0].id, 'b');
+});
+
+test('coincideBusqueda: sin tildes ni mayúsculas, en nombre o descripción, todas las palabras', async () => {
+  const { coincideBusqueda } = await import('../js/modelo.js');
+  const producto = { nombre: 'Torta de Limón', descripcion: 'Con merengue italiano' };
+  assert.equal(coincideBusqueda(producto, ''), true);
+  assert.equal(coincideBusqueda(producto, '  '), true);
+  assert.equal(coincideBusqueda(producto, 'limon'), true);
+  assert.equal(coincideBusqueda(producto, 'TORTA merengue'), true);
+  assert.equal(coincideBusqueda(producto, 'torta chocolate'), false);
+  assert.equal(coincideBusqueda({ nombre: 'Miau' }, 'miau'), true);
+});
+

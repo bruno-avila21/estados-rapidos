@@ -65,6 +65,9 @@ const ICONO_ALINEACION = { left: 'alinear-izquierda', center: 'alinear-centro', 
 // los dos. Los campos se muestran solo mientras se edita un estilo que efectivamente los dibuja.
 const ESTILOS_CON_NOMBRE_NEGOCIO = ['banner-inferior', 'editorial'];
 const ESTILOS_CON_TEXTO_BOTON = ['banner-inferior'];
+// Los que dibujan el nombre de la sección del producto (etiqueta/pill o renglón): en esos, "Capas y
+// visibilidad" suma la fila "Sección" para poder sacarla de la imagen.
+const ESTILOS_CON_SECCION = ['banner-inferior', 'editorial', 'polaroid', 'story-inmersiva', 'novedad'];
 
 export async function render(contenedor, { navegar, params } = {}) {
   contenedor.textContent = '';
@@ -97,7 +100,8 @@ export async function render(contenedor, { navegar, params } = {}) {
   // Ejemplo representativo para la vista previa de los 4 presets de composición: sección real del
   // producto de ejemplo (si tiene una) y una posición de tanda de más de 1 para que "N° 0X" (preset
   // Editorial) se vea en el editor tal cual se vería publicando varios juntos.
-  const seccionNombreEjemplo = resolverSeccionNombre(productoEjemplo, seccionesDisponibles);
+  // `let`: el ojo de "Sección" (Capas y visibilidad) la apaga/prende y hay que volver a resolverla.
+  let seccionNombreEjemplo = resolverSeccionNombre(productoEjemplo, seccionesDisponibles, general);
   const posicionEjemplo = { n: 1, m: 3 };
 
   await cargarFuentes(); // una sola vez: dibujarSegunEstilo es síncrona, asume fuentes ya listas
@@ -624,6 +628,7 @@ export async function render(contenedor, { navegar, params } = {}) {
       filaCapa.append(btnCapa, btnOjo);
       listaCapas.append(filaCapa);
     }
+    if (ESTILOS_CON_SECCION.includes(estiloEditando)) listaCapas.append(filaCapaSeccion());
 
     if (arrastrando) dibujarGuias();
     else if (editando && CLAVES_TEXTO.includes(seleccion) && ajustes[seleccion].visible !== false) {
@@ -632,6 +637,58 @@ export async function render(contenedor, { navegar, params } = {}) {
 
     if (conPanel) dibujarPanel();
     actualizarBadgePersonalizado();
+  }
+
+  // Fila "Sección" de Capas: no es una caja que se mueva (su lugar lo fija cada diseño), solo se
+  // muestra u oculta. Es el mismo ajuste que "Mostrar la sección en la imagen" de la hoja de
+  // revisión (`general.mostrarSeccionEnImagen`): vale para todos los estilos y se guarda al toque.
+  function filaCapaSeccion() {
+    const oculto = general.mostrarSeccionEnImagen === false;
+    const fila = document.createElement('div');
+    fila.className = 'editor-plantilla__fila-capa';
+
+    const btnNombre = document.createElement('button');
+    btnNombre.type = 'button';
+    btnNombre.className = 'editor-plantilla__fila-capa__nombre';
+    btnNombre.setAttribute('data-accion', 'capa-seccion');
+    const tile = document.createElement('span');
+    tile.className = 'editor-plantilla__capa-icono' + (!oculto ? ' editor-plantilla__capa-icono--visible' : '');
+    tile.append(crearIcono('etiqueta'));
+    const textos = document.createElement('span');
+    textos.className = 'editor-plantilla__capa-textos';
+    const nombre = document.createElement('span');
+    nombre.className = 'editor-plantilla__capa-nombre' + (!oculto ? ' editor-plantilla__capa-nombre--visible' : '');
+    nombre.textContent = 'Sección';
+    const estado = document.createElement('span');
+    estado.className = 'editor-plantilla__capa-estado' + (!oculto ? ' editor-plantilla__capa-estado--visible' : '');
+    estado.textContent = oculto ? 'Oculta en todos los estilos' : 'Visible en todos los estilos';
+    textos.append(nombre, estado);
+    btnNombre.append(tile, textos);
+
+    const btnOjo = document.createElement('button');
+    btnOjo.type = 'button';
+    btnOjo.className = 'boton boton--chico boton--fantasma editor-plantilla__ojo';
+    btnOjo.setAttribute('data-accion', 'capa-ojo-seccion');
+    btnOjo.setAttribute('aria-pressed', String(!oculto));
+    btnOjo.setAttribute('aria-label', oculto ? 'Mostrar Sección' : 'Ocultar Sección');
+    btnOjo.append(crearIcono(oculto ? 'ojo-tachado' : 'ojo'));
+
+    const alternar = async () => {
+      general.mostrarSeccionEnImagen = oculto; // estaba oculta → se muestra, y al revés
+      seccionNombreEjemplo = resolverSeccionNombre(productoEjemplo, seccionesDisponibles, general);
+      pintarLienzo();
+      dibujarOverlay({ conPanel: false });
+      try {
+        await repo.guardarMostrarSeccionEnImagen(general.mostrarSeccionEnImagen);
+      } catch {
+        mostrarToast('No se pudo guardar si se muestra la sección.');
+      }
+    };
+    btnNombre.addEventListener('click', alternar);
+    btnOjo.addEventListener('click', alternar);
+
+    fila.append(btnNombre, btnOjo);
+    return fila;
   }
 
   // Guías del arrastre: línea vertical/horizontal del centro del lienzo (tenues mientras se mueve,

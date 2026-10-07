@@ -444,3 +444,103 @@ test('Apariencia: el tono y el modo se aplican al toque y se recuerdan al recarg
   expect(await primario()).toBe('#3a4d39');
   await expect(page.locator('html')).not.toHaveAttribute('data-tono', /.+/);
 });
+
+// --- Pedido 2026-10-07 (3ª tanda): guardar a mano arriba y al salir, Atrás del teléfono, modo
+// Negro, controles claros en tema claro, vista previa en el panel de foto y sección oculta ---
+
+test('Alta de producto: "Guardar" de la barra superior guarda igual que el del pie', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-accion="agregar"]').click();
+  await page.locator('#campo-nombre').fill('Guardado desde arriba');
+  await page.locator('[data-accion-input="elegir-galeria"]').setInputFiles(FOTO);
+  await expect(page.locator('[data-accion="guardar-header"]')).toBeInViewport();
+  await page.locator('[data-accion="guardar-header"]').click();
+  await expect(page.locator('[data-accion="editar"]', { hasText: 'Guardado desde arriba' })).toBeVisible();
+});
+
+test('Alta de producto: al salir con cambios, "Guardar y salir" guarda y va a donde se iba', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-accion="agregar"]').click();
+  await page.locator('[data-accion-input="elegir-galeria"]').setInputFiles(FOTO);
+
+  // Sin nombre no se puede guardar: se queda en el formulario con el error a la vista.
+  await page.locator('.nav-inferior__item[data-ruta="#/ajustes"]').click();
+  await page.locator('.dialogo [data-accion="confirmar-alternativa"]').click();
+  await expect(page).toHaveURL(/#\/producto\/nuevo$/);
+  await expect(page.locator('.campo__error:not([hidden])')).toBeVisible();
+
+  await page.locator('#campo-nombre').fill('Guardado al salir');
+  await page.locator('.nav-inferior__item[data-ruta="#/ajustes"]').click();
+  await page.locator('.dialogo [data-accion="confirmar-alternativa"]').click();
+  await expect(page).toHaveURL(/#\/ajustes$/);
+  await page.locator('.nav-inferior__item[data-ruta="#/"]').click();
+  await expect(page.locator('[data-accion="editar"]', { hasText: 'Guardado al salir' })).toBeVisible();
+});
+
+test('Editar producto: el panel de foto muestra la vista previa entera y al tocarla se abre', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.locator('[data-accion="editar"]').first().click();
+  const imagen = page.locator('.foto-picker .vista-previa-estado__imagen');
+  await expect(imagen).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
+  const caja = await page.locator('.foto-picker .vista-previa-estado__marco').boundingBox();
+  expect(caja.height / caja.width).toBeCloseTo(1920 / 1080, 1); // 9:16 entera, no un cuadrado
+  await page.locator('.foto-picker [data-accion="ver-completa"]').click();
+  await expect(page.locator('.visor-imagen__imagen')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
+});
+
+test('Atrás del teléfono: cierra lo que hay encima, vuelve a la pantalla anterior y recién sale desde Productos', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  const atras = () => page.evaluate(() => window.estadosRapidosBack());
+
+  await page.locator('.nav-inferior__item[data-ruta="#/ajustes"]').click();
+  await page.locator('[data-accion="ir-plantillas"]').click();
+  await expect(page).toHaveURL(/#\/plantillas$/);
+  expect(await atras()).toBe(true);
+  await expect(page).toHaveURL(/#\/ajustes$/); // la anterior, no Productos
+  expect(await atras()).toBe(true);
+  await expect(page).toHaveURL(/#\/$/);
+
+  // Con el visor abierto, Atrás lo cierra sin salir del producto.
+  await page.locator('[data-accion="editar"]').first().click();
+  await page.locator('.foto-picker [data-accion="ver-completa"]').click();
+  await expect(page.locator('.visor-imagen')).toHaveCount(1);
+  expect(await atras()).toBe(true);
+  await expect(page.locator('.visor-imagen')).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/producto\/.+/);
+  expect(await atras()).toBe(true);
+  await expect(page).toHaveURL(/#\/$/);
+  expect(await atras()).toBe(false); // desde Productos sí sale de la app
+});
+
+test('Apariencia: modo Negro es negro puro con texto blanco y se recuerda', async ({ page }) => {
+  await page.goto('/#/ajustes');
+  const token = (nombre) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), nombre);
+  await page.locator('[data-panel="apariencia"] > summary').click();
+  await page.locator('[data-accion="modo-negro"]').click();
+  expect(await token('--color-fondo')).toBe('#000000');
+  expect(await token('--color-texto')).toBe('#ffffff');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-negro', '');
+  expect(await token('--color-fondo')).toBe('#000000');
+  await page.locator('[data-panel="apariencia"] > summary').click();
+  await page.locator('[data-accion="modo-oscuro"]').click();
+  expect(await token('--color-fondo')).toBe('#201e1a');
+  await expect(page.locator('html')).not.toHaveAttribute('data-negro', '');
+});
+
+test.describe('con el celular en oscuro y la app en claro', () => {
+  test.use({ colorScheme: 'dark' });
+  test('el campo "Nueva sección" se ve claro', async ({ page }) => {
+    await page.goto('/#/ajustes');
+    await page.locator('[data-panel="apariencia"] > summary').click();
+    await page.locator('[data-accion="modo-claro"]').click();
+    await page.goto('/#/producto/nuevo');
+    await page.locator('[data-accion="mostrar-nueva-seccion"]').click();
+    const input = page.locator('.chips-secciones__form input');
+    await expect(input).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(input).toHaveCSS('color', 'rgb(28, 27, 26)');
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('light');
+  });
+});

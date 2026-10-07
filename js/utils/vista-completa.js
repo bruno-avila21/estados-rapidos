@@ -58,7 +58,7 @@ export async function componerVista({ producto = null, fotoBlob = null, general:
     descripcion: resolverDescripcion(productoFinal, { ...general, formatoPrecio: plantillaConfig.formatoPrecio }),
     encuadreFoto: general.encuadreFoto,
     general,
-    seccionNombre: resolverSeccionNombre(productoFinal, secciones),
+    seccionNombre: resolverSeccionNombre(productoFinal, secciones, general),
     posicion: { n: 1, m: 1 },
   };
   return miniatura ? componerMiniatura(datos, { ancho: 540, alto: 960 }) : componerSegunEstilo(datos);

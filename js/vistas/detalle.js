@@ -7,9 +7,8 @@ import { validarProducto, parsearPrecio, formatearPrecio, ESTILOS_IMAGEN, ETIQUE
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { mostrarToast } from '../utils/toast.js';
 import { crearIcono } from '../utils/iconos.js';
-import { abrirVisorImagen } from '../utils/visor-imagen.js';
-import { componerVistaCompleta } from '../utils/vista-completa.js';
 import { crearVistaPrevia } from '../utils/vista-previa-viva.js';
+import { achicarFoto } from '../utils/imagen.js';
 
 export async function render(contenedor, { navegar, params, protegerSalida }) {
   contenedor.textContent = '';
@@ -28,7 +27,6 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
 
   let archivoFotoNuevo = null;
   const fotoBlobActual = producto?.fotoId ? await repo.obtenerFotoBlob(producto.fotoId) : null;
-  let urlPreviaActual = fotoBlobActual ? URL.createObjectURL(fotoBlobActual) : null;
 
   // Borrar producto: una sola función para las 2 entradas reales (el "Descartar" de la barra
   // superior y el "Borrar producto" del pie), mismo criterio que "2 botones, 1 acción" del mock.
@@ -47,7 +45,7 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
   // --- Barra "Volver a Productos" / "Descartar": reemplaza al `.encabezado` compartido en esta
   // pantalla (headerOculto en main.js) — el mock no tiene marca/hamburguesa acá. ---
   const barraVolver = document.createElement('div');
-  barraVolver.className = 'barra-volver';
+  barraVolver.className = 'barra-volver barra-volver--producto';
   const btnVolverBarra = document.createElement('button');
   btnVolverBarra.type = 'button';
   btnVolverBarra.className = 'enlace-volver';
@@ -56,7 +54,17 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
   etiquetaVolverBarra.textContent = 'Volver a Productos';
   btnVolverBarra.append(crearIcono('volver'), etiquetaVolverBarra);
   btnVolverBarra.addEventListener('click', () => navegar('#/'));
-  barraVolver.append(btnVolverBarra);
+  // "Guardar" siempre a mano arriba (la barra es sticky): el formulario es largo y el botón del pie
+  // queda lejos (pedido 2026-10-07). Dispara el mismo submit que el de abajo.
+  const accionesBarra = document.createElement('div');
+  accionesBarra.className = 'barra-volver__acciones';
+  const btnGuardarBarra = document.createElement('button');
+  btnGuardarBarra.type = 'button';
+  btnGuardarBarra.className = 'boton boton--primario boton--chico barra-volver__guardar';
+  btnGuardarBarra.setAttribute('data-accion', 'guardar-header');
+  btnGuardarBarra.append(crearIcono('check'), document.createTextNode('Guardar'));
+  btnGuardarBarra.addEventListener('click', () => form.requestSubmit());
+  barraVolver.append(btnVolverBarra, accionesBarra);
   if (!esNuevo) {
     const btnDescartarBarra = document.createElement('button');
     btnDescartarBarra.type = 'button';
@@ -66,8 +74,9 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
     etiquetaDescartar.textContent = 'Descartar';
     btnDescartarBarra.append(crearIcono('borrar'), etiquetaDescartar);
     btnDescartarBarra.addEventListener('click', borrarProductoActual);
-    barraVolver.append(btnDescartarBarra);
+    accionesBarra.append(btnDescartarBarra);
   }
+  accionesBarra.append(btnGuardarBarra);
 
   // --- H1 real de la pantalla (vive en el contenido: patrones.md regla 3, "un H1 por pantalla" —
   // el header compartido ya no es <h1>). ---
@@ -103,36 +112,19 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
   cabeceraFoto.append(rotuloFoto, badgeAspecto);
   panelFoto.append(cabeceraFoto);
 
+  // Con foto se muestra la VISTA PREVIA del estado (9:16 entera, tal cual sale, y al tocarla se
+  // abre a pantalla completa) en vez del recorte cuadrado de la foto (pedido 2026-10-07); el marco
+  // con la cámara queda solo para cuando todavía no hay foto.
   const marcoFoto = document.createElement('div');
   marcoFoto.className = 'foto-picker__marco';
-  const previa = document.createElement('img');
-  previa.className = 'foto-picker__vista';
-  previa.alt = '';
-  if (urlPreviaActual) previa.src = urlPreviaActual;
-  previa.hidden = !urlPreviaActual;
-
   const previaVacia = document.createElement('div');
   previaVacia.className = 'foto-picker__vista foto-picker__vista--vacia';
   previaVacia.setAttribute('aria-hidden', 'true');
   previaVacia.append(crearIcono('camara'));
-  previaVacia.hidden = !!urlPreviaActual;
+  marcoFoto.append(previaVacia);
+  marcoFoto.hidden = !!fotoBlobActual;
 
-  const badgeFoto = document.createElement('span');
-  badgeFoto.className = 'foto-picker__badge';
-  badgeFoto.textContent = 'Foto actual';
-  badgeFoto.hidden = !urlPreviaActual;
-
-  // "Ver completa": el marco es cuadrado y recorta la foto (object-fit: cover) — este botón abre el
-  // estado 1080×1920 ENTERO, armado con lo que hay cargado en el formulario ahora mismo (foto recién
-  // elegida, nombre, precio, descripción y estilo), sin tener que guardar y pasar por "Publicar".
-  const btnVerCompleta = document.createElement('button');
-  btnVerCompleta.type = 'button';
-  btnVerCompleta.className = 'foto-picker__ver';
-  btnVerCompleta.setAttribute('data-accion', 'ver-completa');
-  btnVerCompleta.append(crearIcono('pantalla-completa'), document.createTextNode('Ver completa'));
-  btnVerCompleta.hidden = !urlPreviaActual;
-  // Lo que hay cargado en el formulario AHORA, como lo espera `componerVista` — lo comparten "Ver
-  // completa" y la vista previa en vivo de más abajo.
+  // Lo que hay cargado en el formulario AHORA, como lo espera `componerVista`.
   function opcionesDeVista() {
     const textoPrecio = campoPrecio.input.value.trim();
     return {
@@ -146,11 +138,8 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
       fotoBlob: archivoFotoNuevo || fotoBlobActual,
     };
   }
-  btnVerCompleta.addEventListener('click', () =>
-    abrirVisorImagen({ titulo: 'Así se ve el estado', obtenerBlob: () => componerVistaCompleta(opcionesDeVista()) })
-  );
-
-  marcoFoto.append(previa, previaVacia, badgeFoto, btnVerCompleta);
+  const vistaPrevia = crearVistaPrevia({ obtenerOpciones: opcionesDeVista, accion: 'ver-completa' });
+  vistaPrevia.raiz.hidden = !fotoBlobActual;
 
   const inputGaleria = document.createElement('input');
   inputGaleria.type = 'file';
@@ -167,17 +156,25 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
   inputCamara.tabIndex = -1; // el disparo lo hace el botón visible (QA.md #7)
   inputCamara.setAttribute('data-accion-input', 'elegir-camara');
 
-  const alElegirFoto = (input) => (ev) => {
+  // La foto se achica UNA vez, acá, y ese JPEG es lo que usan la vista previa y el guardado: releer
+  // el archivo original más tarde es lo que fallaba en el teléfono (BUGS.md #73).
+  const alElegirFoto = (input) => async (ev) => {
     const archivo = ev.target.files?.[0];
     if (!archivo) return;
-    archivoFotoNuevo = archivo;
-    if (urlPreviaActual) URL.revokeObjectURL(urlPreviaActual);
-    urlPreviaActual = URL.createObjectURL(archivo);
-    previa.src = urlPreviaActual;
-    previa.hidden = false;
-    previaVacia.hidden = true;
-    badgeFoto.hidden = false;
-    btnVerCompleta.hidden = false;
+    btnGuardar.disabled = true;
+    btnGuardarBarra.disabled = true;
+    try {
+      archivoFotoNuevo = await achicarFoto(archivo);
+    } catch {
+      mostrarToast('No se pudo leer esa foto. Probá con otra o sacala de nuevo.');
+      return;
+    } finally {
+      btnGuardar.disabled = false;
+      btnGuardarBarra.disabled = false;
+      input.value = ''; // deja volver a elegir el mismo archivo
+    }
+    marcoFoto.hidden = true;
+    vistaPrevia.raiz.hidden = false;
     vistaPrevia.actualizar({ inmediato: true });
   };
   inputGaleria.addEventListener('change', alElegirFoto(inputGaleria));
@@ -191,11 +188,17 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
   btnGaleria.addEventListener('click', () => inputGaleria.click());
   accionesFoto.append(btnCamara, btnGaleria);
 
-  const notaFoto = document.createElement('p');
-  notaFoto.className = 'texto-tenue foto-picker__nota';
-  notaFoto.textContent = 'Se recorta a 1080×1920 al publicar el estado.';
-
-  panelFoto.append(marcoFoto, accionesFoto, notaFoto, inputGaleria, inputCamara);
+  panelFoto.append(marcoFoto, vistaPrevia.raiz, accionesFoto, inputGaleria, inputCamara);
+  if (esNuevo) {
+    // Varias fotos de una vez → pantalla "Agregar varios" (un producto por foto).
+    const btnVarias = document.createElement('button');
+    btnVarias.type = 'button';
+    btnVarias.className = 'boton boton--fantasma boton--ancho foto-picker__varias';
+    btnVarias.setAttribute('data-accion', 'ir-agregar-varios');
+    btnVarias.append(crearIcono('galeria'), document.createTextNode('¿Son varios? Agregar varias fotos de una vez'));
+    btnVarias.addEventListener('click', () => navegar('#/varias'));
+    panelFoto.append(btnVarias);
+  }
 
   // --- Panel 2: información general (nombre + precio) ---
   const panelInfo = document.createElement('section');
@@ -275,18 +278,7 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
 
   panelDescripcion.append(cabeceraDescripcion, campoDescripcion, pieDescripcion);
 
-  // --- Vista previa en vivo: cómo queda el estado con la foto, el nombre, el precio y la
-  // descripción que se están cargando — se rearma sola mientras se escribe (pedido 2026-10-03). ---
-  const panelVistaPrevia = document.createElement('section');
-  panelVistaPrevia.className = 'panel';
-  const tituloVistaPrevia = document.createElement('h2');
-  tituloVistaPrevia.className = 'panel__titulo';
-  tituloVistaPrevia.textContent = 'Vista previa';
-  const subtituloVistaPrevia = document.createElement('p');
-  subtituloVistaPrevia.className = 'panel__subtitulo';
-  subtituloVistaPrevia.textContent = 'Así sale el estado con lo que cargaste. El estilo se cambia en Ajustes → Tu plantilla.';
-  const vistaPrevia = crearVistaPrevia({ obtenerOpciones: opcionesDeVista });
-  panelVistaPrevia.append(tituloVistaPrevia, subtituloVistaPrevia, vistaPrevia.raiz);
+  // La vista previa (panel de foto) se rearma sola mientras se escribe.
   campoNombre.input.addEventListener('input', () => vistaPrevia.actualizar());
   campoPrecio.input.addEventListener('input', () => vistaPrevia.actualizar());
 
@@ -331,6 +323,7 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
           if (seccionesSeleccionadas.has(seccion.id)) seccionesSeleccionadas.delete(seccion.id);
           else seccionesSeleccionadas.add(seccion.id);
           pintarChipsSecciones();
+          vistaPrevia.actualizar({ inmediato: true }); // varios estilos dibujan la sección
         });
         chipsSecciones.append(chip);
       }
@@ -371,6 +364,7 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
     seccionesSeleccionadas.add(nueva.id);
     inputNuevaSeccion.value = '';
     pintarChipsSecciones();
+    vistaPrevia.actualizar({ inmediato: true });
   });
 
   panelSecciones.append(tituloSecciones, subtituloSecciones, chipsSecciones, formNuevaSeccion);
@@ -420,7 +414,7 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
       [...seccionesSeleccionadas].sort(),
     ]);
   const formularioInicial = fotoDelFormulario();
-  protegerSalida?.(() => !!archivoFotoNuevo || fotoDelFormulario() !== formularioInicial);
+  protegerSalida?.(() => !!archivoFotoNuevo || fotoDelFormulario() !== formularioInicial, guardar);
 
   const errorGeneral = document.createElement('div');
   errorGeneral.setAttribute('role', 'alert');
@@ -443,7 +437,7 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
 
   filaAcciones.append(btnCancelar, btnGuardar);
 
-  form.append(panelFoto, panelInfo, panelDescripcion, panelVistaPrevia, panelSecciones, detallesAvanzado, errorGeneral, filaAcciones);
+  form.append(panelFoto, panelInfo, panelDescripcion, panelSecciones, detallesAvanzado, errorGeneral, filaAcciones);
 
   if (!esNuevo) {
     const separador = document.createElement('div');
@@ -457,8 +451,9 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
     form.append(separador, btnBorrar);
   }
 
-  form.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
+  /** Valida y guarda lo cargado. Devuelve si se guardó (lo usan el submit y "Guardar y salir" de la
+   * guardia de salida, que navega por su cuenta). */
+  async function guardar() {
     errorGeneral.hidden = true;
     const textoPrecio = campoPrecio.input.value.trim();
     const datos = {
@@ -474,20 +469,31 @@ export async function render(contenedor, { navegar, params, protegerSalida }) {
     limpiarErrores();
     if (!ok) {
       mostrarErrores(errores, { nombre: campoNombre, precio: campoPrecio });
-      return;
+      (errores.nombre ? campoNombre : campoPrecio).contenedor.scrollIntoView({ block: 'center' });
+      return false;
     }
     btnGuardar.disabled = true;
+    btnGuardarBarra.disabled = true;
     try {
-      await repo.guardarProducto(datos, archivoFotoNuevo);
-      protegerSalida?.(null); // guardado: salir ya no pierde nada
+      await repo.guardarProducto(datos, archivoFotoNuevo, { fotoYaAchicada: true });
       mostrarToast(esNuevo ? 'Producto agregado' : 'Cambios guardados');
-      navegar('#/');
+      return true;
     } catch (error) {
       errorGeneral.hidden = false;
       errorGeneral.textContent = 'No se pudo guardar: ' + error.message;
+      errorGeneral.scrollIntoView({ block: 'center' });
+      return false;
     } finally {
       btnGuardar.disabled = false;
+      btnGuardarBarra.disabled = false;
     }
+  }
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (!(await guardar())) return;
+    protegerSalida?.(null); // guardado: salir ya no pierde nada
+    navegar('#/');
   });
 
   function limpiarErrores() {

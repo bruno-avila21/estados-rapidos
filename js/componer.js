@@ -458,6 +458,7 @@ export async function componerMiniatura(datos, { ancho = 270, alto = 480 } = {})
 }
 
 function limpiarLienzo(ctx) {
+  ctx.imageSmoothingQuality = 'high'; // la foto casi siempre se escala para entrar en 1080×1920
   ctx.fillStyle = FONDO_BASE;
   ctx.fillRect(0, 0, ANCHO, ALTO);
 }

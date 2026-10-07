@@ -50,7 +50,7 @@ test('mínimo del día 1: cargar producto, precio en línea, plantilla y publica
   await page.locator('#campo-precio').fill('45000');
   await page.locator('#campo-descripcion').fill('Talles del 38 al 44. Envíos a todo el país.');
   await page.locator('[data-accion-input="elegir-galeria"]').setInputFiles(FOTO);
-  await expect(page.locator('.foto-picker__vista:not([hidden])')).toBeVisible();
+  await expect(page.locator('.foto-picker .vista-previa-estado__imagen')).toBeVisible();
   await page.locator('[data-accion="guardar"]').click();
 
   // vuelve a la lista y aparece la tarjeta con el precio formateado es-AR

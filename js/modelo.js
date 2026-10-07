@@ -509,8 +509,11 @@ export const TEXTO_BOTON_POR_DEFECTO = 'Pedir por privado';
 
 /** Nombre de la PRIMERA sección del producto (la que sirve de "etiqueta/colección" en los 4
  * presets), o `''` si no tiene ninguna o la/s que tiene ya no existen. Pura: recibe la colección de
- * secciones ya cargada (id→nombre), no toca IndexedDB. */
-export function resolverSeccionNombre(producto, secciones) {
+ * secciones ya cargada (id→nombre), no toca IndexedDB. Con `general.mostrarSeccionEnImagen` apagado
+ * (interruptor de la hoja de revisión, 2026-10-07) también devuelve `''`: la imagen sale sin decir
+ * de qué sección es. */
+export function resolverSeccionNombre(producto, secciones, general = null) {
+  if (general?.mostrarSeccionEnImagen === false) return '';
   const ids = seccionesDelProducto(producto);
   if (!ids.length) return '';
   const porId = new Map((secciones ?? []).map((s) => [s.id, s.nombre]));
@@ -758,6 +761,7 @@ export function construirRespaldo({ productos, plantilla, general, secciones }) 
           descripcionModelo: general.descripcionModelo ?? DESCRIPCION_MODELO_POR_DEFECTO,
           encuadreFoto: general.encuadreFoto ?? ENCUADRE_FOTO_POR_DEFECTO,
           incluirTextoAlCompartir: general.incluirTextoAlCompartir ?? true,
+          mostrarSeccionEnImagen: general.mostrarSeccionEnImagen ?? true,
           calidadImagen: general.calidadImagen ?? CALIDAD_IMAGEN_POR_DEFECTO,
           nombreNegocio: general.nombreNegocio ?? NOMBRE_NEGOCIO_POR_DEFECTO,
           textoBoton: general.textoBoton ?? TEXTO_BOTON_POR_DEFECTO,
@@ -812,6 +816,54 @@ export function agruparProductosPorSeccion(productos, secciones) {
     }
   }
   return [...grupos, { id: null, nombre: 'Sin sección', productos: sinSeccion }];
+}
+
+// --- Orden y búsqueda de la pantalla Productos (rediseño del inicio, 2026-10-07) ---
+export const ORDENES_LISTA = Object.freeze(['manual', 'nombre', 'precio-asc', 'precio-desc', 'recientes']);
+export const ETIQUETA_ORDEN_LISTA = Object.freeze({
+  manual: 'Como los cargué',
+  nombre: 'Nombre (A a Z)',
+  'precio-asc': 'Precio: menor a mayor',
+  'precio-desc': 'Precio: mayor a menor',
+  recientes: 'Más nuevos primero',
+});
+export const ORDEN_LISTA_POR_DEFECTO = 'manual';
+
+/** Copia ordenada de `productos`. 'manual' los deja como vienen; por precio, los que no tienen
+ * precio van siempre al final. Pura. */
+export function ordenarProductos(productos, orden) {
+  const copia = [...productos];
+  const porNombre = (a, b) => String(a.nombre ?? '').localeCompare(String(b.nombre ?? ''), 'es', { sensitivity: 'base' });
+  if (orden === 'nombre') return copia.sort(porNombre);
+  if (orden === 'precio-asc' || orden === 'precio-desc') {
+    const signo = orden === 'precio-asc' ? 1 : -1;
+    return copia.sort((a, b) => {
+      if (a.precio == null && b.precio == null) return porNombre(a, b);
+      if (a.precio == null) return 1;
+      if (b.precio == null) return -1;
+      return signo * (a.precio - b.precio) || porNombre(a, b);
+    });
+  }
+  if (orden === 'recientes') return copia.sort((a, b) => String(b.creado ?? '').localeCompare(String(a.creado ?? '')));
+  return copia;
+}
+
+/** Texto en minúsculas y sin tildes, para comparar lo que se busca con lo que hay cargado. */
+export function normalizarBusqueda(texto) {
+  return String(texto ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+/** ¿El producto coincide con lo buscado? Mira nombre y descripción; cada palabra tiene que
+ * aparecer. Búsqueda vacía = todos. Pura. */
+export function coincideBusqueda(producto, busqueda) {
+  const palabras = normalizarBusqueda(busqueda).split(/\s+/).filter(Boolean);
+  if (!palabras.length) return true;
+  const donde = normalizarBusqueda(`${producto.nombre ?? ''} ${producto.descripcion ?? ''}`);
+  return palabras.every((palabra) => donde.includes(palabra));
 }
 
 /** Cuenta productos por sección (+ total y "sin sección") para los chips del filtro. */

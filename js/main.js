@@ -6,6 +6,7 @@ import './utils/instalacion.js';
 import * as lista from './vistas/lista.js';
 import * as detalle from './vistas/detalle.js';
 import * as secciones from './vistas/secciones.js';
+import * as varias from './vistas/varias.js';
 import * as ajustes from './vistas/ajustes.js';
 import * as plantilla from './vistas/plantilla.js';
 import * as plantillas from './vistas/plantillas.js';
@@ -38,7 +39,7 @@ const RUTAS = [
   // El h1 dice "Estados Rápidos" (no "Productos"): así lo pinta el TopAppBar de
   // productos_lista_natural/productos_vista_grilla_natural — el resto de las pantallas, fuera del
   // alcance de este rediseño, sigue mostrando el nombre de la pantalla.
-  { patron: /^#\/$/, modulo: lista, titulo: 'Estados Rápidos', ruta: '#/', subtitulo: 'Catálogo para estados de WhatsApp' },
+  { patron: /^#\/$/, modulo: lista, titulo: 'Estados Rápidos', ruta: '#/', subtitulo: 'Catálogo para estados de WhatsApp', headerClase: 'encabezado--inicio' },
   // editar_producto_natural: sin header de app (ni marca ni hamburguesa) — detalle.js dibuja su
   // propia barra "Volver a Productos"/"Descartar" + el H1 en el contenido. `ruta: '#/'` resalta
   // "Productos" en el nav inferior, igual que en el mock.
@@ -48,6 +49,9 @@ const RUTAS = [
     headerOculto: true,
     ruta: '#/',
   },
+  // "Agregar varios" (2026-10-07): varias fotos de una vez, un producto por foto. Se llega desde el
+  // alta de producto o compartiendo fotos a la app desde la galería (APK). Barra propia, como el alta.
+  { patron: /^#\/varias$/, modulo: varias, headerOculto: true, ruta: '#/' },
   // No está en la navegación principal: se llega desde el chip "⚙ Secciones" de Productos.
   // gesti_n_de_secciones_natural: el header muestra la MARCA (como Productos), no "Secciones" — el
   // H1 real + subtítulo los dibuja secciones.js en el contenido. `ruta: '#/'`: el mock resalta
@@ -79,11 +83,28 @@ const RUTAS = [
 // `protegerSalida(fn)` una función que dice si hay cambios sin guardar. Si la hay y dice que sí,
 // CUALQUIER salida (nav inferior, "Volver", "Cancelar", Atrás del navegador o del APK) pregunta antes
 // con el diálogo propio. Todas pasan por `hashchange`, así que alcanza con interceptar ahí.
-let guardiaSalida = null; // { hash, hayCambios } | null
+// Si la pantalla pasa además `guardar` (async, devuelve si se pudo), el diálogo ofrece "Guardar y
+// salir" (pedido 2026-10-07).
+let guardiaSalida = null; // { hash, hayCambios, guardar } | null
 let preguntandoSalida = false;
 
-function protegerSalida(hayCambios) {
-  guardiaSalida = hayCambios ? { hash: location.hash || '#/', hayCambios } : null;
+function protegerSalida(hayCambios, guardar = null) {
+  guardiaSalida = hayCambios ? { hash: location.hash || '#/', hayCambios, guardar } : null;
+}
+
+// --- Pila de pantallas visitadas: lo que el botón Atrás del teléfono (APK, `estadosRapidosBack`)
+// usa para volver a la pantalla ANTERIOR (ej. Plantilla → Ajustes) en vez de saltar siempre a
+// Productos. Productos es la raíz: llegar ahí la vacía. ---
+const pilaPantallas = [];
+function anotarPantalla(hash) {
+  if (hash === '#/') {
+    pilaPantallas.length = 0;
+    pilaPantallas.push(hash);
+    return;
+  }
+  const yaVisitada = pilaPantallas.lastIndexOf(hash);
+  if (yaVisitada !== -1) pilaPantallas.length = yaVisitada + 1; // se volvió a una pantalla anterior
+  else pilaPantallas.push(hash);
 }
 
 async function alCambiarHash() {
@@ -102,14 +123,19 @@ async function alCambiarHash() {
   history.replaceState(history.state, '', guardia.hash);
   if (preguntandoSalida) return;
   preguntandoSalida = true;
-  const salir = await pedirConfirmacion({
+  const decision = await pedirConfirmacion({
     titulo: 'Hay cambios sin guardar',
-    mensaje: 'Si salís ahora se pierde lo que cargaste en este producto.',
+    mensaje: guardia.guardar
+      ? 'Podés guardarlos antes de salir. Si salís sin guardar se pierde lo que cargaste.'
+      : 'Si salís ahora se pierde lo que cargaste.',
     textoConfirmar: 'Salir sin guardar',
     textoCancelar: 'Seguir editando',
+    textoAlternativa: guardia.guardar ? 'Guardar y salir' : '',
   });
   preguntandoSalida = false;
-  if (!salir) return;
+  if (!decision) return;
+  // Si no se pudo guardar (ej. falta el nombre) se queda en el formulario, con el error a la vista.
+  if (decision === 'alternativa' && !(await guardia.guardar())) return;
   guardiaSalida = null;
   navegar(destino);
 }
@@ -129,6 +155,7 @@ async function enrutar() {
   const match = hash.match(encontrada.patron);
   const params = { id: match?.[1], query: new URLSearchParams(queryString || '') };
   guardiaSalida = null; // la pantalla que se va a dibujar registra la suya si la necesita
+  anotarPantalla(hashCompleto);
 
   encabezado.hidden = !!encontrada.headerOculto;
   encabezado.className = 'encabezado' + (encontrada.headerClase ? ' ' + encontrada.headerClase : '');
@@ -240,10 +267,32 @@ revisarCopiaAutomatica();
 // lista)"; `false` = "no hay nada que cerrar, salí de la app". La hoja de revisión (revision.js) y
 // los modales propios (ej. "Editar precio" en la grilla, lista.js, Fase 3 "M" #2) ya empujan su
 // propio `history.pushState` (`hojaRevision`/`modalAbierto`) y se cierran solos con `popstate`;
-// acá solo hace falta dispararlo, y para el resto de las pantallas, volver a la lista antes de salir.
+// acá solo hace falta dispararlo. Después, de más arriba a más abajo: lo que esté abierto encima
+// de la pantalla sin paso propio en el historial (visor de imagen, diálogo de confirmación, lienzo
+// del editor a pantalla completa), la pantalla anterior de `pilaPantallas`, y recién desde
+// Productos se sale de la app.
+const CAPAS_QUE_CIERRA_ATRAS = [
+  '.visor-imagen [data-accion="cerrar-visor"]',
+  '.dialogo-overlay [data-accion="cancelar"]',
+  '[data-accion="terminar-edicion-lienzo"]:not([hidden])',
+];
 window.estadosRapidosBack = function estadosRapidosBack() {
   if (history.state && (history.state.hojaRevision || history.state.modalAbierto)) {
     history.back();
+    return true;
+  }
+  for (const selector of CAPAS_QUE_CIERRA_ATRAS) {
+    const cierre = document.querySelector(selector);
+    if (cierre) {
+      cierre.click();
+      return true;
+    }
+  }
+  // `hashchange` llega después de que la URL cambió: se anota la pantalla actual por si todavía no
+  // pasó por `enrutar` (BUGS.md #72).
+  anotarPantalla(location.hash || '#/');
+  if (pilaPantallas.length > 1) {
+    location.hash = pilaPantallas[pilaPantallas.length - 2];
     return true;
   }
   if (location.hash && location.hash !== '#/') {
@@ -252,6 +301,40 @@ window.estadosRapidosBack = function estadosRapidosBack() {
   }
   return false;
 };
+
+// --- Fotos compartidas a la app desde la galería del teléfono (APK, 2026-10-07) ---
+// El shell nativo (PantallaPrincipal.kt) copia las fotos del "Compartir" a una carpeta propia y las
+// sirve por el mismo origen; acá se las pide (`Android.fotosCompartidas()` devuelve las rutas y
+// vacía la lista), se bajan como Blob y se abren en "Agregar varios". Se llama al arrancar (la app
+// se abrió PORQUE le compartieron fotos) y cada vez que el shell avisa que llegaron más.
+async function tomarFotosCompartidas() {
+  if (!enApk() || typeof window.Android.fotosCompartidas !== 'function') return;
+  let rutas = [];
+  try {
+    rutas = JSON.parse(window.Android.fotosCompartidas() || '[]');
+  } catch {
+    return;
+  }
+  if (!rutas.length) return;
+  const fotos = [];
+  for (const ruta of rutas) {
+    try {
+      // eslint-disable-next-line no-await-in-loop -- de a una: son archivos grandes
+      const respuesta = await fetch(ruta);
+      if (respuesta.ok) fotos.push(await respuesta.blob());
+    } catch {
+      /* esa foto no se pudo leer: se sigue con las demás */
+    }
+  }
+  if (!fotos.length) {
+    mostrarToast('No se pudieron leer las fotos compartidas.');
+    return;
+  }
+  varias.recibirFotosPendientes(fotos);
+  if (!location.hash.startsWith('#/varias')) navegar('#/varias');
+}
+window.estadosRapidosFotosCompartidas = tomarFotosCompartidas;
+tomarFotosCompartidas();
 
 // --- Service worker: registro + aviso de versión nueva ---
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

@@ -45,7 +45,7 @@ export async function render(contenedor, { navegar } = {}) {
     descripcion: resolverDescripcion(productoEjemplo, { ...general, formatoPrecio }),
     encuadreFoto: general.encuadreFoto,
     general,
-    seccionNombre: resolverSeccionNombre(productoEjemplo, secciones),
+    seccionNombre: resolverSeccionNombre(productoEjemplo, secciones, general),
     posicion: { n: 1, m: 3 },
   });
 

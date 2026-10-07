@@ -3,6 +3,13 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Rediseño del inicio (2026-10-07): las secciones y "Marcar todos"/"Desmarcar" viven en el panel
+// que abre el botón "Filtros" (queda abierto una vez que se lo abre).
+async function abrirFiltros(page) {
+  const boton = page.locator('[data-accion="abrir-filtros"]');
+  if ((await boton.getAttribute('aria-expanded')) === 'false') await boton.click();
+}
+
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const FOTO = path.join(AQUI, 'fixtures', 'producto.png');
 
@@ -62,12 +69,14 @@ test('marcar todos / desmarcar afectan a todos los productos', async ({ page }) 
   await crearProducto(page, { nombre: 'A', precio: '100' });
   await crearProducto(page, { nombre: 'B', precio: '200' });
 
+  await abrirFiltros(page);
   await page.locator('[data-accion="desmarcar-todos"]').click();
   for (const check of await page.locator('[data-accion="seleccionar"]').all()) {
     await expect(check).not.toBeChecked();
   }
   await expect(page.locator('[data-accion="publicar-seleccionados"]')).toHaveCount(0);
 
+  await abrirFiltros(page);
   await page.locator('[data-accion="marcar-todos"]').click();
   for (const check of await page.locator('[data-accion="seleccionar"]').all()) {
     await expect(check).toBeChecked();
@@ -335,3 +344,38 @@ test('"Calidad de imagen": Estándar por defecto, "Alta" pesa más y se recuerda
   await page.locator('[data-accion="publicar"]').first().click();
   await expect(page.locator('[data-accion="revision-calidad-alta"]')).toHaveAttribute('aria-pressed', 'true');
 });
+
+// Pedido 2026-10-07: poder publicar sin que la imagen diga de qué sección es el producto.
+test('"Mostrar la sección en la imagen" se puede apagar, rearma las imágenes y se recuerda', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Sin sección a la vista', precio: '1000' });
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+
+  const check = page.locator('[data-accion="revision-mostrar-seccion"]');
+  await expect(check).toBeChecked(); // encendido por defecto, como salía siempre
+  await check.uncheck();
+  await expect(page.locator('[data-accion="revision-compartir"]')).toBeEnabled({ timeout: 10_000 });
+  await page.locator('[data-accion="revision-cerrar"]').click();
+
+  await page.reload();
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('[data-accion="revision-mostrar-seccion"]')).not.toBeChecked();
+});
+
+// Pedido 2026-10-07: "no lo puedo previsualizar en ningún lado" — la miniatura es el estado entero
+// y al tocarla se abre a pantalla completa.
+test('Publicar: la miniatura muestra el estado entero (9:16) y al tocarla se abre a pantalla completa', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Para ver entero', precio: '1000' });
+  await page.locator('[data-accion="publicar"]').first().click();
+  await expect(page.locator('.hoja-revision__miniatura')).toHaveCount(1, { timeout: 10_000 });
+  const caja = await page.locator('[data-accion="ver-estado"]').boundingBox();
+  expect(caja.height / caja.width).toBeGreaterThan(1.7);
+  await page.locator('[data-accion="ver-estado"]').click();
+  await expect(page.locator('.visor-imagen')).toBeVisible();
+  await page.locator('.visor-imagen [data-accion="cerrar-visor"]').click();
+  await expect(page.locator('.visor-imagen')).toHaveCount(0);
+  await expect(page.locator('[data-accion="revision-compartir"]')).toBeVisible(); // la hoja sigue abierta
+});
+

@@ -81,6 +81,11 @@ class PuenteArchivos(private val activity: AppCompatActivity, private val web: W
      * @param indice    posición de este archivo dentro de la tanda (0, 1, 2…)
      * @param dataUrl   `"data:image/jpeg;base64,...."` (también acepta base64 sin el prefijo)
      */
+    // Fotos que otra app compartió a esta (galería → Compartir → Estados Rápidos): devuelve las
+    // rutas (mismo origen que la app) como JSON y vacía la lista — cada foto se entrega una vez.
+    @JavascriptInterface
+    fun fotosCompartidas(): String = org.json.JSONArray(FotosCompartidas.tomar()).toString()
+
     @JavascriptInterface
     fun guardarParaCompartir(indice: Int, dataUrl: String) {
         hilos.execute {

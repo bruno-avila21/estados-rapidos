@@ -4,7 +4,9 @@
 // respaldo. Los colores de cada tono están en css/estilos.css (`[data-tono='…']`).
 const CLAVE = 'estados-rapidos:tema';
 
-export const MODOS = Object.freeze({ auto: 'Automático', claro: 'Claro', oscuro: 'Oscuro' });
+// 'negro' (pedido 2026-10-07): oscuro "de verdad" — fondo negro puro y texto blanco. Es el modo
+// oscuro (`data-theme='dark'`) más `data-negro`, que pisa solo las superficies y el texto.
+export const MODOS = Object.freeze({ auto: 'Automático', claro: 'Claro', oscuro: 'Oscuro', negro: 'Negro' });
 export const TONOS = Object.freeze({
   cipres: 'Ciprés',
   oceano: 'Océano',
@@ -12,7 +14,7 @@ export const TONOS = Object.freeze({
   ciruela: 'Ciruela',
   grafito: 'Grafito',
 });
-const FONDO = { claro: '#fbf9f5', oscuro: '#201e1a' };
+const FONDO = { claro: '#fbf9f5', oscuro: '#201e1a', negro: '#000000' };
 
 /** Normaliza lo que haya guardado (o nada) a un tema válido. Pura. */
 export function normalizarTema(crudo) {
@@ -34,7 +36,8 @@ export function leerTema() {
 export function aplicarTema(tema = leerTema()) {
   const raiz = document.documentElement;
   if (tema.modo === 'auto') raiz.removeAttribute('data-theme');
-  else raiz.setAttribute('data-theme', tema.modo === 'oscuro' ? 'dark' : 'light');
+  else raiz.setAttribute('data-theme', tema.modo === 'claro' ? 'light' : 'dark');
+  raiz.toggleAttribute('data-negro', tema.modo === 'negro');
   if (tema.tono === 'cipres') raiz.removeAttribute('data-tono');
   else raiz.setAttribute('data-tono', tema.tono);
   document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {

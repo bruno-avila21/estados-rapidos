@@ -6,6 +6,13 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Rediseño del inicio (2026-10-07): las secciones y "Marcar todos"/"Desmarcar" viven en el panel
+// que abre el botón "Filtros" (queda abierto una vez que se lo abre).
+async function abrirFiltros(page) {
+  const boton = page.locator('[data-accion="abrir-filtros"]');
+  if ((await boton.getAttribute('aria-expanded')) === 'false') await boton.click();
+}
+
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const FOTO = path.join(AQUI, 'fixtures', 'producto.png');
 
@@ -84,6 +91,7 @@ test('crear, renombrar, reordenar y borrar una sección (borrar NO borra product
 
   await page.goto('/#/');
   await expect(page.locator('[data-accion="editar"]', { hasText: 'Campera' })).toBeVisible(); // el producto sigue ahí
+  await abrirFiltros(page);
   await expect(page.locator('[data-accion="filtro-seccion"]', { hasText: 'Sin sección (1)' })).toBeVisible();
 });
 
@@ -95,6 +103,7 @@ test('un producto en 2 secciones aparece en ambos grupos con la MISMA casilla si
   await crearProducto(page, { nombre: 'Remera', precio: 3000, secciones: ['Lunes'] });
 
   await page.goto('/#/');
+  await abrirFiltros(page);
   await expect(page.locator('[data-accion="filtro-seccion"]', { hasText: 'Todas (2)' })).toBeVisible();
 
   const grupoLunes = page.locator('details.grupo-seccion', { hasText: 'Lunes' });
@@ -129,6 +138,7 @@ test('filtrar por sección muestra solo esos productos y "Publicar esta sección
   await crearProducto(page, { nombre: 'Otro', precio: 3000 }); // sin sección
 
   await page.goto('/#/');
+  await abrirFiltros(page);
   await page.locator('[data-accion="filtro-seccion"]', { hasText: 'Lunes (2)' }).click();
   await expect(page.locator('[data-accion="editar"]', { hasText: 'Otro' })).toHaveCount(0);
   await expect(page.locator('[data-accion="editar"]')).toHaveCount(2);
@@ -150,12 +160,15 @@ test('"Marcar todos" con un filtro de sección activo marca solo esa sección', 
   await page.goto('/#/');
   for (const check of await page.locator('[data-accion="seleccionar"]').all()) await check.uncheck();
 
+  await abrirFiltros(page);
   await page.locator('[data-accion="filtro-seccion"]', { hasText: 'Lunes (1)' }).click();
+  await abrirFiltros(page);
   await page.locator('[data-accion="marcar-todos"]').click();
   await expect(page.locator('[data-accion="seleccionar"]')).toHaveCount(1); // solo "Uno" está visible
   await expect(page.locator('[data-accion="seleccionar"]').first()).toBeChecked();
 
   // "Otro" (sin sección) sigue DESmarcado: "Marcar todos" no se escapó de la sección filtrada.
+  await abrirFiltros(page);
   await page.locator('[data-accion="filtro-seccion"]', { hasText: 'Sin sección (1)' }).click();
   await expect(page.locator('[data-accion="seleccionar"]').first()).not.toBeChecked();
 });

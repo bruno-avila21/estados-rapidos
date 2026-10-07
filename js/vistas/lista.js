@@ -1,7 +1,8 @@
-// Pantalla "Productos": filtro por sección (chips con scroll propio), agrupado "Todas" con
-// encabezados plegables, dos vistas (lista compacta / grilla 3 columnas) y selección múltiple
-// persistente con la barra "Publicar N". Ronda "secciones" (CREAR-BRIEF.md): un producto puede
-// estar en varias secciones a la vez (etiquetas, no carpetas).
+// Pantalla "Productos" (inicio). Rediseño 2026-10-07, réplica del mock que entregó Bruno: buscador,
+// botones "Filtros" (abre el panel con las secciones y la selección rápida) y "Ordenar", cuenta de
+// productos + conmutador Lista/Grilla, secciones plegables, tarjetas de grilla en 2 columnas y la
+// barra fija "Publicar N productos" con el "+" al lado. Un producto puede estar en varias
+// secciones a la vez (etiquetas, no carpetas).
 import * as repo from '../repositorio.js';
 import {
   formatearPrecio,
@@ -10,6 +11,10 @@ import {
   agruparProductosPorSeccion,
   contarProductosPorSeccion,
   filtrarProductosPorSeccion,
+  ordenarProductos,
+  coincideBusqueda,
+  ORDENES_LISTA,
+  ETIQUETA_ORDEN_LISTA,
   ID_SIN_SECCION,
 } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
@@ -18,6 +23,9 @@ import { abrirHojaRevision } from './revision.js';
 import { crearIcono } from '../utils/iconos.js';
 
 let urlsActuales = [];
+// Lo escrito en el buscador vale mientras la app esté abierta (no se guarda): así sobrevive a los
+// re-render de la lista (marcar todos, cambiar de vista) sin quedar pegado para el otro día.
+let busquedaActual = '';
 
 function limpiarUrls() {
   urlsActuales.forEach((u) => URL.revokeObjectURL(u));
@@ -75,6 +83,7 @@ export async function render(contenedor, { navegar }) {
     return;
   }
   if (!esVigente()) return;
+  productos = ordenarProductos(productos, prefs.orden);
 
   const recargar = () => render(contenedor, { navegar });
   await formatoActual();
@@ -102,17 +111,21 @@ export async function render(contenedor, { navegar }) {
     if (!esVigente()) return;
 
     const conteos = contarProductosPorSeccion(productos, secciones);
-    piezas.push(filaFiltro(secciones, conteos, prefs, { navegar, recargar }));
-
     const visibles = filtrarProductosPorSeccion(productos, prefs.filtroSeccion);
-    // Conmutador Lista/Grilla + "Marcar todos"/"Desmarcar": UNA sola fila en los 2 diseños (no 2
-    // piezas apiladas) — productos_lista_natural/productos_vista_grilla_natural.
-    piezas.push(filaControles(prefs, visibles, recargar));
+    const alBuscar = () => aplicarBusqueda(contenedor, productos);
 
+    piezas.push(buscador(alBuscar));
+    const panelFiltros = panelDeFiltros(secciones, conteos, prefs, visibles, { navegar, recargar });
+    piezas.push(filaFiltrosYOrden(prefs, panelFiltros, recargar));
+    piezas.push(panelFiltros);
+    piezas.push(filaControles(prefs, recargar));
+
+    const nombrePorSeccion = new Map(secciones.map((s) => [s.id, s.nombre]));
     const ctx = {
       navegar,
       recargar,
       fotoUrlPorId,
+      nombrePorSeccion,
       vista: prefs.vista,
       onToggle: async (producto, checked) => {
         producto.seleccionado = checked;
@@ -120,7 +133,8 @@ export async function render(contenedor, { navegar }) {
         // Sin recomponer todo: solo se sincronizan las casillas del mismo producto (puede
         // aparecer en 2 grupos a la vez) y la barra fija "Publicar N" (CREAR-BRIEF.md, rendimiento).
         sincronizarSeleccion(contenedor, producto.id, checked);
-        actualizarBarraPublicarFija(contenedor, productos, prefs.vista);
+        actualizarBarraPublicarFija(contenedor, productos);
+        actualizarContadoresDeGrupo(contenedor, productos);
       },
     };
 
@@ -135,34 +149,61 @@ export async function render(contenedor, { navegar }) {
       }
       piezas.push(botonPublicarSeccion(visibles));
     }
+    piezas.push(estadoSinResultados());
 
     if (prefs.vista !== 'grilla' && visibles.length > 0) piezas.push(consejoPublicacion());
-
-    const seleccionados = productos.filter((p) => p.seleccionado);
-    if (seleccionados.length > 0) piezas.push(barraPublicarFija(seleccionados, prefs.vista));
   }
 
-  // El header (index.html, fuera de `contenedor`) y el FAB cambian de piel según la vista: los 2
-  // diseños dibujan el "+" de la cabecera y el FAB distinto en productos_lista_natural
-  // (FAB oscuro relleno, "+" del header sin fondo) que en productos_vista_grilla_natural (FAB
-  // blanco con borde, "+" del header dentro de un cuadrado con fondo).
-  const enGrilla = productos.length > 0 && prefs.vista === 'grilla';
-  document.querySelector('.encabezado__accion')?.classList.toggle('encabezado__accion--grilla', enGrilla);
-
-  const fab = document.createElement('button');
-  fab.type = 'button';
-  fab.className = 'fab' + (enGrilla ? ' fab--grilla' : '');
-  fab.setAttribute('data-accion', 'agregar');
-  fab.setAttribute('aria-label', 'Agregar producto');
-  fab.append(crearIcono('agregar'));
-  fab.addEventListener('click', () => navegar('#/producto/nuevo'));
-  piezas.push(fab);
+  // Barra fija de abajo: "Publicar N productos" (solo con marcados) + el "+" de agregar al lado.
+  // Sin marcados queda solo el "+", en el mismo lugar.
+  piezas.push(barraPublicarFija(productos.filter((p) => p.seleccionado), navegar));
 
   // Guarda contra una carrera real (BUGS.md #34): si mientras se armaban las piezas el usuario ya
   // navegó a OTRA pantalla, este render que recién termina no puede pisarla con la lista vieja.
   if (!esVigente()) return;
   contenedor.textContent = '';
   contenedor.append(...piezas);
+  if (productos.length > 0) aplicarBusqueda(contenedor, productos);
+}
+
+/** Muestra solo los productos que coinciden con `busquedaActual` (sin recomponer la lista: se
+ * ocultan filas/tarjetas y los grupos que quedan vacíos) y actualiza la cuenta "N productos". */
+function aplicarBusqueda(contenedor, productos) {
+  const coincide = new Set(productos.filter((p) => coincideBusqueda(p, busquedaActual)).map((p) => p.id));
+  const mostrados = new Set();
+  contenedor.querySelectorAll('.grilla-item[data-id], .fila-compacta[data-id]').forEach((el) => {
+    const visible = coincide.has(el.dataset.id);
+    el.hidden = !visible;
+    if (visible) mostrados.add(el.dataset.id);
+  });
+  contenedor.querySelectorAll('details.grupo-seccion').forEach((grupo) => {
+    grupo.hidden = !grupo.querySelector('[data-id]:not([hidden])');
+  });
+  const buscando = busquedaActual.trim() !== '';
+  const cuenta = contenedor.querySelector('[data-estado="cuenta-productos"]');
+  if (cuenta) cuenta.textContent = `${mostrados.size} producto${mostrados.size === 1 ? '' : 's'}`;
+  const sinResultados = contenedor.querySelector('[data-estado="sin-resultados"]');
+  if (sinResultados) sinResultados.hidden = !(buscando && mostrados.size === 0);
+  // "Publicar esta sección" y el consejo no tienen sentido sobre una búsqueda sin resultados.
+  contenedor.querySelectorAll('.boton-publicar-seccion, .consejo').forEach((el) => {
+    el.hidden = buscando && mostrados.size === 0;
+  });
+}
+
+/** El contador de cada grupo ("2 seleccionados" o la cantidad) al día después de marcar/desmarcar. */
+function actualizarContadoresDeGrupo(contenedor, productos) {
+  const porId = new Map(productos.map((p) => [p.id, p]));
+  contenedor.querySelectorAll('details.grupo-seccion').forEach((grupo) => {
+    const ids = [...new Set([...grupo.querySelectorAll('[data-id]')].map((el) => el.dataset.id))];
+    const marcados = ids.filter((id) => porId.get(id)?.seleccionado).length;
+    const contador = grupo.querySelector('.grupo__contador');
+    if (contador) pintarContadorDeGrupo(contador, marcados, ids.length);
+  });
+}
+
+function pintarContadorDeGrupo(contador, marcados, total) {
+  contador.className = 'grupo__contador' + (marcados > 0 ? ' grupo__contador--seleccion' : '');
+  contador.textContent = marcados > 0 ? `${marcados} seleccionado${marcados === 1 ? '' : 's'}` : String(total);
 }
 
 /** Actualiza SOLO las casillas del producto `id` (puede haber más de una si está en 2 secciones y
@@ -179,18 +220,20 @@ function sincronizarSeleccion(contenedor, id, checked) {
   });
 }
 
-/** Recalcula la barra fija "Publicar N" (marcados) a partir de `productos` ya actualizado en
- * memoria, y la reemplaza/crea/saca sin tocar el resto del DOM. */
-function actualizarBarraPublicarFija(contenedor, productos, vista) {
+/** Recalcula el botón "Publicar N" (marcados) a partir de `productos` ya actualizado en memoria,
+ * y lo reemplaza/crea/saca dentro de la barra fija sin tocar el resto del DOM. */
+function actualizarBarraPublicarFija(contenedor, productos) {
+  const barra = contenedor.querySelector('.barra-publicar');
+  if (!barra) return;
   const seleccionados = productos.filter((p) => p.seleccionado);
-  const actual = contenedor.querySelector('.barra-publicar');
+  const actual = barra.querySelector('[data-accion="publicar-seleccionados"]');
   if (seleccionados.length === 0) {
     actual?.remove();
     return;
   }
-  const nueva = barraPublicarFija(seleccionados, vista);
-  if (actual) actual.replaceWith(nueva);
-  else contenedor.append(nueva);
+  const nuevo = botonPublicarSeleccionados(seleccionados);
+  if (actual) actual.replaceWith(nuevo);
+  else barra.prepend(nuevo);
 }
 
 function estadoVacio() {
@@ -222,11 +265,117 @@ function estadoVacioFiltro() {
   return div;
 }
 
-// --- Fila de filtro por sección: chips con scroll horizontal PROPIO ("Todas" + "Sin sección" +
-// cada sección, con contador — mismo orden que productos_lista_natural), la elegida se recuerda
-// (CREAR-BRIEF.md). Nota: el orden del AGRUPADO ("Todas", vistaAgrupada) es otro — ahí "Sin
-// sección" va al final a propósito (test "Sin sección queda al final del agrupado Todas"); acá es
-// solo el orden de los chips del filtro, sin relación con ese. ---
+function estadoSinResultados() {
+  const div = document.createElement('div');
+  div.className = 'estado';
+  div.setAttribute('data-estado', 'sin-resultados');
+  div.hidden = true;
+  const icono = document.createElement('div');
+  icono.className = 'estado__icono';
+  icono.append(crearIcono('buscar'));
+  const titulo = document.createElement('div');
+  titulo.className = 'estado__titulo';
+  titulo.textContent = 'Ningún producto coincide';
+  const texto = document.createElement('p');
+  texto.className = 'texto-tenue';
+  texto.textContent = 'Probá con otra palabra o borrá la búsqueda.';
+  div.append(icono, titulo, texto);
+  return div;
+}
+
+// --- Buscador: filtra por nombre y descripción mientras se escribe, sin recomponer la lista. ---
+function buscador(alBuscar) {
+  const cont = document.createElement('label');
+  cont.className = 'buscador';
+  const input = document.createElement('input');
+  input.type = 'search';
+  input.className = 'buscador__input';
+  input.placeholder = 'Buscar productos...';
+  input.setAttribute('aria-label', 'Buscar productos');
+  input.setAttribute('data-accion', 'buscar-productos');
+  input.enterKeyHint = 'search';
+  input.value = busquedaActual;
+  input.addEventListener('input', () => {
+    busquedaActual = input.value;
+    alBuscar();
+  });
+  cont.append(crearIcono('buscar'), input);
+  return cont;
+}
+
+// --- "Filtros" (abre/cierra el panel de abajo; el número dice cuántos filtros hay puestos) y
+// "Ordenar" (un <select> real tapado por el botón: abre el selector nativo del teléfono). ---
+function filaFiltrosYOrden(prefs, panelFiltros, recargar) {
+  const fila = document.createElement('div');
+  fila.className = 'fila-filtros';
+
+  const btnFiltros = document.createElement('button');
+  btnFiltros.type = 'button';
+  btnFiltros.className = 'boton-control';
+  btnFiltros.setAttribute('data-accion', 'abrir-filtros');
+  btnFiltros.setAttribute('aria-expanded', String(prefs.filtrosAbiertos));
+  btnFiltros.setAttribute('aria-controls', panelFiltros.id);
+  btnFiltros.append(crearIcono('filtro'), document.createTextNode('Filtros'));
+  if (prefs.filtroSeccion !== 'todas') {
+    const badge = document.createElement('span');
+    badge.className = 'boton-control__badge';
+    badge.textContent = '1';
+    badge.setAttribute('aria-label', '1 filtro puesto');
+    btnFiltros.append(badge);
+  }
+  btnFiltros.addEventListener('click', () => {
+    const abrir = panelFiltros.hidden;
+    panelFiltros.hidden = !abrir;
+    btnFiltros.setAttribute('aria-expanded', String(abrir));
+    prefs.filtrosAbiertos = abrir;
+    repo.guardarPreferenciasLista({ filtrosAbiertos: abrir });
+  });
+
+  const cajaOrden = document.createElement('div');
+  cajaOrden.className = 'boton-control boton-control--select';
+  const etiquetaOrden = document.createElement('span');
+  etiquetaOrden.textContent = 'Ordenar';
+  const selectOrden = document.createElement('select');
+  selectOrden.className = 'boton-control__select';
+  selectOrden.setAttribute('data-accion', 'ordenar-productos');
+  selectOrden.setAttribute('aria-label', 'Ordenar productos');
+  for (const valor of ORDENES_LISTA) {
+    const opcion = document.createElement('option');
+    opcion.value = valor;
+    opcion.textContent = ETIQUETA_ORDEN_LISTA[valor];
+    selectOrden.append(opcion);
+  }
+  selectOrden.value = prefs.orden;
+  selectOrden.addEventListener('change', async () => {
+    await repo.guardarPreferenciasLista({ orden: selectOrden.value });
+    recargar();
+  });
+  cajaOrden.append(crearIcono('ordenar'), etiquetaOrden, selectOrden);
+
+  fila.append(btnFiltros, cajaOrden);
+  return fila;
+}
+
+/** Panel que abre "Filtros": las secciones (chips), "Secciones" para administrarlas y la selección
+ * rápida de lo que se está viendo. */
+function panelDeFiltros(secciones, conteos, prefs, visibles, { navegar, recargar }) {
+  const panel = document.createElement('div');
+  panel.className = 'panel-filtros';
+  panel.id = 'panel-filtros';
+  panel.hidden = !prefs.filtrosAbiertos;
+  const rotuloSecciones = document.createElement('span');
+  rotuloSecciones.className = 'panel-filtros__rotulo';
+  rotuloSecciones.textContent = 'Sección';
+  const rotuloSeleccion = document.createElement('span');
+  rotuloSeleccion.className = 'panel-filtros__rotulo';
+  rotuloSeleccion.textContent = 'Selección';
+  panel.append(rotuloSecciones, filaFiltro(secciones, conteos, prefs, { navegar, recargar }), rotuloSeleccion, barraSeleccion(visibles, recargar));
+  return panel;
+}
+
+// --- Chips de sección ("Todas" + "Sin sección" + cada sección, con contador), la elegida se
+// recuerda (CREAR-BRIEF.md). Nota: el orden del AGRUPADO ("Todas", vistaAgrupada) es otro — ahí
+// "Sin sección" va al final a propósito (test "Sin sección queda al final del agrupado Todas"). ---
 function filaFiltro(secciones, conteos, prefs, { navegar, recargar }) {
   const cont = document.createElement('div');
   cont.className = 'filtro-secciones';
@@ -264,14 +413,16 @@ function filaFiltro(secciones, conteos, prefs, { navegar, recargar }) {
   return cont;
 }
 
-// --- Fila de controles: conmutador Lista/Grilla + "Marcar todos"/"Desmarcar" en UNA sola fila
-// (justify-between), como en los 2 diseños — antes eran 2 piezas apiladas en 2 líneas. La grilla
-// además lleva un separador abajo (productos_vista_grilla_natural, "border-b"); la lista no. ---
-function filaControles(prefs, visibles, recargar) {
+// --- Fila de controles: la cuenta "N productos" a la izquierda y el conmutador Lista/Grilla a la
+// derecha (mock del inicio). "Marcar todos"/"Desmarcar" viven en el panel de "Filtros". ---
+function filaControles(prefs, recargar) {
   const cont = document.createElement('div');
-  const enGrilla = prefs.vista === 'grilla';
-  cont.className = 'fila-controles' + (enGrilla ? ' fila-controles--grilla' : '');
-  cont.append(conmutadorVista(prefs, recargar), barraSeleccion(visibles, recargar, prefs.vista));
+  cont.className = 'fila-controles';
+  const cuenta = document.createElement('span');
+  cuenta.className = 'fila-controles__cuenta';
+  cuenta.setAttribute('data-estado', 'cuenta-productos');
+  cuenta.setAttribute('role', 'status');
+  cont.append(cuenta, conmutadorVista(prefs, recargar));
   return cont;
 }
 
@@ -302,32 +453,22 @@ function conmutadorVista(prefs, recargar) {
   return cont;
 }
 
-// --- Barra de selección rápida: "Marcar todos" / "Desmarcar". Los 2 diseños la dibujan distinto
-// (productos_lista_natural: pastillas con borde; productos_vista_grilla_natural: links de texto
-// con ícono y un "|" de separador) — mismo criterio que el encabezado de sección: un componente,
-// 2 pieles según `vista`. ---
-function barraSeleccion(visibles, recargar, vista) {
+// --- Selección rápida: "Marcar todos" / "Desmarcar" (panel de "Filtros"). ---
+function barraSeleccion(visibles, recargar) {
   const div = document.createElement('div');
-  const enGrilla = vista === 'grilla';
-  div.className = 'barra-seleccion' + (enGrilla ? ' barra-seleccion--grilla' : '');
+  div.className = 'barra-seleccion';
 
   const btnMarcarTodos = document.createElement('button');
   btnMarcarTodos.type = 'button';
   btnMarcarTodos.className = 'barra-seleccion__boton';
   btnMarcarTodos.setAttribute('data-accion', 'marcar-todos');
-  if (enGrilla) btnMarcarTodos.append(crearIcono('todos'));
-  btnMarcarTodos.append(document.createTextNode('Marcar todos'));
+  btnMarcarTodos.append(crearIcono('todos'), document.createTextNode('Marcar todos'));
   btnMarcarTodos.addEventListener('click', async () => {
     // Solo los VISIBLES (el filtro de sección activo): "Marcar todos" dentro de una sección marca
     // nada más que esa sección (CREAR-BRIEF.md).
     await repo.marcarTodos(true, visibles.map((p) => p.id));
     recargar();
   });
-
-  const separador = document.createElement('span');
-  separador.className = 'barra-seleccion__separador';
-  separador.textContent = '|';
-  separador.setAttribute('aria-hidden', 'true');
 
   const btnDesmarcar = document.createElement('button');
   btnDesmarcar.type = 'button';
@@ -339,8 +480,7 @@ function barraSeleccion(visibles, recargar, vista) {
     recargar();
   });
 
-  if (enGrilla) div.append(btnMarcarTodos, separador, btnDesmarcar);
-  else div.append(btnMarcarTodos, btnDesmarcar);
+  div.append(btnMarcarTodos, btnDesmarcar);
   return div;
 }
 
@@ -361,40 +501,41 @@ function consejoPublicacion() {
   return div;
 }
 
-function barraPublicarFija(seleccionados, vista) {
-  const enGrilla = vista === 'grilla';
+/** Barra fija de abajo (mock del inicio): "Publicar N productos" con el ícono de WhatsApp y, al
+ * lado, el "+" para agregar un producto. El botón de publicar solo existe con productos marcados. */
+function barraPublicarFija(seleccionados, navegar) {
   const div = document.createElement('div');
   div.className = 'barra-publicar';
+  if (seleccionados.length > 0) div.append(botonPublicarSeleccionados(seleccionados));
+  const btnAgregar = document.createElement('button');
+  btnAgregar.type = 'button';
+  btnAgregar.className = 'barra-publicar__agregar';
+  btnAgregar.setAttribute('data-accion', 'agregar');
+  btnAgregar.setAttribute('aria-label', 'Agregar producto');
+  btnAgregar.append(crearIcono('agregar'));
+  btnAgregar.addEventListener('click', () => navegar('#/producto/nuevo'));
+  div.append(btnAgregar);
+  return div;
+}
+
+function botonPublicarSeleccionados(seleccionados) {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'boton boton--primario boton--ancho';
+  btn.className = 'boton boton--primario barra-publicar__boton';
   btn.setAttribute('data-accion', 'publicar-seleccionados');
-  // "Publicar N producto(s)" (productos_lista_natural/productos_vista_grilla_natural). Ni el
-  // ícono ni el badge "WhatsApp →" (grilla) suman texto real: el ícono es SVG sin nodos de texto,
-  // y el badge se dibuja con CSS `content` (decorativo, `aria-hidden`) — así `toHaveText(...)` en
-  // los tests sigue matcheando exacto "Publicar N producto(s)" aunque se vea el badge.
+  // El ícono es SVG sin nodos de texto: `textContent` del botón es exacto "Publicar N producto(s)"
+  // (lo leen los tests). El texto va en un <span> que trunca con ellipsis a fuente grande/pantallas
+  // angostas en vez de empujar el "+" fuera de la pantalla (overflow-fuente-grande.spec.js).
   const palabra = seleccionados.length === 1 ? 'producto' : 'productos';
-  // Ícono + texto van agrupados en un <span> que se puede achicar (el texto trunca con ellipsis
-  // adentro): a fuente grande/pantallas angostas eso evita que el badge o el ícono se empujen
-  // fuera de la pantalla (BUGS.md, overflow-fuente-grande.spec.js). `textContent` del botón sigue
-  // siendo exacto "Publicar N producto(s)" para los tests — la ellipsis es solo visual (CSS).
-  const contenido = document.createElement('span');
-  contenido.className = 'barra-publicar__contenido';
   const texto = document.createElement('span');
   texto.className = 'barra-publicar__texto';
   texto.textContent = `Publicar ${seleccionados.length} ${palabra}`;
-  contenido.append(crearIcono(enGrilla ? 'compartir' : 'enviar'), texto);
-  btn.append(contenido);
-  if (enGrilla) {
-    btn.classList.add('boton--publicar-grilla');
-    const badge = document.createElement('span');
-    badge.className = 'barra-publicar__whatsapp';
-    badge.setAttribute('aria-hidden', 'true');
-    btn.append(badge);
-  }
+  const redondel = document.createElement('span');
+  redondel.className = 'barra-publicar__wa';
+  redondel.append(crearIcono('whatsapp'));
+  btn.append(redondel, texto);
   btn.addEventListener('click', () => abrirHojaRevision({ ids: seleccionados.map((p) => p.id) }));
-  div.append(btn);
-  return div;
+  return btn;
 }
 
 /** Botón "Publicar esta sección (N)": independiente de las casillas marcadas, publica TODOS los
@@ -421,21 +562,16 @@ function vistaAgrupada(productos, secciones, prefs, recargar, ctx) {
     const detalle = document.createElement('details');
     detalle.className = 'grupo grupo-seccion';
     detalle.open = !prefs.gruposPlegados?.[clave];
-    // Los 2 diseños dibujan este mismo encabezado distinto: productos_lista_natural usa una
-    // etiqueta chica en mayúsculas; productos_vista_grilla_natural, un título editorial grande.
     const resumen = document.createElement('summary');
-    resumen.className = `grupo__titulo grupo__titulo--seccion grupo__titulo--seccion-${ctx.vista === 'grilla' ? 'grilla' : 'lista'}`;
+    resumen.className = 'grupo__titulo grupo__titulo--seccion';
     const nombreYContador = document.createElement('span');
     nombreYContador.className = 'grupo__titulo-grupo';
     const nombre = document.createElement('span');
     nombre.className = 'grupo__titulo-texto';
     nombre.textContent = grupo.nombre;
+    // Con marcados en el grupo, el contador lo dice ("2 seleccionados"); si no, la cantidad.
     const contador = document.createElement('span');
-    // Si hay marcados en el grupo, el contador lo dice (productos_lista_natural: "3 seleccionados");
-    // si no, es la cuenta neutra del grupo (productos_vista_grilla_natural: "3").
-    const marcados = grupo.productos.filter((p) => p.seleccionado).length;
-    contador.className = 'grupo__contador' + (marcados > 0 ? ' grupo__contador--seleccion' : '');
-    contador.textContent = marcados > 0 ? `${marcados} seleccionados` : String(grupo.productos.length);
+    pintarContadorDeGrupo(contador, grupo.productos.filter((p) => p.seleccionado).length, grupo.productos.length);
     nombreYContador.append(nombre, contador);
     // El texto empieza siempre por el nombre del grupo (sin espacio antes del contador): los tests
     // que chequean el prefijo de `summary.textContent` (ej. "Sin sección...") siguen pasando.
@@ -557,7 +693,7 @@ function filaCompacta(producto, ctx) {
   btnPublicar.className = 'boton-icono boton-icono-mini boton-icono-mini--lleno';
   btnPublicar.setAttribute('data-accion', 'publicar');
   btnPublicar.setAttribute('aria-label', `Publicar ${producto.nombre}`);
-  btnPublicar.append(crearIcono('subir'));
+  btnPublicar.append(crearIcono('enviar'));
   btnPublicar.addEventListener('click', () => abrirHojaRevision({ ids: [producto.id] }));
 
   const btnBorrar = document.createElement('button');
@@ -654,16 +790,22 @@ function tarjetaGrilla(producto, ctx) {
   checkbox.addEventListener('change', () => ctx.onToggle(producto, checkbox.checked));
   cajaCheckbox.append(checkbox);
 
-  const listo = document.createElement('span');
-  listo.className = 'grilla-item__listo';
-  listo.textContent = 'Listo';
-  listo.setAttribute('aria-hidden', 'true');
-
-  fotoCaja.append(foto, cajaCheckbox, listo);
+  fotoCaja.append(foto, cajaCheckbox);
 
   const nombre = document.createElement('div');
   nombre.className = 'grilla-item__nombre';
   nombre.textContent = producto.nombre;
+
+  // Chips con las secciones del producto (hasta 2). El renglón existe siempre, aunque no tenga
+  // ninguna: así todas las tarjetas de una fila miden lo mismo.
+  const chips = document.createElement('div');
+  chips.className = 'grilla-item__chips';
+  for (const idSeccion of (producto.secciones ?? []).filter((id) => ctx.nombrePorSeccion.has(id)).slice(0, 2)) {
+    const chip = document.createElement('span');
+    chip.className = 'grilla-item__chip';
+    chip.textContent = ctx.nombrePorSeccion.get(idSeccion);
+    chips.append(chip);
+  }
 
   const precio = document.createElement('div');
   precio.className = 'grilla-item__precio';
@@ -706,7 +848,7 @@ function tarjetaGrilla(producto, ctx) {
   });
 
   pie.append(btnPrecio, btnPublicar);
-  div.append(fotoCaja, nombre, precio, pie);
+  div.append(fotoCaja, nombre, chips, precio, pie);
   return div;
 }
 

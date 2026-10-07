@@ -1,5 +1,7 @@
 // Confirmación de dos pasos propia (NUNCA confirm() nativo). Devuelve una Promise<boolean>.
-export function pedirConfirmacion({ titulo, mensaje, textoConfirmar = 'Borrar', textoCancelar = 'Cancelar' }) {
+// Con `textoAlternativa` suma un tercer botón (primario, ej. "Guardar y salir"): elegirlo resuelve
+// con el string 'alternativa' en vez de un booleano.
+export function pedirConfirmacion({ titulo, mensaje, textoConfirmar = 'Borrar', textoCancelar = 'Cancelar', textoAlternativa = '' }) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'dialogo-overlay';
@@ -50,9 +52,20 @@ export function pedirConfirmacion({ titulo, mensaje, textoConfirmar = 'Borrar', 
     document.addEventListener('keydown', alEscape);
 
     acciones.append(btnCancelar, btnConfirmar);
+    let btnAlternativa = null;
+    if (textoAlternativa) {
+      btnAlternativa = document.createElement('button');
+      btnAlternativa.type = 'button';
+      btnAlternativa.className = 'boton boton--primario';
+      btnAlternativa.textContent = textoAlternativa;
+      btnAlternativa.setAttribute('data-accion', 'confirmar-alternativa');
+      btnAlternativa.addEventListener('click', () => cerrar('alternativa'));
+      acciones.classList.add('dialogo__acciones--tres');
+      acciones.prepend(btnAlternativa);
+    }
     caja.append(h, p, acciones);
     overlay.append(caja);
     document.body.append(overlay);
-    btnConfirmar.focus();
+    (btnAlternativa || btnConfirmar).focus();
   });
 }

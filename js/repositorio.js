@@ -13,6 +13,8 @@ import {
   migrarAjustesPorEstilo,
   normalizarAjustesPorEstilo,
   generarId,
+  ORDENES_LISTA,
+  ORDEN_LISTA_POR_DEFECTO,
 } from './modelo.js';
 import { achicarFoto, blobABase64, base64ABlob } from './utils/imagen.js';
 import { generarPlantillaPorDefecto } from './plantilla-defecto.js';
@@ -33,13 +35,15 @@ export async function obtenerProducto(id) {
   return producto ? normalizarProductoLeido(producto) : null;
 }
 
-export async function guardarProducto(datos, archivoFoto) {
+/** `fotoYaAchicada`: `archivoFoto` ya pasó por `achicarFoto` al elegirla (alta/edición) y se guarda
+ * tal cual, sin volver a decodificarla (BUGS.md #73). */
+export async function guardarProducto(datos, archivoFoto, { fotoYaAchicada = false } = {}) {
   const existente = datos.id ? await db.obtener('productos', datos.id) : null;
   const id = datos.id || generarId();
   let fotoId = existente?.fotoId ?? null;
 
   if (archivoFoto) {
-    const blobChico = await achicarFoto(archivoFoto);
+    const blobChico = fotoYaAchicada ? archivoFoto : await achicarFoto(archivoFoto);
     fotoId = fotoId || `foto_${id}`;
     await db.guardar('blobs', { id: fotoId, blob: blobChico });
   }
@@ -183,14 +187,25 @@ export async function obtenerPreferenciasLista() {
     filtroSeccion: guardado?.filtroSeccion ?? 'todas',
     vista: guardado?.vista === 'grilla' ? 'grilla' : 'compacta',
     gruposPlegados: guardado?.gruposPlegados ?? {},
+    // Rediseño del inicio (2026-10-07): orden elegido en "Ordenar" y si el panel de "Filtros" quedó
+    // abierto. Un registro de antes no los trae: orden manual y filtros cerrados.
+    orden: ORDENES_LISTA.includes(guardado?.orden) ? guardado.orden : ORDEN_LISTA_POR_DEFECTO,
+    filtrosAbiertos: guardado?.filtrosAbiertos === true,
   };
 }
 
-export async function guardarPreferenciasLista(parcial) {
-  const actual = await obtenerPreferenciasLista();
-  const nuevo = { ...actual, ...parcial };
-  await db.guardar('config', nuevo);
-  return nuevo;
+// En cola: cada guardado lee-modifica-escribe, y dos seguidos sin esperar (abrir "Filtros" y elegir
+// una sección al toque) se pisaban entre sí.
+let colaPreferenciasLista = Promise.resolve();
+export function guardarPreferenciasLista(parcial) {
+  const guardado = colaPreferenciasLista.then(async () => {
+    const actual = await obtenerPreferenciasLista();
+    const nuevo = { ...actual, ...parcial };
+    await db.guardar('config', nuevo);
+    return nuevo;
+  });
+  colaPreferenciasLista = guardado.catch(() => {});
+  return guardado;
 }
 
 async function siguienteOrden() {
@@ -293,6 +308,9 @@ export async function obtenerAjustesGenerales() {
     // "Incluir texto" de la hoja de revisión (ronda "compartir sin texto", 2026-09-28): se recuerda
     // la última elección; por defecto encendido (copiar/mandar el texto es lo de siempre).
     incluirTextoAlCompartir: true,
+    // "Mostrar la sección en la imagen" (hoja de revisión, 2026-10-07): encendido por defecto, como
+    // salían siempre los presets que llevan la etiqueta de sección.
+    mostrarSeccionEnImagen: true,
     // Calidad de imagen al exportar (Fase 2, "S" #5): se recuerda la última elección de la hoja de
     // revisión; por defecto 'estandar' (mismo criterio que los campos de arriba: un registro de
     // antes de esta ronda no lo trae y queda con el valor por defecto).
@@ -340,6 +358,15 @@ export async function guardarEncuadreFoto(encuadreFoto) {
 export async function guardarIncluirTextoAlCompartir(incluirTextoAlCompartir) {
   const config = await obtenerAjustesGenerales();
   config.incluirTextoAlCompartir = !!incluirTextoAlCompartir;
+  await db.guardar('config', config);
+  return config;
+}
+
+/** "Mostrar la sección en la imagen" de la hoja de revisión: apagado, ningún estilo dibuja el
+ * nombre de la sección del producto. Se recuerda entre hojas. */
+export async function guardarMostrarSeccionEnImagen(mostrar) {
+  const config = await obtenerAjustesGenerales();
+  config.mostrarSeccionEnImagen = !!mostrar;
   await db.guardar('config', config);
   return config;
 }
@@ -421,6 +448,7 @@ export async function exportarRespaldo() {
       descripcionModelo: general.descripcionModelo,
       encuadreFoto: general.encuadreFoto,
       incluirTextoAlCompartir: general.incluirTextoAlCompartir,
+      mostrarSeccionEnImagen: general.mostrarSeccionEnImagen,
       calidadImagen: general.calidadImagen,
       nombreNegocio: general.nombreNegocio,
       textoBoton: general.textoBoton,
@@ -496,6 +524,7 @@ export async function importarRespaldo(respaldo) {
     descripcionModelo: respaldo.general?.descripcionModelo || DESCRIPCION_MODELO_POR_DEFECTO,
     encuadreFoto: respaldo.general?.encuadreFoto || ENCUADRE_FOTO_POR_DEFECTO,
     incluirTextoAlCompartir: respaldo.general?.incluirTextoAlCompartir ?? true,
+    mostrarSeccionEnImagen: respaldo.general?.mostrarSeccionEnImagen ?? true,
     calidadImagen: respaldo.general?.calidadImagen || CALIDAD_IMAGEN_POR_DEFECTO,
     nombreNegocio: respaldo.general?.nombreNegocio ?? NOMBRE_NEGOCIO_POR_DEFECTO,
     textoBoton: respaldo.general?.textoBoton || TEXTO_BOTON_POR_DEFECTO,

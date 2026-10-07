@@ -103,6 +103,7 @@ test('reordenar arrastrando con el dedo desde la manija cambia el orden', async 
   // editor y la secuencia usan pointer events y por eso el test tiene que simular touch real, no
   // dragTo() de Playwright (que usa mousedown/mousemove, no pointerdown con setPointerCapture).
   const manijaAlfa = itemPorNombre(page, 'Alfa').locator('[data-accion="arrastrar"]');
+  await itemPorNombre(page, 'Gama').scrollIntoViewIfNeeded(); // origen y destino dentro de la ventana
   const cajaManija = await manijaAlfa.boundingBox();
   const cajaGama = await itemPorNombre(page, 'Gama').boundingBox();
   const x0 = cajaManija.x + cajaManija.width / 2;

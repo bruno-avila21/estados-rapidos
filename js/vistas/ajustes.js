@@ -337,7 +337,7 @@ export async function render(contenedor, { navegar }) {
   tituloModo.className = 'apariencia__titulo';
   tituloModo.textContent = 'Modo';
   const segmentadoModo = document.createElement('div');
-  segmentadoModo.className = 'segmentado segmentado--3';
+  segmentadoModo.className = 'segmentado'; // 4 modos en 2×2
   segmentadoModo.setAttribute('role', 'group');
   segmentadoModo.setAttribute('aria-label', 'Modo claro u oscuro');
   const tituloTono = document.createElement('span');

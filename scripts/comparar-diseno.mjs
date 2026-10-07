@@ -82,7 +82,7 @@ const ESCENAS = {
         return guardado.id;
       }, fotoBase64);
       await page.goto(`/#/producto/${id}`);
-      await page.waitForSelector('.foto-picker__vista:not([hidden])', { state: 'visible' });
+      await page.waitForSelector('.foto-picker .vista-previa-estado__imagen', { state: 'visible' });
       await page.waitForTimeout(150);
     },
   },

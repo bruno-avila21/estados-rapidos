@@ -13,6 +13,13 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Rediseño del inicio (2026-10-07): las secciones y "Marcar todos"/"Desmarcar" viven en el panel
+// que abre el botón "Filtros" (queda abierto una vez que se lo abre).
+async function abrirFiltros(page) {
+  const boton = page.locator('[data-accion="abrir-filtros"]');
+  if ((await boton.getAttribute('aria-expanded')) === 'false') await boton.click();
+}
+
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const FOTO = path.join(AQUI, 'fixtures', 'producto.png');
 
@@ -213,6 +220,7 @@ for (const ancho of ANCHOS) {
 
       await page.goto('/#/');
       // Filtro por sección (chips con scroll horizontal propio) + "Publicar esta sección (N)".
+      await abrirFiltros(page);
       await page.locator('[data-accion="filtro-seccion"]', { hasText: 'Lunes para publicar' }).click();
       await esperarSinDesborde(page, 'Productos (filtro por sección)');
       await expect(page.locator('[data-accion="publicar-seccion"]')).toBeVisible();
@@ -222,6 +230,7 @@ for (const ancho of ANCHOS) {
       await esperarSinDesborde(page, 'Productos (grilla, filtrado)');
 
       // Volver a "Todas" + lista compacta para el resto del flujo (agrupado por sección).
+      await abrirFiltros(page);
       await page.locator('[data-accion="filtro-seccion"]', { hasText: 'Todas' }).click();
       await esperarSinDesborde(page, 'Productos (Todas, agrupado por sección, grilla)');
       await page.locator('[data-accion="vista-compacta"]').click();

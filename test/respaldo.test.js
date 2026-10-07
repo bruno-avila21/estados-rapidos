@@ -173,6 +173,13 @@ test('resolverSeccionNombre: toma la PRIMERA sección del producto', () => {
   assert.equal(resolverSeccionNombre({ secciones: ['s2', 's1'] }, secciones), 'Ofertas');
 });
 
+test('resolverSeccionNombre: con "mostrar la sección en la imagen" apagado, string vacío', () => {
+  const secciones = [{ id: 's1', nombre: 'Lunes' }];
+  assert.equal(resolverSeccionNombre({ secciones: ['s1'] }, secciones, { mostrarSeccionEnImagen: false }), '');
+  assert.equal(resolverSeccionNombre({ secciones: ['s1'] }, secciones, { mostrarSeccionEnImagen: true }), 'Lunes');
+  assert.equal(resolverSeccionNombre({ secciones: ['s1'] }, secciones, {}), 'Lunes'); // ajustes de antes: se muestra
+});
+
 test('resolverSeccionNombre: si la sección ya no existe (fue borrada), string vacío', () => {
   assert.equal(resolverSeccionNombre({ secciones: ['fantasma'] }, [{ id: 's1', nombre: 'Lunes' }]), '');
 });

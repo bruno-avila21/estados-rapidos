@@ -38,7 +38,8 @@ mano) hasta tocar "Listo". Ajustes arranca con la **vista previa** del estado y 
 el resto (encuadre, texto que acompaña, formato del precio, datos) va en bloques plegables.
 
 Apariencia elegible (Ajustes → Apariencia, `js/utils/tema.js` + `js/tema-inicial.js`, guardada en
-`localStorage` de ese celular): modo automático/claro/oscuro (`data-theme`) y tono del color primario
+`localStorage` de ese celular): modo automático/claro/oscuro/negro (`data-theme`; "Negro" es oscuro +
+`data-negro`: fondo negro puro y texto blanco) y tono del color primario
 (`data-tono`: Ciprés por defecto, Océano, Terracota, Ciruela, Grafito — `node scripts/capturas-tonos.mjs
 <carpeta>` para verlos).
 
@@ -128,8 +129,18 @@ propósito desde la pestaña "Respaldo" — y ese archivo tampoco se commitea (v
   arrastrando).
 - `js/respaldo-automatico.js` / `js/utils/respaldo-copia.js` — copia automática diaria del respaldo
   (APK + PWA) a la carpeta pública, con rotación (máximo 7 copias).
-- `js/vistas/*.js` — pantallas: `lista` (productos + selección + barra "Publicar N"), `detalle`
-  (alta/edición, con override de estilo en "Opciones avanzadas"), `ajustes` (tarjetas de estilo con
+- `js/main.js` — router por hash, guardia de salida (con "Guardar y salir") y `estadosRapidosBack`:
+  el Atrás del teléfono en el APK cierra lo que haya encima, vuelve a la pantalla anterior
+  (`pilaPantallas`) y recién desde Productos sale de la app.
+- `js/vistas/*.js` — pantallas: `lista` (inicio, réplica del mock de Bruno del 2026-10-07: buscador,
+  "Filtros" —panel con las secciones y "Marcar todos"— y "Ordenar", cuenta + conmutador
+  Lista/Grilla, secciones plegables, tarjetas en 2 columnas y barra fija "Publicar N productos" +
+  "+"; para verla a ojo: `node scripts/capturas-inicio.mjs <carpeta> <foto1> <foto2> …`), `detalle`
+  (alta/edición: la vista previa 9:16 del estado es la imagen del panel de foto, "Guardar" también
+  en la barra superior, override de estilo en "Opciones avanzadas"), `varias` ("Agregar varios",
+  `#/varias`: varias fotos de una vez y un producto por foto, con nombre y precio en una sola
+  pantalla; en el APK también llegan compartiendo fotos desde la galería — `recibirCompartidas`
+  en `PantallaPrincipal.kt` + `Android.fotosCompartidas()`), `ajustes` (tarjetas de estilo con
   miniatura en vivo, descripción modelo, formato de precio), `plantillas` (galería de estilos con
   favoritas), `plantilla` (editor de plantilla interactivo), `respaldo` (exportar/importar/borrar todo), `revision` (hoja de revisión antes de publicar).
 - `js/utils/*.js` — toast, confirmación propia (nunca `confirm()` nativo), compartir (con timeout

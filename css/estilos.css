@@ -44,6 +44,14 @@
   font-style: normal;
   font-display: swap;
 }
+/* Peso 700: títulos del inicio rediseñado (mock de Bruno, 2026-10-07). */
+@font-face {
+  font-family: 'EstadosManrope';
+  src: url('../fonts/manrope-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* Identidad visual: verde ciprés (primario) + umber cálido (acento secundario) sobre
@@ -64,6 +72,9 @@
   --color-peligro-fuerte: #8f1414;
   --color-peligro-texto: #ffffff;
   --color-exito: #3f5c38;
+  /* Verde de la marca WhatsApp: solo para el redondel del botón "Publicar N productos" (mock del
+     inicio). Un tono más oscuro que el oficial para que el glifo blanco llegue a 3:1. */
+  --color-whatsapp: #1fa855;
   --color-superposicion: rgba(36, 34, 32, 0.45);
   --sombra: 0 4px 20px -2px rgba(58, 48, 40, 0.08), 0 1px 3px 0 rgba(58, 48, 40, 0.05);
 
@@ -105,10 +116,15 @@
   --espacio-nav: 64px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Los controles nativos (inputs, selects, barras de scroll) siguen al tema ELEGIDO en la app, no
+     al del sistema: con el celular en oscuro y la app en claro salían oscuros (pedido 2026-10-07). */
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
+    color-scheme: dark;
     /* Misma paleta, tonos "aged slate": piedra oscura en vez de negro puro, verde ciprés
        aclarado para que el texto sobre botones siga siendo oscuro (mejor contraste que blanco
        sobre un verde tan cerrado). */
@@ -143,6 +159,7 @@
   }
 }
 [data-theme='dark'] {
+  color-scheme: dark;
   --color-fondo: #201e1a;
   --color-superficie: #29271f;
   --color-superficie-alta: #333026;
@@ -278,13 +295,6 @@ h3 {
 }
 /* productos_vista_grilla_natural: el "+" del header va dentro de un cuadrado con fondo y borde
    (productos_lista_natural lo deja sin fondo — es el mismo botón, `vista` decide el modificador). */
-.encabezado__accion--grilla {
-  background: var(--color-superficie-alta);
-  border: 1px solid var(--borde-medio);
-}
-.encabezado__accion--grilla:hover {
-  background: var(--color-superficie-maxima);
-}
 .encabezado__textos {
   flex: 1;
   min-width: 0;
@@ -385,9 +395,6 @@ h3 {
 /* El diseño usa el ícono RELLENO en la pestaña activa (Material Symbols "FILL 1"), no solo un
    cambio de color — nuestros íconos de línea no tienen una variante "filled" propia, así que se
    rellenan las mismas formas (el trazo se mantiene, `fill:none` pasa a `fill:currentColor`). */
-.nav-inferior__item.activo .icono {
-  fill: currentColor;
-}
 
 /* ---------- Botones ---------- */
 .boton[hidden] {
@@ -459,39 +466,6 @@ h3 {
 
 /* ---------- FAB ---------- */
 /* El diseño usa un cuadrado redondeado (rounded-xl, 48×48), no un círculo. */
-.fab {
-  position: fixed;
-  right: 16px;
-  bottom: calc(var(--espacio-nav) + var(--safe-bottom) + 16px);
-  width: 48px;
-  height: 48px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radio);
-  background: var(--color-primario-oscuro);
-  color: #fff;
-  border: none;
-  box-shadow: var(--sombra-cta);
-  cursor: pointer;
-  z-index: 19; /* por encima de .barra-publicar (BUGS.md #11): nunca queda tapado */
-  transition: transform var(--duracion) var(--ease), background var(--duracion) var(--ease);
-}
-.fab .icono {
-  width: 24px;
-  height: 24px;
-  stroke-width: 1.75;
-}
-.fab:hover {
-  background: var(--color-primario);
-}
-.fab:active {
-  transform: scale(0.94);
-}
-.fab:focus-visible {
-  outline: 2px solid var(--color-primario-oscuro);
-  outline-offset: 3px;
-}
 /* productos_vista_grilla_natural: el FAB es blanco con borde (oscuro relleno en
    productos_lista_natural) — mismo botón, `vista` decide el modificador. */
 .fab--grilla {
@@ -634,38 +608,6 @@ h3 {
    `.barra-publicar__contenido` es el que se achica (min-width:0 + texto con ellipsis) para que a
    fuente grande/pantallas angostas trunque en vez de empujar el ícono o el badge fuera de la
    pantalla (BUGS.md, overflow-fuente-grande.spec.js). */
-.barra-publicar .boton--primario {
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  /* Más chico que el `.boton` genérico (16px): con el badge "WhatsApp →" de la grilla, 16px hacía
-     que "Publicar N productos" se partiera en 2 líneas en 412px. */
-  padding: 0 14px;
-  font-size: 0.875rem;
-  background: var(--color-primario);
-  border-radius: var(--radio);
-  box-shadow: var(--sombra-cta);
-}
-.barra-publicar .boton--primario:hover {
-  background: var(--color-primario-fuerte);
-}
-.boton--publicar-grilla {
-  justify-content: space-between;
-}
-.barra-publicar__contenido {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex-shrink: 1;
-}
-.barra-publicar__contenido .icono {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-}
 .barra-publicar__texto {
   min-width: 0;
   overflow: hidden;
@@ -676,20 +618,6 @@ h3 {
    `content`, no un nodo de texto — así nunca lo ve `el.textContent` (los tests e2e siguen leyendo
    exacto "Publicar N producto(s)"), y `aria-hidden` en el <span> (lista.js) lo saca del árbol de
    accesibilidad para que no se anuncie duplicado. */
-.barra-publicar__whatsapp {
-  display: inline-flex;
-  flex-shrink: 0;
-  margin-left: 6px;
-  padding: 2px 8px;
-  border-radius: var(--radio-chico);
-  background: rgba(255, 255, 255, 0.14);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-.barra-publicar__whatsapp::after {
-  content: 'WhatsApp →';
-}
 @media (min-width: 720px) {
   .barra-publicar {
     max-width: 640px;
@@ -794,23 +722,40 @@ h3 {
   background: var(--color-superficie-baja);
   border: 1px solid var(--borde-sutil);
   border-radius: var(--radio-grande);
-  transition: border-color var(--duracion) var(--ease);
+  transition: border-color var(--duracion) var(--ease), box-shadow var(--duracion) var(--ease),
+    background-color var(--duracion) var(--ease);
 }
+/* Fila tomada con el dedo: se levanta (sombra + borde primario) para que se note cuál se mueve. */
 .hoja-revision__item--arrastrando {
-  opacity: 0.85;
-  transform: scale(0.98);
-  transition: transform var(--duracion) var(--ease), opacity var(--duracion) var(--ease);
+  position: relative;
   z-index: 2;
+  background: var(--color-superficie-blanca);
+  border-color: var(--color-primario);
+  box-shadow: var(--sombra-cta);
 }
+/* Miniatura = el estado entero (9:16); es un botón que lo abre a pantalla completa. */
 .hoja-revision__foto {
   position: relative;
   flex-shrink: 0;
-  width: 56px;
-  height: 56px;
+  width: 45px;
+  height: 80px;
+  padding: 0;
   border-radius: var(--radio);
   overflow: hidden;
   background: var(--color-superficie-alta);
   border: 1px solid var(--borde-sutil);
+  cursor: pointer;
+  transition: border-color var(--duracion) var(--ease), transform var(--duracion) var(--ease);
+}
+.hoja-revision__foto:hover {
+  border-color: var(--color-primario);
+}
+.hoja-revision__foto:active {
+  transform: scale(0.97);
+}
+.hoja-revision__foto:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
 }
 .hoja-revision__miniatura {
   display: block;
@@ -2586,11 +2531,6 @@ details.grupo > .campo {
   gap: 8px;
   padding: 4px 0;
 }
-.fila-controles--grilla {
-  padding-bottom: 12px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--borde-sutil);
-}
 
 /* Conmutador Lista/Grilla (productos_lista_natural): pista con las 2 opciones, la activa con su
    propio fondo + sombra chica, como un segmented control nativo. Compacto como en el diseño
@@ -2695,23 +2635,6 @@ details.grupo > .campo {
   color: var(--color-texto-tenue);
 }
 /* Grilla: sin pastilla, texto+ícono nomás, con el separador "|" entre los 2. */
-.barra-seleccion--grilla .barra-seleccion__boton,
-.barra-seleccion--grilla .barra-seleccion__boton--fantasma {
-  padding: 4px 6px;
-  border: none;
-  background: transparent;
-  color: var(--color-primario-oscuro);
-}
-.barra-seleccion--grilla .barra-seleccion__boton--fantasma {
-  color: var(--color-texto-tenue);
-}
-.barra-seleccion--grilla .barra-seleccion__boton:hover {
-  background: var(--color-superficie-baja);
-}
-.barra-seleccion__separador {
-  color: var(--color-contorno-variante);
-  font-size: 0.75rem;
-}
 
 .boton-publicar-seccion {
   margin-top: 8px;
@@ -2912,34 +2835,8 @@ details.grupo-seccion > .grilla-productos {
   gap: 8px;
 }
 /* Grilla (productos_vista_grilla_natural): título editorial grande. */
-.grupo__titulo--seccion-grilla .grupo__titulo-texto {
-  font-family: var(--font-titulo);
-  font-size: var(--tamano-20);
-  font-weight: 500;
-  color: var(--color-primario-oscuro);
-  letter-spacing: -0.01em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* Lista (productos_lista_natural): etiqueta chica en mayúsculas, con un separador abajo (el
    diseño lo dibuja como "border-b" del contenedor del encabezado; la grilla no lo lleva). */
-.grupo__titulo--seccion-lista .grupo__titulo-texto {
-  font-family: var(--font-cuerpo);
-  font-size: var(--tamano-14);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--color-texto-tenue);
-}
-.grupo__titulo--seccion-lista {
-  padding-bottom: 8px;
-  margin-bottom: 10px;
-  border-bottom: 1px solid var(--borde-sutil);
-}
-.grupo__titulo--seccion-grilla {
-  margin-bottom: 14px;
-}
 .grupo__contador {
   flex-shrink: 0;
   padding: 2px 8px;
@@ -3202,25 +3099,6 @@ details[open] > .grupo__titulo--seccion::after {
   outline-offset: 1px;
 }
 /* Pastilla "Listo": solo visible con la casilla marcada (sibling general desde el <label>). */
-.grilla-item__listo {
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  padding: 2px 6px;
-  border-radius: var(--radio-chico);
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--borde-sutil);
-  color: var(--color-primario-oscuro);
-  font-family: var(--font-cuerpo);
-  font-size: 0.625rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  opacity: 0;
-  transition: opacity var(--duracion) var(--ease);
-}
-.grilla-item__seleccion-caja:has(:checked) ~ .grilla-item__listo {
-  opacity: 1;
-}
 .grilla-item__nombre {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3404,19 +3282,6 @@ details[open] > .grupo__titulo--seccion::after {
   height: 2.5rem;
   stroke-width: 1.25;
 }
-.foto-picker__badge {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  padding: 3px 8px;
-  border-radius: var(--radio-chico);
-  background: rgba(253, 248, 245, 0.92);
-  border: 1px solid var(--borde-sutil);
-  color: var(--color-texto);
-  font-family: var(--font-cuerpo);
-  font-size: 0.6875rem;
-  font-weight: 600;
-}
 .foto-picker__acciones {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3513,6 +3378,31 @@ details[open] > .grupo__titulo--seccion::after {
 }
 .chips-secciones__form {
   margin-top: 10px;
+}
+/* No vive dentro de un `.campo`: sin esto quedaba con el estilo pelado del navegador (y oscuro en
+   tema claro si el celular estaba en oscuro). Mismos valores que `.campo input`. */
+.chips-secciones__form input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--toque-min);
+  border-radius: var(--radio-chico);
+  border: 1px solid var(--borde-medio);
+  background: var(--color-superficie-blanca);
+  color: var(--color-texto);
+  padding: 10px 12px;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-16);
+  transition: border-color var(--duracion) var(--ease);
+}
+.chips-secciones__form input:hover {
+  border-color: var(--color-contorno);
+}
+.chips-secciones__form input:focus-visible {
+  outline: none;
+  border-color: var(--color-acento);
+}
+.chips-secciones__form .boton {
+  min-height: var(--toque-min);
 }
 
 .formulario-producto__acciones {
@@ -3965,6 +3855,25 @@ details[open] > .grupo__titulo--seccion::after {
    (BUGS.md #46) — con esto se encogen y el texto interno (envuelto en <span>) hace ellipsis. */
 .barra-volver > * {
   min-width: 0;
+}
+.barra-volver__acciones {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+}
+.barra-volver__acciones > * {
+  min-width: 0;
+}
+/* Con letra grande no entran los tres: el que cede primero es el texto de "Volver a Productos"
+   (hasta quedar en la flecha), después el de "Descartar"; "Guardar" nunca se corta (BUGS.md #71). */
+.barra-volver--producto > .enlace-volver {
+  flex-shrink: 20;
+  min-width: 2.75rem;
+}
+.barra-volver__guardar {
+  flex-shrink: 0;
+  min-height: 40px;
 }
 .barra-volver__descartar {
   display: inline-flex;
@@ -4472,13 +4381,11 @@ details[open] > .grupo__titulo--seccion::after {
   border-color: var(--color-acento);
 }
 .tarjeta-estilo__ver:focus-visible,
-.foto-picker__ver:focus-visible,
 .visor-imagen__cerrar:focus-visible {
   outline: 2px solid var(--color-acento);
   outline-offset: 2px;
 }
 .tarjeta-estilo__ver:active,
-.foto-picker__ver:active,
 .visor-imagen__cerrar:active {
   transform: scale(0.97);
 }
@@ -4490,38 +4397,6 @@ details[open] > .grupo__titulo--seccion::after {
 .grilla-estilos--galeria .tarjeta-estilo__ver {
   top: 12px;
   right: 12px;
-}
-
-.foto-picker__ver {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: var(--toque-min);
-  padding: 0 12px;
-  border: 1px solid var(--borde-medio);
-  border-radius: var(--radio-chico);
-  background: var(--color-superficie-blanca);
-  color: var(--color-texto);
-  font-family: var(--font-cuerpo);
-  font-size: var(--tamano-14);
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color var(--duracion) var(--ease), transform var(--duracion) var(--ease);
-}
-.foto-picker__ver[hidden] {
-  display: none;
-}
-.foto-picker__ver:hover {
-  border-color: var(--color-acento);
-}
-.foto-picker__ver .icono {
-  width: 18px;
-  height: 18px;
-  margin-right: 0;
-  color: var(--color-primario-oscuro);
 }
 
 .visor-imagen {
@@ -4646,6 +4521,17 @@ details[open] > .grupo__titulo--seccion::after {
 }
 .vista-previa-estado__pista {
   font-size: var(--tamano-12);
+}
+.vista-previa-estado[hidden],
+.foto-picker__marco[hidden] {
+  display: none;
+}
+/* En el alta/edición es LA imagen del panel de foto (reemplaza al recorte cuadrado): más grande. */
+.foto-picker .vista-previa-estado {
+  margin: 0 0 10px;
+}
+.foto-picker .vista-previa-estado__marco {
+  width: min(300px, 78%);
 }
 
 /* ---------- Ajustes en bloques plegables + pantalla Plantillas + lienzo a pantalla completa
@@ -5076,3 +4962,659 @@ details[open] > .grupo__titulo--seccion::after {
 .apariencia__muestra--cipres {
   background: #3a4d39;
 }
+
+/* ---------- Modo "Negro" (pedido 2026-10-07): oscuro de verdad ----------
+   Es el modo oscuro (`data-theme='dark'`, que sigue aportando el primario de cada tono) con las
+   superficies en negro puro / grises neutros y el texto blanco, sin el tinte cálido de "Oscuro".
+   Va al final para ganarle por orden a los bloques de tono (misma especificidad). Contraste: texto
+   #fff sobre #000 21:1; tenue #b8b8b8 sobre #000 10.6:1 y sobre #1c1c1c 8.6:1. */
+[data-theme='dark'][data-negro] {
+  --color-fondo: #000000;
+  --color-superficie: #121212;
+  --color-superficie-alta: #1c1c1c;
+  --color-superficie-baja: #0a0a0a;
+  --color-superficie-blanca: #161616;
+  --color-superficie-maxima: #262626;
+  --color-borde: rgba(255, 255, 255, 0.2);
+  --borde-sutil: rgba(255, 255, 255, 0.14);
+  --borde-medio: rgba(255, 255, 255, 0.24);
+  --color-contorno: #9a9a9a;
+  --color-contorno-variante: #3d3d3d;
+  --color-texto: #ffffff;
+  --color-texto-tenue: #b8b8b8;
+  --color-acento: #e6e6e6;
+  --color-peligro-texto: #000000;
+  --color-superposicion: rgba(0, 0, 0, 0.72);
+  --sombra: 0 4px 20px -2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --sombra-cta: 0 4px 20px -2px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Diálogo con tres salidas ("Guardar y salir" / "Salir sin guardar" / "Seguir editando"): apiladas,
+   no entran lado a lado en un celular. */
+.dialogo__acciones--tres {
+  flex-direction: column;
+}
+.dialogo__acciones--tres .boton {
+  flex: none;
+}
+
+/* =========================================================================================
+   Inicio (Productos) — rediseño 2026-10-07, réplica del mock que entregó Bruno: header con marca
+   grande y "+" relleno, buscador, "Filtros"/"Ordenar", cuenta + conmutador Lista/Grilla, secciones
+   plegables, tarjetas de grilla en 2 columnas y barra fija "Publicar N productos" + "+".
+   Todo con los tokens de siempre: toma el tono y el modo elegidos en Apariencia.
+   ========================================================================================= */
+.encabezado--inicio {
+  gap: 12px;
+  padding: calc(var(--safe-top) + 14px) 16px 12px;
+}
+.encabezado--inicio .encabezado__marca {
+  width: 40px;
+  height: 40px;
+}
+.encabezado--inicio .encabezado__titulo {
+  font-family: var(--font-cuerpo);
+  font-size: 1.3125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.encabezado--inicio .encabezado__subtitulo {
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+}
+.encabezado--inicio .encabezado__accion {
+  border-radius: var(--radio-grande);
+  background: var(--color-primario-oscuro);
+  color: var(--color-primario-texto);
+  box-shadow: var(--sombra);
+}
+.encabezado--inicio .encabezado__accion:hover {
+  background: var(--color-primario-fuerte);
+}
+.encabezado--inicio .encabezado__accion:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+
+/* Pestaña activa: raya abajo (mock), ícono de línea como el resto. */
+.nav-inferior__item {
+  position: relative;
+}
+.nav-inferior__item.activo::after {
+  content: '';
+  position: absolute;
+  left: 24%;
+  right: 24%;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--color-primario-oscuro);
+}
+
+.buscador {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--toque-min);
+  margin-top: 14px;
+  padding: 0 14px;
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--borde-medio);
+  border-radius: var(--radio-grande);
+  cursor: text;
+  transition: border-color var(--duracion) var(--ease);
+}
+.buscador:hover {
+  border-color: var(--color-contorno);
+}
+.buscador:focus-within {
+  border-color: var(--color-primario-oscuro);
+}
+.buscador .icono {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: var(--color-primario-oscuro);
+}
+.buscador__input {
+  flex: 1;
+  min-width: 0;
+  min-height: calc(var(--toque-min) - 2px);
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-texto);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-16);
+  appearance: none;
+}
+.buscador__input:focus-visible {
+  outline: none; /* el foco lo muestra el borde del contenedor (`:focus-within`) */
+}
+.buscador__input::placeholder {
+  color: var(--color-texto-tenue);
+  opacity: 0.8;
+}
+
+.fila-filtros {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.boton-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: var(--toque-min);
+  padding: 0 12px;
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--borde-medio);
+  border-radius: var(--radio-grande);
+  color: var(--color-primario-oscuro);
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--duracion) var(--ease), background var(--duracion) var(--ease), transform var(--duracion) var(--ease);
+}
+/* Solo con puntero: en el teléfono el hover queda "pegado" después de tocar y el botón parecía
+   seguir abierto. */
+@media (hover: hover) {
+  .boton-control:hover {
+    border-color: var(--color-contorno);
+  }
+}
+.boton-control:active {
+  transform: scale(0.98);
+}
+.boton-control:focus-visible,
+.boton-control--select:focus-within {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.boton-control[aria-expanded='true'] {
+  background: var(--color-primario-tinte);
+  border-color: var(--color-primario-oscuro);
+}
+.boton-control .icono {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+.boton-control__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--color-primario);
+  color: var(--color-primario-texto);
+  font-size: var(--tamano-12);
+  line-height: 1;
+}
+/* "Ordenar": el <select> real tapa todo el botón, invisible — tocarlo abre el selector nativo. */
+.boton-control__select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: var(--tamano-16);
+}
+
+.panel-filtros {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--color-superficie-baja);
+  border: 1px solid var(--borde-sutil);
+  border-radius: var(--radio-grande);
+}
+.panel-filtros[hidden] {
+  display: none;
+}
+.panel-filtros__rotulo {
+  font-size: var(--tamano-12);
+  font-weight: 600;
+  color: var(--color-texto-tenue);
+}
+/* Dentro del panel los chips bajan de renglón (afuera eran una fila con scroll horizontal). */
+.panel-filtros .filtro-secciones {
+  flex-wrap: wrap;
+  overflow: visible;
+  margin: 0;
+  padding: 0 0 4px;
+}
+.panel-filtros .chip {
+  min-height: 44px;
+  border-radius: 10px;
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.panel-filtros .barra-seleccion {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+}
+.panel-filtros .barra-seleccion__boton {
+  min-height: 44px;
+  border-radius: 10px;
+  padding: 0 14px;
+  font-size: var(--tamano-14);
+  line-height: 1.25;
+}
+
+.fila-controles {
+  flex-wrap: nowrap;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 0;
+}
+.fila-controles__cuenta {
+  min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-primario-oscuro);
+}
+.conmutador-vista {
+  flex-shrink: 0;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--borde-medio);
+  border-radius: 10px;
+}
+.conmutador-vista__opcion {
+  padding: 9px 14px;
+  border-radius: 0;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+}
+.conmutador-vista__opcion--activa,
+.conmutador-vista__opcion--activa:hover {
+  border-radius: 9px;
+  background: var(--color-primario-oscuro);
+  color: var(--color-primario-texto);
+  box-shadow: none;
+}
+
+/* Encabezado de sección: nombre grande + "N seleccionados" + chevron, con raya abajo. */
+.grupo__titulo--seccion {
+  padding: 16px 0 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--borde-sutil);
+}
+.grupo__titulo--seccion .grupo__titulo-texto {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-cuerpo);
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-primario-oscuro);
+}
+.grupo__contador {
+  padding: 4px 10px;
+  border-radius: var(--radio);
+  font-size: var(--tamano-12);
+  letter-spacing: 0;
+}
+.grupo-seccion[hidden] {
+  display: none;
+}
+
+/* Tarjeta de grilla: blanca, redondeada, foto arriba con la casilla redonda, nombre, chip de
+   sección, precio y un pie partido en dos (lápiz | avión). */
+.grilla-productos {
+  gap: 12px;
+  padding-top: 0;
+}
+.grilla-item {
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px 0 rgba(58, 48, 40, 0.06);
+}
+.grilla-item[hidden],
+.fila-compacta[hidden],
+.estado[hidden],
+.consejo[hidden] {
+  display: none;
+}
+.grilla-item__foto-caja {
+  padding: 3px 3px 0;
+}
+.grilla-item__foto {
+  aspect-ratio: 10 / 11;
+  border-radius: 13px 13px 8px 8px;
+}
+.grilla-item__seleccion-caja {
+  top: 13px;
+  left: 13px;
+}
+.grilla-item__seleccion {
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.88);
+}
+.grilla-item__seleccion:checked {
+  background-color: var(--color-primario-oscuro);
+  border-color: var(--color-primario-oscuro);
+}
+.grilla-item__nombre {
+  padding: 12px 12px 0;
+  font-size: var(--tamano-16);
+  font-weight: 700;
+  color: var(--color-primario-oscuro);
+}
+.grilla-item__chips {
+  display: flex;
+  gap: 4px;
+  min-height: 30px; /* el renglón existe aunque no haya sección: tarjetas parejas en la fila */
+  padding: 6px 12px 0;
+  overflow: hidden;
+}
+.grilla-item__chip {
+  min-width: 0;
+  max-width: 100%;
+  align-self: flex-start;
+  padding: 3px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 6px;
+  background: var(--color-primario-tinte-suave);
+  color: var(--color-primario-tinte-suave-texto);
+  font-size: var(--tamano-12);
+  font-weight: 600;
+}
+.grilla-item__precio,
+.grilla-item__precio--vacio {
+  margin: 0;
+  padding: 6px 12px 12px;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  line-height: 1.4;
+  font-style: normal;
+}
+.grilla-item__precio {
+  font-weight: 600;
+  color: var(--color-texto);
+}
+.grilla-item__precio--vacio {
+  font-weight: 400;
+  color: var(--color-texto-tenue);
+}
+.grilla-item__pie {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: auto 10px 4px;
+  padding: 0;
+  border-top: 1px solid var(--borde-sutil);
+}
+.grilla-item__pie .grilla-item__accion {
+  width: 100%;
+  height: var(--toque-min);
+  border-radius: 0;
+  color: var(--color-primario-oscuro);
+}
+.grilla-item__pie .grilla-item__accion + .grilla-item__accion {
+  border-left: 1px solid var(--borde-sutil);
+}
+.grilla-item__pie .grilla-item__accion .icono {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.8;
+}
+.grilla-item__pie .grilla-item__accion + .grilla-item__accion {
+  margin: 10px 0;
+  height: calc(var(--toque-min) - 20px);
+}
+
+/* Barra fija de abajo: "Publicar N productos" + "+". Sin marcados queda solo el "+", a la derecha. */
+.vista:has(.barra-publicar) {
+  padding-bottom: calc(var(--espacio-nav) + var(--safe-bottom) + 92px);
+}
+.barra-publicar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 16px;
+}
+/* Con "Publicar" a la vista es una franja opaca pegada a la nav (mock): la lista no asoma detrás. */
+.barra-publicar:has(.barra-publicar__boton) {
+  /* 4px por debajo del borde de la nav (que mide un par de px menos que `--espacio-nav`): sin
+     rendija por la que asome la lista. */
+  bottom: calc(var(--espacio-nav) + var(--safe-bottom) - 4px);
+  padding: 12px 16px 16px;
+  background: var(--color-fondo);
+  border-top: 1px solid var(--borde-sutil);
+  pointer-events: auto;
+}
+.barra-publicar__boton {
+  pointer-events: auto;
+  flex: 1;
+  min-width: 0;
+  min-height: 56px;
+  gap: 10px;
+  padding: 0 16px;
+  border-radius: 16px;
+  background: var(--color-primario-oscuro);
+  color: var(--color-primario-texto);
+  font-size: var(--tamano-16);
+  font-weight: 700;
+  box-shadow: var(--sombra-cta);
+}
+.barra-publicar__boton:hover {
+  background: var(--color-primario-fuerte);
+}
+.barra-publicar__boton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.barra-publicar__wa {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-whatsapp);
+  color: #ffffff;
+}
+.barra-publicar__wa .icono {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
+  stroke-width: 1.9;
+}
+.barra-publicar__agregar {
+  pointer-events: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  border: 1px solid var(--borde-medio);
+  background: var(--color-superficie-blanca);
+  color: var(--color-primario-oscuro);
+  box-shadow: var(--sombra);
+  cursor: pointer;
+  transition: border-color var(--duracion) var(--ease), transform var(--duracion) var(--ease);
+}
+.barra-publicar__agregar:hover {
+  border-color: var(--color-contorno);
+}
+.barra-publicar__agregar:active {
+  transform: scale(0.95);
+}
+.barra-publicar__agregar:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.barra-publicar__agregar .icono {
+  width: 24px;
+  height: 24px;
+}
+
+/* Tilde de las casillas en oscuro/negro: ahí el relleno marcado es CLARO, el tilde va oscuro. */
+[data-theme='dark'] .grilla-item__seleccion:checked,
+[data-theme='dark'] .fila-compacta__seleccion:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111111' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='5 13 10 18 19 7'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .grilla-item__seleccion:checked,
+  :root:not([data-theme='light']) .fila-compacta__seleccion:checked {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111111' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='5 13 10 18 19 7'/%3E%3C/svg%3E");
+  }
+}
+
+/* Vista Lista con el mismo lenguaje que las tarjetas: fila blanca redondeada, casilla redonda,
+   nombre en sans con el color primario. */
+.lista-compacta {
+  gap: 10px;
+}
+.fila-compacta {
+  background: var(--color-superficie-blanca);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px 0 rgba(58, 48, 40, 0.06);
+}
+.fila-compacta__seleccion {
+  border-radius: 50%;
+  background-color: var(--color-superficie-blanca);
+}
+.fila-compacta__seleccion:checked {
+  background-color: var(--color-primario-oscuro);
+  border-color: var(--color-primario-oscuro);
+}
+.fila-compacta__foto {
+  border-radius: 10px;
+}
+.fila-compacta__nombre {
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-16);
+  font-weight: 700;
+  color: var(--color-primario-oscuro);
+}
+.fila-compacta__subtitulo {
+  font-size: var(--tamano-12);
+  letter-spacing: 0;
+}
+.fila-compacta__precio {
+  background: transparent;
+  border-color: var(--borde-sutil);
+  border-radius: var(--radio);
+  letter-spacing: 0;
+}
+.fila-compacta__precio:placeholder-shown {
+  background: transparent;
+  font-style: normal;
+}
+
+/* Alta/edición: la vista previa no se come la primera pantalla (nombre y precio quedan a mano), y
+   "Guardar" de la barra con el tamaño y el radio del resto de los botones. */
+.foto-picker .vista-previa-estado__marco {
+  width: min(210px, 56%);
+}
+.barra-volver__guardar {
+  min-height: 44px;
+  border-radius: var(--radio);
+}
+.encabezado--inicio .encabezado__marca svg {
+  width: 36px;
+  height: 36px;
+}
+/* Más específico que el padding lateral que trae `summary` de `.grupo`: el nombre de la sección
+   arranca en la misma línea que el buscador y las tarjetas. */
+details.grupo-seccion > summary.grupo__titulo--seccion {
+  padding: 16px 0 12px;
+}
+/* Vista Lista: acciones sin caja (como el pie de las tarjetas) y el precio como texto que se puede
+   tocar para editar — el borde aparece recién con el foco. */
+.fila-compacta__acciones .boton-icono-mini,
+.fila-compacta__acciones .boton-icono-mini--lleno {
+  width: 44px;
+  height: 44px;
+  background: transparent;
+  color: var(--color-primario-oscuro);
+}
+.fila-compacta__acciones .boton-icono-mini--peligro {
+  color: var(--color-texto-tenue);
+}
+.fila-compacta__precio,
+.fila-compacta__precio:placeholder-shown {
+  padding-left: 0;
+  border-color: transparent;
+}
+.fila-compacta__precio:hover {
+  border-color: var(--borde-medio);
+}
+.fila-compacta__precio:focus-visible {
+  padding-left: 8px;
+  border-color: var(--color-acento);
+}
+
+/* ---------- "Agregar varios" (js/vistas/varias.js): una fila por foto con nombre y precio ---------- */
+.foto-picker__varias {
+  margin-top: 10px;
+  white-space: normal;
+  text-align: left;
+}
+.varias__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+}
+.varias__lista:empty {
+  display: none;
+}
+.varias__fila {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px;
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--borde-sutil);
+  border-radius: 16px;
+}
+.varias__foto {
+  flex-shrink: 0;
+  width: 72px;
+  height: 104px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--color-superficie-alta);
+}
+.varias__campos {
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+}
+.varias__campos input {
+  width: 100%;
+  min-width: 0;
+}
+

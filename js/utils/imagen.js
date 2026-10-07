@@ -1,9 +1,31 @@
-// Redimensionar/comprimir fotos antes de guardarlas en IndexedDB (máx. 1600px lado mayor, JPEG 0.85).
-export const LADO_MAXIMO = 1600;
-export const CALIDAD_JPEG = 0.85;
+// Redimensionar/comprimir fotos antes de guardarlas en IndexedDB (máx. 2560px lado mayor, JPEG 0.9).
+// 2560 y no menos: una foto apaisada 4:3 queda en 2560×1920, justo el alto del estado (1080×1920),
+// así llenar la pantalla no la estira. Con 1600 quedaba en 1600×1200 y se estiraba 1,6× (BUGS.md #79).
+export const LADO_MAXIMO = 2560;
+export const CALIDAD_JPEG = 0.9;
+
+/** Decodifica con `createImageBitmap` y, si falla, reintenta con un `<img>` (otro camino de
+ * decodificación del navegador: en algunos WebView abre fotos que el primero rechaza, BUGS.md #73). */
+async function decodificar(archivoOBlob) {
+  try {
+    return await createImageBitmap(archivoOBlob);
+  } catch (error) {
+    const url = URL.createObjectURL(archivoOBlob);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      return { width: img.naturalWidth, height: img.naturalHeight, fuente: img };
+    } catch {
+      throw error;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+}
 
 export async function achicarFoto(archivoOBlob, { ladoMaximo = LADO_MAXIMO, calidad = CALIDAD_JPEG } = {}) {
-  const bitmap = await createImageBitmap(archivoOBlob);
+  const bitmap = await decodificar(archivoOBlob);
   const escala = Math.min(1, ladoMaximo / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * escala));
   const h = Math.max(1, Math.round(bitmap.height * escala));
@@ -11,7 +33,8 @@ export async function achicarFoto(archivoOBlob, { ladoMaximo = LADO_MAXIMO, cali
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(bitmap, 0, 0, w, h);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap.fuente ?? bitmap, 0, 0, w, h);
   bitmap.close?.();
   return await new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('No se pudo procesar la foto.'))), 'image/jpeg', calidad);

@@ -55,6 +55,19 @@ const TRAZOS = Object.freeze({
   ],
   // Ícono "send" (Material "send"): avión de papel — barra de publicar fija (lista) y acción
   // "Compartir en WhatsApp" de la grilla.
+  // Rediseño del inicio (2026-10-07): embudo de "Filtros", flechas de "Ordenar", chevron de plegar
+  // y el globo con teléfono de WhatsApp para "Publicar N productos".
+  filtro: [['path', { d: 'M4 5h16l-6 7.5V19l-4-2v-4.5L4 5z' }]],
+  ordenar: [
+    ['line', { x1: 8, y1: 5, x2: 8, y2: 19 }],
+    ['polyline', { points: '5,16 8,19 11,16' }],
+    ['line', { x1: 16, y1: 19, x2: 16, y2: 5 }],
+    ['polyline', { points: '13,8 16,5 19,8' }],
+  ],
+  whatsapp: [
+    ['path', { d: 'M4 20l1.2-4.1A8 8 0 1 1 8.2 19L4 20z' }],
+    ['path', { d: 'M9.3 8.4c-.5 2.9 3.4 6.8 6.3 6.3l.7-1.5-1.8-1-.9.8c-.9-.4-1.8-1.3-2.2-2.2l.8-.9-1-1.8-1.9.3z' }],
+  ],
   enviar: [['path', { d: 'M4 12 20 4 13 20 11 13 4 12z' }], ['line', { x1: 11, y1: 13, x2: 20, y2: 4 }]],
   // Ícono "share" (Material "share"): 3 puntos conectados — barra de publicar fija de la grilla
   // (productos_vista_grilla_natural usa "share", no "send").

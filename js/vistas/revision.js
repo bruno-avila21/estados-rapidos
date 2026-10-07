@@ -49,6 +49,7 @@ import {
 import { compartirArchivos, copiarDescripcion, descargarImagen, puedeCompartirArchivos } from '../utils/compartir.js';
 import { mostrarToast } from '../utils/toast.js';
 import { crearIcono } from '../utils/iconos.js';
+import { abrirVisorImagen } from '../utils/visor-imagen.js';
 import { moverElemento, indiceDesdePosicion } from '../reordenar.js';
 
 /** Igual criterio defensivo que `lista.js` (`sincronizarSeleccion`): un id nunca debería romper el
@@ -160,7 +161,7 @@ export async function abrirHojaRevision({ ids }) {
       general,
       // Los 4 presets de composición: sección REAL del producto (primera, si tiene) y su posición
       // en ESTA tanda ("N° 0X" del preset Editorial) — nunca inventadas.
-      seccionNombre: resolverSeccionNombre(producto, secciones),
+      seccionNombre: resolverSeccionNombre(producto, secciones, general),
       posicion: { n: indice + 1, m: productos.length },
     };
   }
@@ -370,6 +371,35 @@ export async function abrirHojaRevision({ ids }) {
   labelIncluirTexto.append(textosIncluirTexto, interruptorIncluirTexto);
   filaIncluirTexto.append(labelIncluirTexto);
 
+  // --- "Mostrar la sección en la imagen" (pedido 2026-10-07): varios estilos escriben el nombre de
+  // la sección del producto (etiqueta, pill, fila superior). Apagado, la imagen sale sin decir de
+  // qué sección es; se recuerda en Ajustes generales, igual que "Incluir texto". ---
+  const filaMostrarSeccion = document.createElement('div');
+  filaMostrarSeccion.className = 'hoja-revision__fila-config';
+  const labelMostrarSeccion = document.createElement('label');
+  labelMostrarSeccion.className = 'hoja-revision__fila-switch';
+  const textosMostrarSeccion = document.createElement('div');
+  textosMostrarSeccion.className = 'hoja-revision__fila-switch-textos';
+  const tituloMostrarSeccion = document.createElement('span');
+  tituloMostrarSeccion.className = 'hoja-revision__fila-switch-titulo';
+  tituloMostrarSeccion.textContent = 'Mostrar la sección en la imagen';
+  const ayudaMostrarSeccion = document.createElement('span');
+  ayudaMostrarSeccion.className = 'hoja-revision__fila-switch-ayuda';
+  ayudaMostrarSeccion.textContent = 'Apagalo para que el estado no diga de qué sección es el producto.';
+  textosMostrarSeccion.append(tituloMostrarSeccion, ayudaMostrarSeccion);
+  const interruptorMostrarSeccion = document.createElement('span');
+  interruptorMostrarSeccion.className = 'interruptor';
+  const checkMostrarSeccion = document.createElement('input');
+  checkMostrarSeccion.type = 'checkbox';
+  checkMostrarSeccion.id = 'revision-mostrar-seccion';
+  checkMostrarSeccion.setAttribute('data-accion', 'revision-mostrar-seccion');
+  checkMostrarSeccion.checked = general.mostrarSeccionEnImagen !== false;
+  const pistaMostrarSeccion = document.createElement('span');
+  pistaMostrarSeccion.className = 'interruptor__pista';
+  interruptorMostrarSeccion.append(checkMostrarSeccion, pistaMostrarSeccion);
+  labelMostrarSeccion.append(textosMostrarSeccion, interruptorMostrarSeccion);
+  filaMostrarSeccion.append(labelMostrarSeccion);
+
   // --- Destino de publicación: informativo (WhatsApp Estados es el ÚNICO destino real — el mock
   // ofrece "Cambiar", que no tiene ningún otro destino detrás, así que no se dibuja el botón). ---
   const filaDestino = document.createElement('div');
@@ -428,7 +458,7 @@ export async function abrirHojaRevision({ ids }) {
   }
   filaCalidad.append(tituloCalidad, grillaCalidad);
 
-  panelConfig.append(filaIncluirTexto, filaDestino, filaEstilo, filaCalidad);
+  panelConfig.append(filaIncluirTexto, filaMostrarSeccion, filaDestino, filaEstilo, filaCalidad);
   seccionConfig.append(tituloConfig, panelConfig);
 
   actualizarEstadoIncluirTexto();
@@ -535,12 +565,26 @@ export async function abrirHojaRevision({ ids }) {
     item.setAttribute('data-id', producto.id);
     item.setAttribute('role', 'group');
 
-    const foto = document.createElement('div');
+    // La miniatura es el estado ENTERO (9:16) y se toca para verlo a pantalla completa: es donde se
+    // comprueba cómo queda el estilo elegido o la sección apagada antes de compartir (BUGS.md #78).
+    const foto = document.createElement('button');
+    foto.type = 'button';
     foto.className = 'hoja-revision__foto';
+    foto.setAttribute('data-accion', 'ver-estado');
+    foto.setAttribute('aria-label', `Ver completo el estado de ${producto.nombre}`);
     const img = document.createElement('img');
     img.className = 'hoja-revision__miniatura';
     img.alt = producto.nombre;
     foto.append(img);
+    foto.addEventListener('click', () => {
+      abrirVisorImagen({
+        titulo: producto.nombre,
+        obtenerBlob: async () => {
+          const indice = Math.max(0, productos.findIndex((p) => p.id === producto.id));
+          return finalesPorId.get(producto.id) ?? componerSegunEstilo(await datosParaProducto(producto, indice));
+        },
+      });
+    });
 
     const info = document.createElement('div');
     info.className = 'hoja-revision__info';
@@ -611,10 +655,22 @@ export async function abrirHojaRevision({ ids }) {
    * no hay que rearmar miniaturas ni relanzar ninguna composición) y refresca badges/aria/disabled/
    * "Portada"-"Paso N". */
   function sincronizarDomConProductos() {
+    // FLIP: se anota dónde estaba cada fila, se reordena, y las que cambiaron de lugar arrancan
+    // desplazadas a su posición vieja y se deslizan a la nueva (BUGS.md #80: el cambio de orden
+    // era un salto seco). La fila que el dedo está arrastrando no se anima: sigue al dedo.
+    const antes = new Map(Array.from(carrusel.children, (el) => [el, el.getBoundingClientRect().top]));
     for (const producto of productos) {
       const selector = selectorPorId(producto.id);
       const el = selector && carrusel.querySelector(selector);
       if (el) carrusel.append(el);
+    }
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      for (const [el, topViejo] of antes) {
+        if (!el.isConnected || el.classList.contains('hoja-revision__item--arrastrando')) continue;
+        const delta = topViejo - el.getBoundingClientRect().top;
+        if (!delta || typeof el.animate !== 'function') continue;
+        el.animate([{ transform: `translateY(${delta}px)` }, { transform: 'translateY(0)' }], { duration: 200, easing: 'ease-out' });
+      }
     }
     const total = productos.length;
     productos.forEach((producto, i) => {
@@ -699,6 +755,11 @@ export async function abrirHojaRevision({ ids }) {
         return r.top + r.height / 2;
       });
       item.classList.add('hoja-revision__item--arrastrando');
+      // En `window` y no en la manija: al cambiar de lugar la fila se mueve en el DOM y la manija
+      // pierde la captura del puntero, con lo que el arrastre se cortaba al primer cambio (BUGS.md #82).
+      window.addEventListener('pointermove', mover, { passive: false });
+      window.addEventListener('pointerup', terminar);
+      window.addEventListener('pointercancel', terminar);
       try {
         manija.setPointerCapture(ev.pointerId);
       } catch {
@@ -718,15 +779,15 @@ export async function abrirHojaRevision({ ids }) {
     const terminar = () => {
       if (!activo) return;
       activo = false;
+      window.removeEventListener('pointermove', mover);
+      window.removeEventListener('pointerup', terminar);
+      window.removeEventListener('pointercancel', terminar);
       item.classList.remove('hoja-revision__item--arrastrando');
       if (indiceActual >= 0 && productos[indiceActual]) {
         progreso.textContent = `${productos[indiceActual].nombre} — posición ${indiceActual + 1} de ${productos.length}.`;
       }
     };
     manija.addEventListener('pointerdown', empezar);
-    manija.addEventListener('pointermove', mover);
-    manija.addEventListener('pointerup', terminar);
-    manija.addEventListener('pointercancel', terminar);
   }
 
   async function generarMiniaturas(miGeneracion) {
@@ -802,6 +863,12 @@ export async function abrirHojaRevision({ ids }) {
   selectEstilo.addEventListener('change', async () => {
     estiloSesion = selectEstilo.value || null;
     actualizarValorFilaEstilo();
+    await generarTodo();
+  });
+
+  checkMostrarSeccion.addEventListener('change', async () => {
+    general.mostrarSeccionEnImagen = checkMostrarSeccion.checked; // `datosParaProducto` lee `general`
+    await repo.guardarMostrarSeccionEnImagen(checkMostrarSeccion.checked);
     await generarTodo();
   });
 
