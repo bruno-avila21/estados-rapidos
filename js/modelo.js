@@ -238,8 +238,40 @@ function ajustesStoryInmersiva() {
 // "Novedad" y "Ficha natural" (2026-10-07): colores y tamaños medidos de los dos diseños que
 // entregó Bruno. La caja del precio ES la etiqueta del diseño (fondo + radio propios); el borde
 // crema de "Novedad" y el prefijo "Precio:" de "Ficha natural" los pone componer.js.
+// Piezas FIJAS de cada preset que también se pueden mover/agrandar/achicar/ocultar desde el
+// editor (pedido 2026-10-07: "debería poder mover, agrandar, achicar todo"). Son cajas simples
+// (x/y/w/h/visible, sin tipografía): su contenido lo dibuja componer.js escalado a la caja.
+export const ELEMENTOS_DECORATIVOS = Object.freeze({
+  novedad: Object.freeze(['pill', 'divisor', 'contacto', 'divisorInferior']),
+  'ficha-natural': Object.freeze(['insignia', 'divisor', 'contacto']),
+});
+export const ETIQUETA_DECORATIVO = Object.freeze({
+  pill: 'Etiqueta superior',
+  divisor: 'Divisor',
+  divisorInferior: 'Divisor inferior',
+  contacto: 'Llamado de WhatsApp',
+  insignia: 'Insignia',
+});
+/** Los divisores se estiran a lo ancho (la hoja no cambia); el resto escala parejo. */
+export const DECORATIVOS_ELASTICOS = Object.freeze(['divisor', 'divisorInferior']);
+
+/** Rectángulo de una pieza decorativa en una geometría (la insignia viene como círculo). Pura. */
+export function rectDecorativo(geometria, clave) {
+  const zona = geometria?.[clave];
+  if (!zona) return null;
+  if ('r' in zona) return { x: zona.cx - zona.r, y: zona.cy - zona.r, w: zona.r * 2, h: zona.r * 2 };
+  return { x: zona.x, y: zona.y, w: zona.w, h: zona.h };
+}
+
+function cajasDecorativas(estilo, geometria) {
+  const cajas = {};
+  for (const clave of ELEMENTOS_DECORATIVOS[estilo]) cajas[clave] = { ...rectDecorativo(geometria, clave), visible: true };
+  return cajas;
+}
+
 function ajustesNovedad() {
   return {
+    ...cajasDecorativas('novedad', GEO_NOVEDAD),
     foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
     nombre: cajaPreset(GEO_NOVEDAD.nombre, { tamano: 108, alineacion: 'left', familia: 'newsreader', peso: 700, color: '#f1e9d6', maxLineas: 2 }),
     precio: cajaPreset(GEO_NOVEDAD.precio, {
@@ -266,6 +298,7 @@ function ajustesNovedad() {
 
 function ajustesFichaNatural() {
   return {
+    ...cajasDecorativas('ficha-natural', GEO_FICHA_NATURAL),
     foto: { ...AJUSTES_POR_DEFECTO.foto, visible: false },
     nombre: cajaPreset(GEO_FICHA_NATURAL.nombre, { tamano: 104, alineacion: 'center', familia: 'newsreader', peso: 700, color: '#2f3e22', maxLineas: 2 }),
     precio: cajaPreset(GEO_FICHA_NATURAL.precio, {
@@ -307,7 +340,12 @@ export const AJUSTES_POR_DEFECTO_POR_ESTILO = Object.freeze({
 function normalizarAjustesDeEstilo(estilo, guardado) {
   const base = AJUSTES_POR_DEFECTO_POR_ESTILO[estilo] || AJUSTES_POR_DEFECTO_POR_ESTILO['foto-precio'];
   const g = guardado || {};
+  // Las piezas decorativas van primero, en el mismo orden que los defaults (así
+  // `esAjustePersonalizado` compara igual); un guardado de antes de 2026-10-07 no las trae.
+  const decorativas = {};
+  for (const clave of ELEMENTOS_DECORATIVOS[estilo] ?? []) decorativas[clave] = normalizarCaja(base[clave], g[clave]);
   return {
+    ...decorativas,
     foto: normalizarCaja(base.foto, g.foto),
     nombre: normalizarCaja(base.nombre, g.nombre),
     precio: normalizarCaja(base.precio, g.precio),

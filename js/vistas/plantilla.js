@@ -22,7 +22,7 @@
 // (js/vistas/plantillas.js, 2026-10-07): acá solo se edita UN estilo. El lienzo arranca bloqueado
 // y, al tocar "Editar" o un texto, pasa a pantalla completa hasta tocar "Listo".
 import * as repo from '../repositorio.js';
-import { dibujarSegunEstilo, resolverCajasTexto, ANCHO, ALTO } from '../componer.js';
+import { dibujarSegunEstilo, resolverCajasTexto, resolverCajasDecorativas, ANCHO, ALTO } from '../componer.js';
 import { cargarFuentes } from '../fuentes.js';
 import { elementoEnPunto, moverCaja, redimensionarCaja, aplicarSnap, acomodarAutomatico } from '../editor-geometria.js';
 import {
@@ -37,6 +37,9 @@ import {
   aplicarPresetFondo,
   resolverSeccionNombre,
   TEXTO_BOTON_POR_DEFECTO,
+  ELEMENTOS_DECORATIVOS,
+  ETIQUETA_DECORATIVO,
+  DECORATIVOS_ELASTICOS,
 } from '../modelo.js';
 import { pedirConfirmacion } from '../utils/confirmar.js';
 import { crearIcono } from '../utils/iconos.js';
@@ -99,6 +102,7 @@ export async function render(contenedor, { navegar, params } = {}) {
 
   await cargarFuentes(); // una sola vez: dibujarSegunEstilo es síncrona, asume fuentes ya listas
 
+  const CLAVES_DECORATIVAS = ELEMENTOS_DECORATIVOS[estiloEditando] ?? [];
   let seleccion = null;
   // Arrastre en curso (mover o redimensionar): muestra las guías y esconde el mini menú para que no
   // tape lo que se está acomodando. `guiasActivas` = las que `aplicarSnap` enganchó en este paso.
@@ -423,7 +427,9 @@ export async function render(contenedor, { navegar, params } = {}) {
   // ================= Lógica =================
 
   function clavesVisiblesParaEstilo() {
-    return estiloEditando === 'mi-plantilla' ? ['foto', ...CLAVES_TEXTO] : CLAVES_TEXTO;
+    if (estiloEditando === 'mi-plantilla') return ['foto', ...CLAVES_TEXTO];
+    // "Novedad"/"Ficha natural": también sus piezas fijas (pill, divisores, WhatsApp, insignia).
+    return [...CLAVES_TEXTO, ...CLAVES_DECORATIVAS];
   }
 
   // Solo los elementos VISIBLES son "clickeables" directo sobre el lienzo (ver dibujarOverlay: un
@@ -458,7 +464,10 @@ export async function render(contenedor, { navegar, params } = {}) {
   // siguen operando sobre `ajustes` (lo que se guarda), el corrimiento se recalcula en cada dibujo.
   function cajasVisuales() {
     const cajas = resolverCajasTexto(ctxPrevia, datosLienzo());
-    return { ...ajustes, nombre: cajas.nombre, precio: cajas.precio, descripcion: cajas.descripcion };
+    const visuales = { ...ajustes, nombre: cajas.nombre, precio: cajas.precio, descripcion: cajas.descripcion };
+    const decorativas = resolverCajasDecorativas(datosLienzo(), cajas.extra);
+    for (const clave of CLAVES_DECORATIVAS) visuales[clave] = decorativas[clave].caja;
+    return visuales;
   }
 
   function ajustarResolucionCanvas() {
@@ -518,8 +527,8 @@ export async function render(contenedor, { navegar, params } = {}) {
     btnModo.classList.toggle('boton--primario', !editando);
     btnModo.setAttribute('aria-pressed', String(editando));
     textoModo.textContent = editando
-      ? 'Arrastrá los textos para moverlos. Tocá uno para cambiarle tamaño, color o letra.'
-      : 'Bloqueado: podés deslizar sin mover nada. Tocá "Editar" o un texto de la imagen para acomodarlo.';
+      ? 'Arrastrá cada parte para moverla; las esquinas la agrandan o achican. En los textos, tocá uno para cambiarle color o letra.'
+      : 'Bloqueado: podés deslizar sin mover nada. Tocá "Editar" o una parte de la imagen para acomodarla.';
     btnListo.hidden = !editando;
   }
 
@@ -617,7 +626,7 @@ export async function render(contenedor, { navegar, params } = {}) {
     }
 
     if (arrastrando) dibujarGuias();
-    else if (editando && seleccion && seleccion !== 'foto' && ajustes[seleccion].visible !== false) {
+    else if (editando && CLAVES_TEXTO.includes(seleccion) && ajustes[seleccion].visible !== false) {
       overlay.append(miniMenu(seleccion, visuales[seleccion]));
     }
 
@@ -761,7 +770,7 @@ export async function render(contenedor, { navegar, params } = {}) {
   }
 
   function etiquetaCaja(clave) {
-    return { foto: 'Foto', nombre: 'Nombre', precio: 'Precio', descripcion: 'Descripción' }[clave];
+    return { foto: 'Foto', nombre: 'Nombre', precio: 'Precio', descripcion: 'Descripción', ...ETIQUETA_DECORATIVO }[clave];
   }
 
   // Ícono del cuadradito de cada fila de Capas (editar_plantilla_natural: "T" para nombre, billete
@@ -774,6 +783,7 @@ export async function render(contenedor, { navegar, params } = {}) {
   // oculto EN ESTE ESTILO (cada estilo tiene su propia visibilidad); visible dice dónde se ve.
   function estadoCapa(clave, oculto) {
     if (oculto) return 'Oculto en este estilo';
+    if (CLAVES_DECORATIVAS.includes(clave)) return 'Parte del diseño';
     return { foto: 'Fondo de la plantilla', nombre: 'Visible sobre la foto', precio: 'Visible sobre la foto', descripcion: 'Visible en el pie' }[
       clave
     ];
@@ -853,7 +863,15 @@ export async function render(contenedor, { navegar, params } = {}) {
     const cajaInicial = { ...ajustes[clave] };
     const alMover = (evMove) => {
       const actual = puntoDesdeEvento(evMove);
-      const nueva = redimensionarCaja(cajaInicial, manija, actual.x - inicio.x, actual.y - inicio.y, { w: ANCHO, h: ALTO });
+      let nueva = redimensionarCaja(cajaInicial, manija, actual.x - inicio.x, actual.y - inicio.y, { w: ANCHO, h: ALTO });
+      // Las piezas del diseño que no son divisores escalan parejas: el alto sigue al ancho, con el
+      // borde opuesto a la manija quieto.
+      if (CLAVES_DECORATIVAS.includes(clave) && !DECORATIVOS_ELASTICOS.includes(clave)) {
+        const h = Math.round((nueva.w * cajaInicial.h) / cajaInicial.w);
+        nueva = { ...nueva, h, y: manija.startsWith('n') ? cajaInicial.y + cajaInicial.h - h : cajaInicial.y };
+      } else if (DECORATIVOS_ELASTICOS.includes(clave)) {
+        nueva = { ...nueva, h: cajaInicial.h, y: cajaInicial.y };
+      }
       arrastrando = true;
       ajustes[clave] = { ...ajustes[clave], ...nueva };
       dibujarOverlay({ conPanel: false });
@@ -870,6 +888,51 @@ export async function render(contenedor, { navegar, params } = {}) {
     window.addEventListener('pointercancel', alSoltar);
   }
 
+  // Panel de una pieza del diseño (pill, divisor, WhatsApp, insignia): no tiene tipografía ni
+  // color propios — se muestra/oculta, se le cambia el tamaño y se centra. Mover y redimensionar
+  // con el dedo se hace sobre el lienzo, como con los textos.
+  function dibujarPanelDecorativo(clave, caja, oculto) {
+    const fabrica = AJUSTES_POR_DEFECTO_POR_ESTILO[estiloEditando][clave];
+    const encabezado = document.createElement('div');
+    encabezado.className = 'fila editor-plantilla__panel-encabezado';
+    const titulo = document.createElement('div');
+    titulo.className = 'grupo__titulo';
+    titulo.textContent = `Propiedades — ${etiquetaCaja(clave)}`;
+    const btnOcultar = document.createElement('button');
+    btnOcultar.type = 'button';
+    btnOcultar.className = 'boton boton--chico boton--fantasma';
+    btnOcultar.setAttribute('data-accion', 'editor-toggle-visible');
+    btnOcultar.setAttribute('aria-pressed', String(oculto));
+    btnOcultar.textContent = oculto ? 'Mostrar' : 'Ocultar';
+    btnOcultar.addEventListener('click', () => actualizarCampo(clave, 'visible', oculto, true));
+    encabezado.append(titulo, btnOcultar);
+
+    const elastico = DECORATIVOS_ELASTICOS.includes(clave);
+    const porcentaje = Math.round((caja.w / fabrica.w) * 100);
+    const campoTamano = campoRangoNumero(elastico ? 'Largo (%)' : 'Tamaño (%)', porcentaje, 40, 250, (v) => {
+      const actual = ajustes[clave];
+      const w = Math.min(ANCHO, Math.round((fabrica.w * v) / 100));
+      const h = elastico ? actual.h : Math.round((fabrica.h * v) / 100);
+      // crece/achica desde su centro, sin salirse del lienzo
+      const x = Math.max(0, Math.min(ANCHO - w, Math.round(actual.x + (actual.w - w) / 2)));
+      const y = Math.max(0, Math.min(ALTO - h, Math.round(actual.y + (actual.h - h) / 2)));
+      ajustes[clave] = { ...actual, x, y, w, h };
+      actualizarCampo(clave, 'w', w, true, false);
+    });
+
+    const btnCentrar = document.createElement('button');
+    btnCentrar.type = 'button';
+    btnCentrar.className = 'boton boton--chico';
+    btnCentrar.setAttribute('data-accion', 'editor-centrar-horizontal');
+    btnCentrar.append(crearIcono('alinear-centro'), document.createTextNode('Centrar en la imagen'));
+    btnCentrar.addEventListener('click', () => actualizarCampo(clave, 'x', Math.round((ANCHO - ajustes[clave].w) / 2), true));
+
+    const ayuda = document.createElement('p');
+    ayuda.className = 'texto-tenue';
+    ayuda.textContent = 'Es parte del diseño de esta plantilla: se mueve y se agranda arrastrando sobre la imagen, igual que los textos.';
+    panel.append(encabezado, campoTamano, btnCentrar, ayuda);
+  }
+
   function dibujarPanel() {
     panel.textContent = '';
     if (!seleccion || seleccion === 'foto') {
@@ -879,6 +942,10 @@ export async function render(contenedor, { navegar, params } = {}) {
     panel.hidden = false;
     const caja = ajustes[seleccion];
     const oculto = caja.visible === false;
+    if (CLAVES_DECORATIVAS.includes(seleccion)) {
+      dibujarPanelDecorativo(seleccion, caja, oculto);
+      return;
+    }
 
     const encabezado = document.createElement('div');
     encabezado.className = 'fila editor-plantilla__panel-encabezado';

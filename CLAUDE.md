@@ -21,7 +21,9 @@ recortada y textos abajo) y **Story inmersiva** (scrim degradado sobre la foto a
 Más 2 presets replicados de diseños que entregó Bruno (2026-10-07): **Novedad** (foto a sangre,
 scrim verde oscuro, pill arriba, nombre en dos renglones con el segundo en itálica verde, caja de
 precio y llamado de WhatsApp) y **Ficha natural** (fondo crema, foto arriba con insignia de hoja,
-nombre en mayúsculas, caja "Precio: $…" y "Escribime") — para revisarlos a ojo:
+nombre en mayúsculas, caja "Precio: $…" y "Escribime"); en estos dos también se mueven,
+redimensionan y ocultan las piezas del diseño (pill, divisores, llamado de WhatsApp, insignia —
+`ELEMENTOS_DECORATIVOS` en modelo.js, `resolverCajasDecorativas` en componer.js) — para revisarlos a ojo:
 `node scripts/previa-presets.mjs <salida.jpg> <foto> novedad ficha-natural`.
 Precio **opcional** en todos: vacío es válido ("Sin precio"), solo un negativo es error. Nombre,
 precio y descripción comparten un solo **editor de plantilla** tipo inspector (pantalla "Plantilla",

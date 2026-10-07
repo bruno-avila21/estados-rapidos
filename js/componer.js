@@ -31,7 +31,7 @@
 // pantalla Plantilla) — ninguno inventado: si falta el dato, no se dibuja (nunca "Stock"/"Ref."/
 // "Pieza única"/"Edición limitada" de relleno).
 import { calcularLineas, calcularParrafo, calcularRecorteCover } from './layout.js';
-import { formatearPrecio } from './modelo.js';
+import { formatearPrecio, ELEMENTOS_DECORATIVOS, DECORATIVOS_ELASTICOS, rectDecorativo } from './modelo.js';
 import { cargarFuentes, familiaCanvas } from './fuentes.js';
 import {
   geometriaBannerInferior,
@@ -182,6 +182,53 @@ export function resolverCajasTexto(ctx, datos) {
 }
 
 /**
+ * Cajas EFECTIVAS de las piezas decorativas de "Novedad"/"Ficha natural" (pill, divisores, llamado
+ * de WhatsApp, insignia): lo guardado en `ajustes` está pensado sobre la geometría de fábrica (con
+ * precio y descripción); si el contenido reacomoda el diseño, cada pieza se corre lo mismo que se
+ * corre su lugar de fábrica — igual criterio que `resolverCajasTexto` con nombre/precio. Devuelve
+ * por clave `{ caja, fabrica }` (`fabrica` = tamaño original, para escalar el dibujo). La usa
+ * también el editor, para que los recuadros coincidan con lo dibujado.
+ */
+export function resolverCajasDecorativas(datos, extraDescripcion = 0) {
+  const { estilo, ajustes } = datos;
+  const claves = ELEMENTOS_DECORATIVOS[estilo];
+  const geometria = GEOMETRIA_PRESET[estilo];
+  if (!claves || !geometria) return {};
+  const { conPrecio, conDescripcion } = banderasDeContenido(datos);
+  const antes = geometria({});
+  const despues = geometria({ conPrecio, conDescripcion, extraDescripcion });
+  const resultado = {};
+  for (const clave of claves) {
+    const fabrica = rectDecorativo(antes, clave);
+    const actual = rectDecorativo(despues, clave) ?? fabrica;
+    const guardada = ajustes?.[clave] ?? { ...fabrica, visible: true };
+    resultado[clave] = {
+      fabrica,
+      caja: { ...guardada, x: guardada.x + (actual.x - fabrica.x), y: guardada.y + (actual.y - fabrica.y) },
+    };
+  }
+  return resultado;
+}
+
+/** Dibuja una pieza decorativa en su caja: las elásticas (divisores) reciben la caja tal cual; las
+ * demás se dibujan a su tamaño de fábrica dentro de un contexto escalado al ancho de la caja. */
+function dibujarDecorativo(ctx, clave, decorativas, dibujar) {
+  const pieza = decorativas[clave];
+  if (!pieza || pieza.caja.visible === false) return;
+  const { caja, fabrica } = pieza;
+  if (DECORATIVOS_ELASTICOS.includes(clave)) {
+    dibujar({ x: caja.x, y: caja.y, w: caja.w, h: caja.h });
+    return;
+  }
+  const escala = caja.w / fabrica.w;
+  ctx.save();
+  ctx.translate(caja.x, caja.y);
+  ctx.scale(escala, escala);
+  dibujar({ x: 0, y: 0, w: fabrica.w, h: fabrica.h });
+  ctx.restore();
+}
+
+/**
  * Dibuja el estado completo en `ctx` según el estilo resuelto (ver `resolverEstilo` en modelo.js).
  * Síncrona a propósito: asume que las fuentes ya están cargadas (`await cargarFuentes()` antes) y
  * que las imágenes (`plantillaImagen`/`fotoImagen`) ya son `ImageBitmap` decodificados — así se
@@ -207,6 +254,7 @@ export function dibujarSegunEstilo(ctx, datos) {
   const cajas = resolverCajasTexto(ctx, datos);
   const ajustes = { ...datos.ajustes, nombre: cajas.nombre, precio: cajas.precio, descripcion: cajas.descripcion };
   const extraDescripcion = cajas.extra;
+  const decorativas = resolverCajasDecorativas(datos, extraDescripcion);
   const { textoPrecio, conPrecio, conDescripcion, conSeccion, conNombreNegocio } = banderasDeContenido(datos);
   limpiarLienzo(ctx);
 
@@ -333,7 +381,7 @@ export function dibujarSegunEstilo(ctx, datos) {
 
     dibujarFondoFoto(ctx, fotoImagen, 'cover');
     dibujarScrimNovedad(ctx, geo.scrim);
-    dibujarPillNovedad(ctx, geo.pill, (seccionNombre || 'Novedad').toUpperCase());
+    dibujarDecorativo(ctx, 'pill', decorativas, (rect) => dibujarPillNovedad(ctx, rect, (seccionNombre || 'Novedad').toUpperCase()));
     // El segundo renglón del nombre va en itálica verde (como el diseño) mientras la tipografía sea
     // la de fábrica; si se eligió otra en el editor, queda en esa, solo con el color de acento.
     const segunda =
@@ -341,11 +389,11 @@ export function dibujarSegunEstilo(ctx, datos) {
         ? { color: COLOR_NOVEDAD_ACENTO, familia: 'newsreader-italica', peso: 700 }
         : { color: COLOR_NOVEDAD_ACENTO };
     dibujarNombreEnDosLineas(ctx, producto?.nombre ?? '', ajustes.nombre, { segunda });
-    dibujarDivisorHoja(ctx, geo.divisor, COLOR_NOVEDAD_ORO);
+    dibujarDecorativo(ctx, 'divisor', decorativas, (rect) => dibujarDivisorHoja(ctx, rect, COLOR_NOVEDAD_ORO));
     if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion, { parrafo: true });
     if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, { ...ajustes.precio, bordeColor: COLOR_NOVEDAD_CREMA, bordeAncho: 3 });
-    dibujarContactoNovedad(ctx, geo.contacto);
-    dibujarDivisorHoja(ctx, geo.divisorInferior, COLOR_NOVEDAD_ORO);
+    dibujarDecorativo(ctx, 'contacto', decorativas, (rect) => dibujarContactoNovedad(ctx, rect));
+    dibujarDecorativo(ctx, 'divisorInferior', decorativas, (rect) => dibujarDivisorHoja(ctx, rect, COLOR_NOVEDAD_ORO));
     return;
   }
 
@@ -357,12 +405,14 @@ export function dibujarSegunEstilo(ctx, datos) {
     ctx.fillRect(0, 0, ANCHO, ALTO);
     ctx.restore();
     if (fotoImagen) dibujarFotoCover(ctx, fotoImagen, geo.foto);
-    dibujarInsigniaHoja(ctx, geo.insignia);
+    dibujarDecorativo(ctx, 'insignia', decorativas, (rect) =>
+      dibujarInsigniaHoja(ctx, { cx: rect.x + rect.w / 2, cy: rect.y + rect.h / 2, r: rect.w / 2 })
+    );
     dibujarNombreEnDosLineas(ctx, producto?.nombre ?? '', ajustes.nombre, { mayusculas: true });
-    dibujarDivisorHoja(ctx, geo.divisor, COLOR_FICHA_DIVISOR, { grosor: 2 });
+    dibujarDecorativo(ctx, 'divisor', decorativas, (rect) => dibujarDivisorHoja(ctx, rect, COLOR_FICHA_DIVISOR, { grosor: 2 }));
     if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion, { parrafo: true });
     if (conPrecio) dibujarCajaTexto(ctx, `Precio: ${textoPrecio}`, ajustes.precio);
-    dibujarContactoFicha(ctx, geo.contacto);
+    dibujarDecorativo(ctx, 'contacto', decorativas, (rect) => dibujarContactoFicha(ctx, rect));
     return;
   }
 

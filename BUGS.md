@@ -944,3 +944,12 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** se sacó el botón; en su lugar va la marca (logo en SVG, sin interacción).
 - **Resuelto:** sí — E2E "Apariencia…" verifica que `ir-inicio` ya no existe y que la marca se ve.
 - ¿Se repetiría en otro proyecto? Sí — un control copiado de un mock sin destino real no se "conecta a algo trivial": se saca o se le da una función.
+
+### 70. Los 2 E2E nuevos de piezas editables ("Novedad"/"Ficha natural") fallan en la primera corrida
+- **Paso:** `npx playwright test -c test/e2e/playwright.config.js` (2026-10-07), recién escritos junto con la función.
+- **Error exacto:** `editor.spec.js:780 — expect((await leer('contacto')).visible).toBe(false) — Expected: false, Received: true`; el segundo en `editor.spec.js:794` (ver causa).
+- **Reproducir:** correr `editor.spec.js` con el árbol de esta ronda.
+- **Causa:** de los tests, no de la app: (1) leían `window.__editorDebugPlantilla` justo después del clic, antes del redibujo (va en el próximo `requestAnimationFrame`); (2) comparaban el centro del divisor con precisión de 0,5 px cuando el ancho se redondea a entero (`540.5` vs `540`).
+- **Arreglo:** `expect.poll` en la lectura y tolerancia de 1 px en el centro.
+- **Resuelto:** sí — ver la corrida posterior.
+- ¿Se repetiría en otro proyecto? Sí — ya figura en este archivo: todo lo que se lee de un canvas coalescido con rAF se espera con `expect.poll`.

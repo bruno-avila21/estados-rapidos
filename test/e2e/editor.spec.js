@@ -737,3 +737,75 @@ test('al editar, el lienzo ocupa toda la pantalla (entra entero, sin scroll) y "
   await expect(zona).not.toHaveClass(/editor-plantilla__zona--pantalla/);
   await expect(page.locator('[data-accion="deshacer"]')).toBeVisible();
 });
+
+// --- Piezas del diseño editables en "Novedad"/"Ficha natural" (2026-10-07) ---
+
+test('"Novedad": la etiqueta, los divisores y el llamado de WhatsApp se mueven, se agrandan y se ocultan', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=novedad');
+  await editorListo(page);
+  for (const clave of ['pill', 'divisor', 'contacto', 'divisorInferior']) {
+    await expect(page.locator(`[data-accion="capa-${clave}"]`)).toBeVisible();
+    await expect(page.locator(`[data-elemento="${clave}"]`)).toHaveCount(1);
+  }
+  const leer = (clave) => page.evaluate((c) => window.__editorDebugPlantilla.ajustes[c], clave);
+
+  // mover
+  const pillAntes = await leer('pill');
+  await arrastrar(page, 'pill', 0, 120);
+  const pillMovida = await leer('pill');
+  expect(pillMovida.y).toBeGreaterThan(pillAntes.y);
+  expect(pillMovida.w).toBe(pillAntes.w);
+
+  // agrandar con la manija: escala pareja (misma proporción)
+  await page.locator('[data-elemento="contacto"]').click();
+  const contactoAntes = await leer('contacto');
+  const manija = await page.locator('[data-elemento="contacto"] .editor-plantilla__manija--se').boundingBox();
+  await page.mouse.move(manija.x + manija.width / 2, manija.y + manija.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(manija.x + manija.width / 2 + 40, manija.y + manija.height / 2 + 10, { steps: 5 });
+  await page.mouse.up();
+  const contactoGrande = await leer('contacto');
+  expect(contactoGrande.w).toBeGreaterThan(contactoAntes.w);
+  expect(contactoGrande.w / contactoGrande.h).toBeCloseTo(contactoAntes.w / contactoAntes.h, 1);
+  // las piezas del diseño no traen el mini menú de texto
+  await expect(page.locator('.editor-plantilla__mini')).toHaveCount(0);
+
+  // panel propio: tamaño en % y ocultar
+  await listo(page);
+  await expect(page.locator('.editor-plantilla__panel')).toContainText('Llamado de WhatsApp');
+  await page.locator('[data-accion="editor-toggle-visible"]').click();
+  await expect(page.locator('[data-elemento="contacto"]')).toHaveCount(0);
+  await expect.poll(async () => (await leer('contacto')).visible).toBe(false); // el lienzo se redibuja en el próximo frame
+  await expect(page.locator('.editor-plantilla__badge')).toHaveText('Personalizado');
+
+  // persiste y "Restablecer" lo devuelve todo a fábrica
+  await page.waitForTimeout(600);
+  await page.reload();
+  await editorListo(page);
+  expect((await leer('pill')).y).toBe(pillMovida.y);
+  await page.locator('[data-accion="restablecer-plantilla"]').click();
+  await page.locator('[data-accion="confirmar-borrar"]').click();
+  await expect.poll(async () => (await leer('pill')).y).toBe(pillAntes.y);
+  await expect(page.locator('[data-elemento="contacto"]')).toHaveCount(1);
+});
+
+test('"Ficha natural": la insignia y el divisor son capas editables; el divisor solo cambia de largo', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=ficha-natural');
+  await editorListo(page);
+  for (const clave of ['insignia', 'divisor', 'contacto']) await expect(page.locator(`[data-accion="capa-${clave}"]`)).toBeVisible();
+  const leer = (clave) => page.evaluate((c) => window.__editorDebugPlantilla.ajustes[c], clave);
+  const antes = await leer('divisor');
+  await page.locator('[data-accion="capa-divisor"]').click();
+  await page.locator('.editor-plantilla__panel input[type="range"]').first().evaluate((el) => {
+    el.value = '50';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect.poll(async () => (await leer('divisor')).w).toBe(Math.round(antes.w / 2));
+  const despues = await leer('divisor');
+  expect(despues.h).toBe(antes.h);
+  expect(Math.abs(despues.x + despues.w / 2 - (antes.x + antes.w / 2))).toBeLessThanOrEqual(1); // sigue centrado (redondeo a px)
+});
