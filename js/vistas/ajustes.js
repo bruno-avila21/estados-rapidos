@@ -18,6 +18,8 @@ import { mostrarToast } from '../utils/toast.js';
 import { crearIcono } from '../utils/iconos.js';
 import { abrirVisorImagen } from '../utils/visor-imagen.js';
 import { componerVistaCompleta } from '../utils/vista-completa.js';
+import { crearVistaPrevia } from '../utils/vista-previa-viva.js';
+import { ESTILOS_CON_DESCRIPCION } from '../componer.js';
 import { seccionLaApp } from './ajustes-la-app.js';
 
 let debounce = null;
@@ -212,11 +214,35 @@ export async function render(contenedor, { navegar }) {
   };
   previaCaja.append(cabeceraPrevia, previaModelo);
 
+  // Vista previa en vivo de la IMAGEN con este texto (pedido 2026-10-03): el primer producto cargado
+  // (o el de ejemplo) con la plantilla de descripción tal cual está escrita ahora, aunque todavía no
+  // se haya guardado. Si el estilo general no dibuja la descripción, se avisa en vez de dejar a la
+  // persona buscando un texto que nunca va a aparecer en la imagen.
+  const vistaPrevia = crearVistaPrevia({
+    titulo: 'Así se ve tu estado',
+    obtenerOpciones: () => ({ general: { descripcionModelo: textareaModelo.value }, soloModelo: true }),
+  });
+  const previaImagen = document.createElement('div');
+  previaImagen.className = 'vista-previa-copia';
+  const etiquetaPreviaImagen = document.createElement('span');
+  etiquetaPreviaImagen.className = 'vista-previa-copia__etiqueta';
+  etiquetaPreviaImagen.textContent = 'Vista previa de la imagen';
+  previaImagen.append(etiquetaPreviaImagen, vistaPrevia.raiz);
+  if (!ESTILOS_CON_DESCRIPCION.includes(general.estiloGeneral)) {
+    const notaEstilo = document.createElement('p');
+    notaEstilo.className = 'panel__subtitulo panel__subtitulo--pie';
+    notaEstilo.setAttribute('data-nota', 'estilo-sin-descripcion');
+    notaEstilo.textContent = `Con el estilo "${ETIQUETA_ESTILO[general.estiloGeneral] ?? ETIQUETA_ESTILO['solo-foto']}" este texto no se dibuja en la imagen: solo se copia para pegarlo. Para verlo en la imagen elegí un estilo con descripción en "Tu plantilla".`;
+    previaImagen.append(notaEstilo);
+  }
+  vistaPrevia.actualizar({ inmediato: true });
+
   actualizarContador();
   actualizarPreviaModelo();
   textareaModelo.addEventListener('input', () => {
     actualizarContador();
     actualizarPreviaModelo();
+    vistaPrevia.actualizar();
     clearTimeout(debounce);
     debounce = setTimeout(async () => {
       await repo.guardarDescripcionModelo(textareaModelo.value);
@@ -281,7 +307,7 @@ export async function render(contenedor, { navegar }) {
   );
   grupoFormato.append(campoPrefijo, casillasPrecision);
 
-  panelTexto.append(variableChips, editorTexto, previaCaja);
+  panelTexto.append(variableChips, editorTexto, previaCaja, previaImagen);
   wrap.append(panelTexto);
 
   // --- 4) Prefijo y puntuación monetaria: panel propio (mismo orden que el mock). ---

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calcularLineas, calcularRecorteCover } from '../js/layout.js';
+import { calcularLineas, calcularParrafo, calcularRecorteCover } from '../js/layout.js';
 
 // Medidor simulado: monoespaciado, cada carácter ocupa 0.55 * tamano px (no hay canvas en Node).
 const medirAncho = (texto, tamano) => texto.length * tamano * 0.55;
@@ -121,4 +121,45 @@ test('calcularRecorteCover: mismo aspecto no recorta', () => {
   const { sw, sh } = calcularRecorteCover({ anchoOrigen: 800, altoOrigen: 800, anchoDestino: 400, altoDestino: 400 });
   assert.equal(sw, 800);
   assert.equal(sh, 800);
+});
+
+// --- calcularParrafo (la descripción, pedido 2026-10-03): parte en renglones al tamaño elegido y
+// respeta los saltos escritos, en vez de achicar a una línea o truncar con "…". ---
+test('calcularParrafo: un texto largo se parte en renglones SIN achicar la letra si hay alto', () => {
+  const texto = 'uno dos tres cuatro cinco seis siete ocho nueve diez once doce';
+  const { lineas, tamano, recortado } = calcularParrafo({ texto, anchoMax: 200, altoMax: 2000, medirAncho, tamanoInicial: 40, tamanoMinimo: 18 });
+  assert.equal(tamano, 40);
+  assert.equal(recortado, false);
+  assert.ok(lineas.length > 2);
+  assert.equal(lineas.join(' '), texto); // no se pierde ni una palabra
+  for (const l of lineas) assert.ok(medirAncho(l, tamano) <= 200, l);
+});
+
+test('calcularParrafo: respeta los saltos de línea escritos (y colapsa los renglones en blanco de más)', () => {
+  const { lineas } = calcularParrafo({ texto: 'Talle S y M\r\nColor negro\n\n\n\nEnvíos a todo el país', anchoMax: 2000, altoMax: 2000, medirAncho, tamanoInicial: 30 });
+  assert.deepEqual(lineas, ['Talle S y M', 'Color negro', '', 'Envíos a todo el país']);
+});
+
+test('calcularParrafo: si no entra en el alto, achica la letra antes de truncar', () => {
+  const texto = 'uno dos tres cuatro cinco seis siete ocho nueve diez once doce';
+  const { tamano, recortado, lineas } = calcularParrafo({ texto, anchoMax: 200, altoMax: 150, medirAncho, tamanoInicial: 40, tamanoMinimo: 18 });
+  assert.ok(tamano < 40 && tamano >= 18);
+  assert.equal(recortado, false);
+  assert.ok(lineas.length * tamano * 1.22 <= 150);
+});
+
+test('calcularParrafo: recién al tamaño mínimo y sin alto trunca con "…", sin pasarse del ancho', () => {
+  const texto = 'uno dos tres cuatro cinco seis siete ocho nueve diez once doce trece catorce quince';
+  const { lineas, tamano, recortado } = calcularParrafo({ texto, anchoMax: 200, altoMax: 50, medirAncho, tamanoInicial: 40, tamanoMinimo: 18 });
+  assert.equal(tamano, 18);
+  assert.equal(recortado, true);
+  assert.ok(lineas.at(-1).endsWith('…'));
+  for (const l of lineas) assert.ok(medirAncho(l, tamano) <= 200, l);
+});
+
+test('calcularParrafo: una palabra más ancha que la caja se corta por letras, no desborda', () => {
+  const { lineas, tamano } = calcularParrafo({ texto: 'a'.repeat(60), anchoMax: 200, altoMax: 2000, medirAncho, tamanoInicial: 30 });
+  assert.ok(lineas.length > 1);
+  assert.equal(lineas.join(''), 'a'.repeat(60));
+  for (const l of lineas) assert.ok(medirAncho(l, tamano) <= 200, l);
 });

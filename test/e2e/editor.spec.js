@@ -536,3 +536,68 @@ test('un preset de fondo es UN solo paso de deshacer (los 3 campos juntos)', asy
     .poll(() => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre.fondoRadio))
     .toBe(4);
 });
+
+// --- Guías de centrado y mini menú flotante (2026-10-07) ---
+
+test('al arrastrar aparecen las guías del centro y se encienden al quedar centrado', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=foto-precio');
+  await asegurarLienzoVisible(page);
+
+  const caja = page.locator('[data-elemento="nombre"]');
+  const box = await caja.boundingBox();
+  await expect(page.locator('.editor-plantilla__guia')).toHaveCount(0); // sin arrastre no hay guías
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 2, box.y + box.height / 2 - 80, { steps: 5 });
+  // El nombre ocupa casi todo el ancho: a 2px del centro queda enganchado al centro horizontal.
+  await expect(page.locator('[data-guia="centro-x"]')).toHaveAttribute('data-activa', 'true');
+  await expect(page.locator('[data-guia="centro-y"]')).toHaveAttribute('data-activa', 'false');
+  await expect(page.locator('.editor-plantilla__guia-rotulo')).toHaveText('Centro horizontal');
+  await expect(page.locator('.editor-plantilla__mini')).toHaveCount(0); // el menú no tapa mientras se mueve
+  await page.mouse.up();
+
+  await expect(page.locator('.editor-plantilla__guia')).toHaveCount(0);
+  const ajustes = await page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre);
+  expect(ajustes.x + ajustes.w / 2).toBe(540); // centrado exacto en 1080
+});
+
+test('el mini menú del elemento seleccionado cambia tamaño, alineación, color y tipografía', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page);
+  await page.goto('/#/plantilla?estilo=foto-precio');
+  await asegurarLienzoVisible(page);
+
+  await expect(page.locator('.editor-plantilla__mini')).toHaveCount(0);
+  await page.locator('[data-elemento="nombre"]').click();
+  const menu = page.locator('.editor-plantilla__mini');
+  await expect(menu).toBeVisible();
+  const leer = () => page.evaluate(() => window.__editorDebugPlantilla.ajustes.nombre);
+  const antes = await leer();
+
+  await menu.locator('[data-accion="mini-tamano-mas"]').click();
+  await expect.poll(async () => (await leer()).tamano).toBe(antes.tamano + 4);
+  await menu.locator('[data-accion="mini-tamano-menos"]').click();
+  await expect.poll(async () => (await leer()).tamano).toBe(antes.tamano);
+
+  await menu.locator('[data-accion="mini-alineacion"]').click();
+  await expect.poll(async () => (await leer()).alineacion).not.toBe(antes.alineacion);
+
+  await menu.locator('[data-accion="mini-color"]').click();
+  await menu.locator('[data-accion="mini-color-f5a623"]').click();
+  await expect.poll(async () => (await leer()).color).toBe('#f5a623');
+
+  await menu.locator('[data-accion="mini-fuente"]').selectOption('pacifico');
+  await expect.poll(async () => (await leer()).familia).toBe('pacifico');
+
+  // Sigue seleccionado (el menú no deselecciona) y el panel de abajo refleja lo mismo.
+  await expect(page.locator('[data-elemento="nombre"]')).toHaveClass(/editor-plantilla__caja--activa/);
+  await expect(page.locator('[data-accion="editor-fuente"]')).toHaveValue('pacifico');
+
+  // El menú entra en el ancho de la pantalla (412px), sin scroll horizontal.
+  const cajaMenu = await menu.boundingBox();
+  expect(cajaMenu.x).toBeGreaterThanOrEqual(0);
+  expect(cajaMenu.x + cajaMenu.width).toBeLessThanOrEqual(412);
+});

@@ -359,19 +359,32 @@ export async function guardarCopiaAutomaticaHabilitada(habilitada) {
 
 /** "Nombre del negocio" de los 4 presets de composición (editable en Plantilla): vacío = no se
  * dibuja en ningún preset. */
-export async function guardarNombreNegocio(nombreNegocio) {
-  const config = await obtenerAjustesGenerales();
-  config.nombreNegocio = String(nombreNegocio ?? '').slice(0, 60);
-  await db.guardar('config', config);
-  return config;
+export function guardarNombreNegocio(nombreNegocio) {
+  return actualizarGeneralEnCola((config) => {
+    config.nombreNegocio = String(nombreNegocio ?? '').slice(0, 60);
+  });
 }
 
 /** "Texto del botón/llamado" del preset "Banner inferior" (editable en Plantilla). */
-export async function guardarTextoBoton(textoBoton) {
-  const config = await obtenerAjustesGenerales();
-  config.textoBoton = String(textoBoton ?? '').slice(0, 40) || TEXTO_BOTON_POR_DEFECTO;
-  await db.guardar('config', config);
-  return config;
+export function guardarTextoBoton(textoBoton) {
+  return actualizarGeneralEnCola((config) => {
+    config.textoBoton = String(textoBoton ?? '').slice(0, 40) || TEXTO_BOTON_POR_DEFECTO;
+  });
+}
+
+// Los dos campos de arriba se guardan con debounce desde la misma pantalla: si los dos timers caen
+// juntos, cada uno leía el registro 'general' ANTES de que el otro escribiera y el último pisaba al
+// primero (BUGS.md #64). En cola, cada leer-modificar-escribir espera al anterior.
+let colaGeneral = Promise.resolve();
+function actualizarGeneralEnCola(mutar) {
+  const turno = colaGeneral.then(async () => {
+    const config = await obtenerAjustesGenerales();
+    mutar(config);
+    await db.guardar('config', config);
+    return config;
+  });
+  colaGeneral = turno.catch(() => {});
+  return turno;
 }
 
 export async function exportarRespaldo() {

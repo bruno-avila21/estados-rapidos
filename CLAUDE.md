@@ -21,7 +21,9 @@ Precio **opcional** en todos: vacío es válido ("Sin precio"), solo un negativo
 precio y descripción comparten un solo **editor de plantilla** tipo inspector (pantalla "Plantilla",
 se abre desde Ajustes): clic/toque selecciona un elemento sobre la vista previa, arrastrar mueve,
 las manijas de las esquinas redimensionan, con panel de propiedades (tamaño, tipografía, color,
-fondo/etiqueta, visible), capas, deshacer/rehacer y restablecer.
+fondo/etiqueta, visible), capas, deshacer/rehacer y restablecer. Al arrastrar se ven las guías del
+centro (se encienden y dicen "Centrado" al engancharse) y el elemento seleccionado trae un mini
+menú flotante (tamaño, alineación, color, tipografía).
 
 Identidad visual "Organic Minimalist" (reskin 2026-09-28): paleta verde ciprés + umber sobre
 superficies de alabastro/lino (verde ciprés primario `--color-primario`, umber `--color-acento`;

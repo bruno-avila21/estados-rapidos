@@ -25,7 +25,7 @@
 // VIVO (mismo `tarjetaEstilo`/`componerMiniatura` que Ajustes) para elegirlos con un toque sin salir
 // del editor, con un "Deshacer" corto para el estilo general anterior.
 import * as repo from '../repositorio.js';
-import { dibujarSegunEstilo, componerMiniatura, componerSegunEstilo, ANCHO, ALTO } from '../componer.js';
+import { dibujarSegunEstilo, resolverCajasTexto, componerMiniatura, componerSegunEstilo, ANCHO, ALTO } from '../componer.js';
 import { cargarFuentes } from '../fuentes.js';
 import { elementoEnPunto, moverCaja, redimensionarCaja, aplicarSnap, acomodarAutomatico } from '../editor-geometria.js';
 import {
@@ -53,6 +53,17 @@ import { tarjetaEstilo, mostrarMiniatura } from './ajustes.js';
 const COLORES_RAPIDOS = ['#ffffff', '#242220', '#3a4d39', '#6e5b49', '#f5a623', '#3f5c38'];
 const CLAVES_TEXTO = ['nombre', 'precio', 'descripcion'];
 const HANDLES = ['nw', 'ne', 'sw', 'se'];
+// Guías del lienzo mientras se arrastra (pedido 2026-10-07): las dos del centro se ven SIEMPRE
+// durante el arrastre (tenues) y se encienden al engancharse; las de margen solo al engancharse.
+// `UMBRAL_SNAP` está en px lógicos (1080 de ancho): 24 ≈ 8px de dedo en un celu, el 12 de antes
+// (~4px) casi no se sentía.
+const GUIAS_CENTRO = ['centro-x', 'centro-y'];
+const GUIAS_MARGEN = ['margen-izquierdo', 'margen-derecho', 'margen-superior', 'margen-inferior'];
+const UMBRAL_SNAP = 24;
+const PASO_TAMANO_MINI = 4;
+const ALINEACIONES = ['left', 'center', 'right'];
+const ETIQUETA_ALINEACION = { left: 'izquierda', center: 'centro', right: 'derecha' };
+const ICONO_ALINEACION = { left: 'alinear-izquierda', center: 'alinear-centro', right: 'alinear-derecha' };
 // "Nombre del negocio" lo dibujan banner-inferior (pie) y editorial (pie); "Texto del botón" solo
 // banner-inferior (el único con botón/CTA propio) — polaroid y story-inmersiva no usan ninguno de
 // los dos. Los campos se muestran solo mientras se edita un estilo que efectivamente los dibuja.
@@ -111,6 +122,11 @@ export async function render(contenedor, { navegar, params } = {}) {
   await cargarFuentes(); // una sola vez: dibujarSegunEstilo es síncrona, asume fuentes ya listas
 
   let seleccion = null;
+  // Arrastre en curso (mover o redimensionar): muestra las guías y esconde el mini menú para que no
+  // tape lo que se está acomodando. `guiasActivas` = las que `aplicarSnap` enganchó en este paso.
+  let arrastrando = false;
+  let guiasActivas = [];
+  let miniColorAbierto = false;
   // Declarados acá (y no más abajo, junto a `solicitarRedibujo`) para que la llamada inicial de
   // más abajo no choque con la zona muerta temporal de `let` (TDZ): las funciones declaradas con
   // `function` se hoistean enteras, pero un `let` no se puede leer antes de su propia línea.
@@ -518,9 +534,35 @@ export async function render(contenedor, { navegar, params } = {}) {
   // elemento oculto no dibuja caja en el overlay, igual que el mock no lo dibuja en la
   // previsualización) — para reactivarlo hay que ir a "Capas y visibilidad".
   function cajasHitTest() {
+    const visuales = cajasVisuales();
     return clavesVisiblesParaEstilo()
-      .map((clave) => ({ clave, ...ajustes[clave] }))
+      .map((clave) => ({ clave, ...visuales[clave] }))
       .filter((caja) => caja.visible !== false);
+  }
+
+  function datosLienzo() {
+    return {
+      estilo: estiloEditando,
+      plantillaImagen: plantillaImagenActual,
+      fotoImagen: fotoEjemplo,
+      producto: productoEjemplo,
+      ajustes,
+      formatoPrecio,
+      descripcion: descripcionEjemplo,
+      encuadreFoto: general.encuadreFoto,
+      general,
+      seccionNombre: seccionNombreEjemplo,
+      posicion: posicionEjemplo,
+    };
+  }
+
+  // Dónde se DIBUJA cada caja: igual a `ajustes`, salvo que la descripción de ejemplo no entre en
+  // su caja — ahí crece y corre a nombre/precio (`resolverCajasTexto`, componer.js). El overlay y el
+  // hit-test usan estas, para que el recuadro quede sobre el texto que se ve; arrastrar/redimensionar
+  // siguen operando sobre `ajustes` (lo que se guarda), el corrimiento se recalcula en cada dibujo.
+  function cajasVisuales() {
+    const cajas = resolverCajasTexto(ctxPrevia, datosLienzo());
+    return { ...ajustes, nombre: cajas.nombre, precio: cajas.precio, descripcion: cajas.descripcion };
   }
 
   function ajustarResolucionCanvas() {
@@ -548,19 +590,7 @@ export async function render(contenedor, { navegar, params } = {}) {
   }
 
   function pintarLienzo() {
-    dibujarSegunEstilo(ctxPrevia, {
-      estilo: estiloEditando,
-      plantillaImagen: plantillaImagenActual,
-      fotoImagen: fotoEjemplo,
-      producto: productoEjemplo,
-      ajustes,
-      formatoPrecio,
-      descripcion: descripcionEjemplo,
-      encuadreFoto: general.encuadreFoto,
-      general,
-      seccionNombre: seccionNombreEjemplo,
-      posicion: posicionEjemplo,
-    });
+    dibujarSegunEstilo(ctxPrevia, datosLienzo());
     contadorDibujos += 1;
     // Para tests E2E (CREAR-BRIEF.md: "exponer en window para test el último layout dibujado") —
     // permite verificar que lo dibujado en el canvas coincide con el overlay, sin depender de leer
@@ -667,6 +697,7 @@ export async function render(contenedor, { navegar, params } = {}) {
   function dibujarOverlay({ conPanel = true } = {}) {
     overlay.textContent = '';
     const claves = clavesVisiblesParaEstilo();
+    const visuales = cajasVisuales();
 
     capas.textContent = '';
     const cabeceraCapas = document.createElement('div');
@@ -695,7 +726,7 @@ export async function render(contenedor, { navegar, params } = {}) {
         const div = document.createElement('div');
         div.className = 'editor-plantilla__caja' + (seleccion === clave ? ' editor-plantilla__caja--activa' : '');
         div.setAttribute('data-elemento', clave); // para tests: clic directo sobre el elemento en el lienzo
-        posicionarEnPx(div, caja);
+        posicionarEnPx(div, visuales[clave]);
         div.addEventListener('pointerdown', (ev) => alPointerDownCaja(ev, clave));
         if (seleccion === clave) {
           for (const manija of HANDLES) {
@@ -754,8 +785,140 @@ export async function render(contenedor, { navegar, params } = {}) {
       listaCapas.append(filaCapa);
     }
 
+    if (arrastrando) dibujarGuias();
+    else if (seleccion && seleccion !== 'foto' && ajustes[seleccion].visible !== false) {
+      overlay.append(miniMenu(seleccion, visuales[seleccion]));
+    }
+
     if (conPanel) dibujarPanel();
     actualizarBadgePersonalizado();
+  }
+
+  // Guías del arrastre: línea vertical/horizontal del centro del lienzo (tenues mientras se mueve,
+  // resaltadas cuando el elemento quedó enganchado) + las de margen al engancharse, y un rótulo que
+  // lo dice con palabras ("Centrado") — no depende solo del color.
+  function dibujarGuias() {
+    for (const guia of [...GUIAS_CENTRO, ...GUIAS_MARGEN]) {
+      const activa = guiasActivas.includes(guia);
+      if (!activa && !GUIAS_CENTRO.includes(guia)) continue;
+      const linea = document.createElement('div');
+      linea.className = `editor-plantilla__guia editor-plantilla__guia--${guia}` + (activa ? ' editor-plantilla__guia--activa' : '');
+      linea.setAttribute('data-guia', guia);
+      linea.setAttribute('data-activa', String(activa));
+      overlay.append(linea);
+    }
+    const enX = guiasActivas.includes('centro-x');
+    const enY = guiasActivas.includes('centro-y');
+    if (enX || enY) {
+      const rotulo = document.createElement('div');
+      rotulo.className = 'editor-plantilla__guia-rotulo';
+      rotulo.setAttribute('role', 'status');
+      rotulo.textContent = enX && enY ? 'Centrado' : enX ? 'Centro horizontal' : 'Centro vertical';
+      overlay.append(rotulo);
+    }
+  }
+
+  // Mini menú flotante junto al elemento seleccionado (pedido 2026-10-07): lo de todos los días
+  // (tamaño, alineación, color, tipografía) sin bajar hasta el panel de propiedades, que sigue
+  // estando abajo con todo lo demás. Va arriba de la caja si hay lugar, si no abajo.
+  function miniMenu(clave, cajaVisual) {
+    const caja = ajustes[clave];
+    const menu = document.createElement('div');
+    menu.className = 'editor-plantilla__mini';
+    menu.setAttribute('role', 'toolbar');
+    menu.setAttribute('aria-label', `Ajustes rápidos de ${etiquetaCaja(clave)}`);
+    // Un toque en el menú no es un toque en el lienzo: no deselecciona ni arranca un arrastre.
+    menu.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+
+    const fila = document.createElement('div');
+    fila.className = 'editor-plantilla__mini-fila';
+
+    const botonMini = (accion, etiqueta, contenido) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'editor-plantilla__mini-boton';
+      btn.setAttribute('data-accion', accion);
+      btn.setAttribute('aria-label', etiqueta);
+      btn.title = etiqueta;
+      btn.append(contenido);
+      return btn;
+    };
+    const muestraColor = (color) => {
+      const muestra = document.createElement('span');
+      muestra.className = 'editor-plantilla__mini-muestra';
+      muestra.style.background = color;
+      return muestra;
+    };
+
+    const tamano = caja.tamano || 48;
+    const cambiarTamano = (delta) => actualizarCampo(clave, 'tamano', Math.max(16, Math.min(160, tamano + delta)), true);
+    const btnMenos = botonMini('mini-tamano-menos', 'Achicar la letra', document.createTextNode('A−'));
+    btnMenos.classList.add('editor-plantilla__mini-boton--chico');
+    btnMenos.disabled = tamano <= 16;
+    btnMenos.addEventListener('click', () => cambiarTamano(-PASO_TAMANO_MINI));
+    const btnMas = botonMini('mini-tamano-mas', 'Agrandar la letra', document.createTextNode('A+'));
+    btnMas.disabled = tamano >= 160;
+    btnMas.addEventListener('click', () => cambiarTamano(PASO_TAMANO_MINI));
+
+    const alineacion = ALINEACIONES.includes(caja.alineacion) ? caja.alineacion : 'center';
+    const siguiente = ALINEACIONES[(ALINEACIONES.indexOf(alineacion) + 1) % ALINEACIONES.length];
+    const btnAlinear = botonMini(
+      'mini-alineacion',
+      `Alineación: ${ETIQUETA_ALINEACION[alineacion]}. Tocar para pasar a ${ETIQUETA_ALINEACION[siguiente]}`,
+      crearIcono(ICONO_ALINEACION[alineacion])
+    );
+    btnAlinear.setAttribute('data-valor', alineacion);
+    btnAlinear.addEventListener('click', () => actualizarCampo(clave, 'alineacion', siguiente, true));
+
+    const btnColor = botonMini('mini-color', 'Color del texto', muestraColor(caja.color || '#ffffff'));
+    btnColor.setAttribute('aria-expanded', String(miniColorAbierto));
+    btnColor.addEventListener('click', () => {
+      miniColorAbierto = !miniColorAbierto;
+      dibujarOverlay({ conPanel: false });
+    });
+
+    const selectFuente = document.createElement('select');
+    selectFuente.className = 'editor-plantilla__mini-fuente';
+    selectFuente.setAttribute('data-accion', 'mini-fuente');
+    selectFuente.setAttribute('aria-label', 'Tipografía');
+    for (const fuente of FUENTES_DISPONIBLES) {
+      const opcion = document.createElement('option');
+      opcion.value = fuente;
+      opcion.textContent = ETIQUETA_FUENTE[fuente];
+      if (fuente === caja.familia) opcion.selected = true;
+      selectFuente.append(opcion);
+    }
+    selectFuente.addEventListener('change', () => actualizarCampo(clave, 'familia', selectFuente.value, true));
+
+    fila.append(btnMenos, btnMas, btnAlinear, btnColor, selectFuente);
+    menu.append(fila);
+
+    if (miniColorAbierto) {
+      const filaColores = document.createElement('div');
+      filaColores.className = 'editor-plantilla__mini-fila editor-plantilla__mini-colores';
+      for (const rapido of COLORES_RAPIDOS) {
+        const swatch = botonMini(`mini-color-${rapido.slice(1)}`, `Color ${rapido}`, muestraColor(rapido));
+        swatch.setAttribute('aria-pressed', String((caja.color || '').toLowerCase() === rapido));
+        swatch.addEventListener('click', () => {
+          miniColorAbierto = false;
+          actualizarCampo(clave, 'color', rapido, true);
+        });
+        filaColores.append(swatch);
+      }
+      menu.append(filaColores);
+    }
+
+    const altoLienzo = overlay.getBoundingClientRect().height || 1;
+    const altoMenu = miniColorAbierto ? 116 : 60;
+    const separacion = 14; // deja libres las manijas de las esquinas
+    const arribaPx = (cajaVisual.y / ALTO) * altoLienzo;
+    const abajoPx = ((cajaVisual.y + cajaVisual.h) / ALTO) * altoLienzo;
+    const top =
+      arribaPx >= altoMenu + separacion
+        ? arribaPx - altoMenu - separacion
+        : Math.max(0, Math.min(abajoPx + separacion, altoLienzo - altoMenu));
+    menu.style.top = `${Math.round(top)}px`;
+    return menu;
   }
 
   // Badge de la barra superior: SIEMPRE visible, con 2 estados ("Por defecto"/"Personalizado") —
@@ -808,31 +971,46 @@ export async function render(contenedor, { navegar, params } = {}) {
   }
 
   function seleccionar(clave) {
+    if (clave !== seleccion) miniColorAbierto = false;
     seleccion = clave;
+    dibujarOverlay();
+  }
+
+  function terminarArrastre() {
+    arrastrando = false;
+    guiasActivas = [];
+    guardarEnHistorial();
     dibujarOverlay();
   }
 
   function alPointerDownCaja(ev, clave) {
     ev.stopPropagation();
     ev.preventDefault();
+    if (clave !== seleccion) miniColorAbierto = false;
     seleccion = clave;
     const inicio = puntoDesdeEvento(ev);
     const cajaInicial = { ...ajustes[clave] };
     const alMover = (evMove) => {
       const actual = puntoDesdeEvento(evMove);
-      let nueva = moverCaja(cajaInicial, actual.x - inicio.x, actual.y - inicio.y, { w: ANCHO, h: ALTO });
-      const { caja: conSnap } = aplicarSnap(nueva, { w: ANCHO, h: ALTO });
+      const nueva = moverCaja(cajaInicial, actual.x - inicio.x, actual.y - inicio.y, { w: ANCHO, h: ALTO });
+      const { caja: conSnap, guias } = aplicarSnap(nueva, { w: ANCHO, h: ALTO }, UMBRAL_SNAP);
+      // Aviso táctil cortito al engancharse en un centro (donde el dispositivo lo soporte).
+      if (guias.some((g) => GUIAS_CENTRO.includes(g) && !guiasActivas.includes(g))) navigator.vibrate?.(8);
+      arrastrando = true;
+      guiasActivas = guias;
       ajustes[clave] = { ...ajustes[clave], x: conSnap.x, y: conSnap.y };
-      dibujarOverlay();
+      dibujarOverlay({ conPanel: false });
       solicitarRedibujo();
     };
     const alSoltar = () => {
       window.removeEventListener('pointermove', alMover);
       window.removeEventListener('pointerup', alSoltar);
-      guardarEnHistorial();
+      window.removeEventListener('pointercancel', alSoltar);
+      terminarArrastre();
     };
     window.addEventListener('pointermove', alMover);
     window.addEventListener('pointerup', alSoltar);
+    window.addEventListener('pointercancel', alSoltar);
     dibujarOverlay();
   }
 
@@ -844,17 +1022,20 @@ export async function render(contenedor, { navegar, params } = {}) {
     const alMover = (evMove) => {
       const actual = puntoDesdeEvento(evMove);
       const nueva = redimensionarCaja(cajaInicial, manija, actual.x - inicio.x, actual.y - inicio.y, { w: ANCHO, h: ALTO });
+      arrastrando = true;
       ajustes[clave] = { ...ajustes[clave], ...nueva };
-      dibujarOverlay();
+      dibujarOverlay({ conPanel: false });
       solicitarRedibujo();
     };
     const alSoltar = () => {
       window.removeEventListener('pointermove', alMover);
       window.removeEventListener('pointerup', alSoltar);
-      guardarEnHistorial();
+      window.removeEventListener('pointercancel', alSoltar);
+      terminarArrastre();
     };
     window.addEventListener('pointermove', alMover);
     window.addEventListener('pointerup', alSoltar);
+    window.addEventListener('pointercancel', alSoltar);
   }
 
   function dibujarPanel() {

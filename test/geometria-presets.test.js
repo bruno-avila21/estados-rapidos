@@ -179,3 +179,35 @@ test('geometriaStoryInmersiva: sin precio NI descripción, no queda ninguna fila
   assert.equal(geo.descripcion, null);
   assert.ok(dentroDelLienzo(geo.nombre));
 });
+
+// --- `extraDescripcion` (pedido 2026-10-03): la zona decorativa acompaña a la descripción crecida.
+test('extraDescripcion: la descripción gana ese alto en los 4 presets y nada se sale del lienzo', async () => {
+  const m = await import('../js/geometria-presets.js');
+  const casos = {
+    'banner-inferior': m.geometriaBannerInferior,
+    editorial: m.geometriaEditorial,
+    polaroid: m.geometriaPolaroid,
+    'story-inmersiva': m.geometriaStoryInmersiva,
+  };
+  for (const [preset, geometria] of Object.entries(casos)) {
+    const base = geometria({});
+    for (const extra of [120, m.EXTRA_DESCRIPCION_MAX[preset]]) {
+      const crecida = geometria({ extraDescripcion: extra });
+      assert.equal(crecida.descripcion.h, base.descripcion.h + extra, preset);
+      for (const [clave, rect] of Object.entries(crecida)) {
+        if (!rect || typeof rect !== 'object' || rect.y == null) continue;
+        assert.ok(rect.y >= 0 && rect.y + rect.h <= m.ALTO_LIENZO, `${preset}.${clave} con extra ${extra}`);
+      }
+    }
+  }
+});
+
+test('extraDescripcion: el banner y la story crecen hacia arriba (nombre sube), el editorial empuja el pie', async () => {
+  const m = await import('../js/geometria-presets.js');
+  assert.equal(m.geometriaBannerInferior({ extraDescripcion: 100 }).nombre.y, m.geometriaBannerInferior({}).nombre.y - 100);
+  assert.equal(m.geometriaBannerInferior({ extraDescripcion: 100 }).pie.y, m.geometriaBannerInferior({}).pie.y);
+  assert.equal(m.geometriaStoryInmersiva({ extraDescripcion: 100 }).nombre.y, m.geometriaStoryInmersiva({}).nombre.y - 100);
+  assert.equal(m.geometriaEditorial({ extraDescripcion: 80 }).pie.y, m.geometriaEditorial({}).pie.y + 80);
+  assert.equal(m.geometriaEditorial({ extraDescripcion: 80 }).marco.h, m.geometriaEditorial({}).marco.h); // todavía entra
+  assert.ok(m.geometriaEditorial({ extraDescripcion: 400 }).marco.h < m.geometriaEditorial({}).marco.h); // ya no: se acorta la foto
+});

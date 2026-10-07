@@ -872,3 +872,48 @@ seguridad.md: nada se omite, lo no resuelto dice "pendiente: motivo"). Todos res
 - **Arreglo:** `css/estilos.css` — se agrega `.campo[hidden] { display: none; }` justo después de la definición de `.campo` (mismo patrón que las otras 2 excepciones ya existentes).
 - **Resuelto:** sí — `test/e2e/presets.spec.js` (9/9) y la suite completa (101/101) en verde.
 - ¿Se repetiría en otro proyecto? Sí — es un patrón de bug recurrente EN ESTE proyecto específico (van 3 clases distintas con el mismo problema: `.fila`, `.tarjeta-estilo__badge`, ahora `.campo`): cualquier clase con `display` propio (flex/grid/block) necesita su propio `[hidden]{display:none}` si algún componente la oculta con el atributo `hidden` en vez de una clase `.oculto`. Vale la pena una regla general en `patrones.md`: toda clase de layout con `display` explícito debe traer su par `.clase[hidden]{display:none}`, o usar `:where([hidden])` una sola vez con máxima especificidad baja para cubrir TODAS las clases de una — evitaría repetir este bug una 4ª vez.
+
+### 62. La descripción no hace salto de línea en la imagen: sale en una línea diminuta o truncada ("Texto Inc…"), y agrandar la letra no cambia nada
+- **Paso:** reportado por Bruno en el chat (2026-10-03), usando el APK 1.5: cargar una descripción de varias líneas en un producto y publicar/ver el estado con un estilo que la dibuja.
+- **Error exacto:** no es un error de consola — "cuando agrego una descripción, no hace el salto de línea, si agrando el tamaño del texto tampoco, queda tipo 'Texto Inc.....' así de feo".
+- **Reproducir:** producto con descripción de 2-3 renglones (con Enter en el medio), estilo general "Banner inferior" o "Story inmersiva"; en Plantilla subir "Tamaño de letra" de la descripción.
+- **Causa:** la descripción se dibujaba con `calcularLineas` (layout.js), pensada para TÍTULOS: (1) `split(/\s+/)` se comía los saltos de línea escritos; (2) primero achicaba la letra hasta el 45% para meter todo en UNA línea y recién después partía; (3) tope fijo de `maxLineas` (1 en story, 2 en banner/polaroid, 3 en editorial) dentro de una caja de alto fijo, con `elipsis:true` — pasado eso, "…". Agrandar la letra solo hacía que llegara antes al tope.
+- **Arreglo:** `calcularParrafo` nuevo en layout.js (parte en renglones al tamaño elegido, respeta `\n`, corta por letras una palabra más ancha que la caja; achica solo si no hay alto y trunca recién al mínimo) + `resolverCajasTexto` en componer.js: si el párrafo no entra, la caja de la descripción CRECE y la zona decorativa la acompaña (`extraDescripcion` en las 4 funciones de geometria-presets.js; en "Foto con descripción" crece hacia arriba y sube lo que tenga encima). El editor de plantilla usa las mismas cajas efectivas para el overlay.
+- **Resuelto:** sí — `test/layout.test.js` (5 casos de `calcularParrafo`), `test/geometria-presets.test.js` (2 de `extraDescripcion`) y el E2E "La descripción larga se parte en renglones y la caja crece" (los 5 estilos). Sin verificar a ojo en el celu.
+- ¿Se repetiría en otro proyecto? Sí — un "ajustar texto a una caja" hecho para títulos (achicar → partir → truncar) no sirve para párrafos: son dos funciones distintas, y el párrafo necesita que el contenedor crezca.
+
+### 63. Salir del alta/edición de producto (nav inferior, "Volver", Atrás) descarta lo cargado sin avisar
+- **Paso:** reportado por Bruno en el chat (2026-10-03): "cuando agregás un producto te podés ir a ajustes y perdés los cambios sin aviso de nada".
+- **Error exacto:** no hay — pérdida silenciosa de datos del formulario.
+- **Reproducir:** `#/producto/nuevo`, escribir un nombre, tocar "Ajustes" en la nav inferior.
+- **Causa:** el router (`main.js`) re-renderizaba en cada `hashchange` sin preguntarle nada a la pantalla que se iba.
+- **Arreglo:** guardia de salida en `main.js` (`protegerSalida(hayCambios)`, se la pasa a cada `render`): si la pantalla registró una y dice que hay cambios, `hashchange` restaura la URL del formulario sin re-renderizar y pregunta con el diálogo propio ("Seguir editando" / "Salir sin guardar"). `detalle.js` compara el formulario contra cómo estaba al abrirlo; guardar o borrar desactivan la guardia.
+- **Resuelto:** sí — 2 E2E nuevos en `ajustes.spec.js`. Al agregarla falló `overflow-fuente-grande.spec.js` (6 casos, timeout): ese test marcaba chips de sección y se iba a Ajustes sin guardar — ahora confirma el diálogo y lo mide también.
+- ¿Se repetiría en otro proyecto? Sí — cualquier SPA con router por hash y formularios largos: la guardia va en el router, no en cada botón de salida.
+
+### 64. "Nombre del negocio" se pierde al guardar junto con "Texto del botón" (carrera entre los dos debounce)
+- **Paso:** `npx playwright test` completo (2026-10-07), `presets.spec.js:150` "Plantilla: Nombre del negocio/Texto del botón se guardan y persisten entre visitas" — intermitente (1 de cada 3 corridas aislado).
+- **Error exacto:** `expect(locator).toHaveValue(expected) failed — Locator: locator('#campo-nombre-negocio') — Expected: "Taller Tierra Firme" — Received: ""`.
+- **Reproducir:** en `#/plantilla?estilo=banner-inferior` completar los dos campos con menos de 350ms de diferencia y recargar.
+- **Causa:** `guardarNombreNegocio` y `guardarTextoBoton` (repositorio.js) hacían cada una leer-modificar-escribir del MISMO registro `config/general`; con los dos timers cayendo juntos, la segunda leía antes de que la primera escribiera y la pisaba con el valor viejo.
+- **Arreglo:** `actualizarGeneralEnCola` en repositorio.js: las dos pasan por una cola de promesas, cada escritura espera a la anterior.
+- **Resuelto:** sí — el mismo test repetido 6 veces en verde. No venía de los cambios de esta ronda: era previo e intermitente.
+- ¿Se repetiría en otro proyecto? Sí — cualquier "config" guardada como UN registro con varios campos que se editan con debounce independiente: leer-modificar-escribir necesita cola (o una sola transacción), no dos awaits sueltos.
+
+### 65. "No guarda las secciones: agrego una sección y quiero que la tengan otros productos y no me deja"
+- **Paso:** reportado por Bruno en el chat (2026-10-07).
+- **Error exacto:** no hay error de consola.
+- **Reproducir:** crear una sección (desde la ficha de un producto o desde Secciones) y querer ponérsela a varios productos.
+- **Causa:** no se pudo reproducir una falla de guardado — crear la sección desde la ficha, guardarla y asignarla a otro producto funciona (verificado con agent-browser sobre el árbol actual; la lógica de secciones no cambió desde el APK 1.5). Lo que faltaba es el camino: la única forma de asignar era abrir la ficha de CADA producto, tocar el chip y "Guardar cambios"; desde la pantalla Secciones no se podía.
+- **Arreglo:** "Elegir productos" en cada fila de Secciones (secciones.js): despliega los productos como chips y cada toque se guarda al instante (`repo.asignarSecciones`), con el contador de la fila al día.
+- **Resuelto:** sí para el camino nuevo — 2 E2E en `secciones.spec.js` ("Elegir productos…" y "una sección creada desde la ficha… queda disponible para los demás"). Pendiente: que Bruno confirme en el celu si era esto o hay una falla puntual que no apareció en escritorio.
+- ¿Se repetiría en otro proyecto? Sí — una relación muchos-a-muchos (etiquetas) necesita asignación desde los DOS lados; si solo se edita desde un lado, del otro "no deja".
+
+### 66. La descripción sigue sin salto de línea en el celu (el arreglo de #62 no estaba publicado en Pages)
+- **Paso:** reportado por Bruno en el chat (2026-10-07): "cuando cargo una descripción a un producto, no me deja que aparezca el salto de línea, aparece todo a lo largo".
+- **Error exacto:** no hay.
+- **Reproducir:** Pages / APK 1.5, descripción con Enter en el medio.
+- **Causa:** sin confirmar. El arreglo de #62 (`calcularParrafo`) estaba en el árbol de trabajo sin commitear: Pages seguía con el código del 1.5. Existe un `estados-rapidos-1.6.apk` del 2026-10-03 21:03 que sí lo incluye, pero no se sabe si llegó al celu. Ojo: la lista de Productos muestra la descripción en UN renglón con "…" a propósito (`.fila-compacta__subtitulo`), eso no es este bug.
+- **Arreglo:** ninguno nuevo de código; se publica todo junto (commit + Pages + APK 1.7).
+- **Resuelto:** pendiente: que Bruno confirme con el 1.7; si sigue, anotar en qué pantalla lo ve. En el árbol actual los tests de `calcularParrafo` y el E2E de descripción larga (con saltos escritos, 5 estilos) pasan.
+- ¿Se repetiría en otro proyecto? Sí — "resuelto" en BUGS.md tiene que decir también si salió publicado; un arreglo sin release es un bug abierto para el usuario.

@@ -256,3 +256,120 @@ test('Alta de producto: "Ver completa" aparece al elegir la foto y muestra el es
   await page.locator('[data-accion="cerrar-visor"]').click();
   await expect(page.locator('#campo-nombre')).toHaveValue('Producto visor'); // el formulario sigue intacto
 });
+
+// Pedido 2026-10-03 (2ª tanda): la descripción hace salto de línea en la imagen, hay vista previa en
+// vivo en Ajustes y en el alta, y salir del formulario con cambios sin guardar pregunta antes.
+test('Alta de producto: salir con cambios sin guardar pregunta; "Seguir editando" no pierde nada', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-accion="agregar"]').click();
+  await page.locator('#campo-nombre').fill('A medio cargar');
+
+  await page.locator('.nav-inferior__item[data-ruta="#/ajustes"]').click();
+  await expect(page.locator('.dialogo')).toContainText('cambios sin guardar');
+  await page.locator('.dialogo [data-accion="cancelar"]').click(); // "Seguir editando"
+  await expect(page).toHaveURL(/#\/producto\/nuevo$/);
+  await expect(page.locator('#campo-nombre')).toHaveValue('A medio cargar');
+
+  await page.locator('.nav-inferior__item[data-ruta="#/ajustes"]').click();
+  await page.locator('.dialogo [data-accion="confirmar-borrar"]').click(); // "Salir sin guardar"
+  await expect(page).toHaveURL(/#\/ajustes$/);
+  await expect(page.locator('h1.pagina__titulo')).toHaveText('Ajustes');
+});
+
+test('Alta de producto: sin tocar nada se sale sin preguntar, y guardar tampoco pregunta', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-accion="agregar"]').click();
+  await page.locator('[data-accion="cancelar"]').click();
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.locator('.dialogo')).toHaveCount(0);
+
+  await crearProducto(page); // llena, guarda y vuelve a la lista: sin diálogo en el medio
+  await expect(page.locator('.dialogo')).toHaveCount(0);
+});
+
+test('Alta de producto: la vista previa en vivo se rearma al escribir', async ({ page }) => {
+  await page.goto('/#/producto/nuevo');
+  const imagen = page.locator('.vista-previa-estado__imagen');
+  await expect(imagen).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
+  const antes = await imagen.getAttribute('src');
+  await page.locator('#campo-descripcion').fill('Primera línea\nSegunda línea');
+  await expect(imagen).not.toHaveAttribute('src', antes, { timeout: 10_000 });
+});
+
+test('Ajustes: vista previa de la imagen junto al texto, con aviso si el estilo no dibuja la descripción', async ({ page }) => {
+  await page.goto('/#/ajustes');
+  await expect(page.locator('.vista-previa-estado__imagen')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
+  await expect(page.locator('[data-nota="estilo-sin-descripcion"]')).toContainText('Solo la foto');
+
+  await page.evaluate(async () => {
+    const repo = await import('/js/repositorio.js');
+    await repo.guardarEstiloGeneral('foto-descripcion');
+  });
+  await page.reload();
+  await expect(page.locator('.vista-previa-estado__imagen')).toHaveAttribute('src', /^blob:/, { timeout: 10_000 });
+  await expect(page.locator('[data-nota="estilo-sin-descripcion"]')).toHaveCount(0);
+});
+
+test('La descripción larga se parte en renglones y la caja crece (no se trunca ni se achica)', async ({ page }) => {
+  await page.goto('/');
+  const resultado = await page.evaluate(async () => {
+    const { resolverCajasTexto, dibujarSegunEstilo } = await import('/js/componer.js');
+    const { calcularParrafo } = await import('/js/layout.js');
+    const { AJUSTES_POR_DEFECTO_POR_ESTILO } = await import('/js/modelo.js');
+    const { cargarFuentes, familiaCanvas } = await import('/js/fuentes.js');
+    await cargarFuentes();
+    const descripcion =
+      'Remera de algodón peinado, corte recto, disponible en talles S, M, L y XL.\nColores: negro, blanco y verde.\nEnvíos a todo el país, consultá por privado.';
+    const salida = {};
+    for (const estilo of ['foto-descripcion', 'banner-inferior', 'editorial', 'polaroid', 'story-inmersiva']) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1080;
+      canvas.height = 1920;
+      const ctx = canvas.getContext('2d');
+      const ajustes = AJUSTES_POR_DEFECTO_POR_ESTILO[estilo];
+      const datos = {
+        estilo,
+        fotoImagen: null,
+        producto: { nombre: 'Remera básica', precio: 12500 },
+        ajustes,
+        formatoPrecio: { prefijo: '$ ', separadorMiles: true, decimales: false },
+        descripcion,
+        encuadreFoto: 'contain',
+        general: { nombreNegocio: 'Mi tienda' },
+        seccionNombre: 'Remeras',
+        posicion: { n: 1, m: 1 },
+      };
+      const cajas = resolverCajasTexto(ctx, datos);
+      dibujarSegunEstilo(ctx, datos); // no tiene que romper con la caja crecida
+      const caja = cajas.descripcion;
+      const cursiva = caja.familia === 'newsreader-italica' ? 'italic ' : '';
+      const { lineas, tamano, recortado } = calcularParrafo({
+        texto: descripcion,
+        anchoMax: caja.w - 24,
+        altoMax: caja.h - 20,
+        medirAncho: (t, tam) => {
+          ctx.font = `${cursiva}${caja.peso} ${tam}px ${familiaCanvas(caja.familia)}`;
+          return ctx.measureText(t).width;
+        },
+        tamanoInicial: caja.tamano,
+      });
+      salida[estilo] = {
+        extra: cajas.extra,
+        lineas: lineas.length,
+        tamano,
+        tamanoElegido: caja.tamano,
+        recortado,
+        dentro: caja.y >= 0 && caja.y + caja.h <= 1920,
+        nombreDentro: cajas.nombre.y >= 0,
+      };
+    }
+    return salida;
+  });
+  for (const [estilo, r] of Object.entries(resultado)) {
+    expect(r.recortado, estilo).toBe(false);
+    expect(r.tamano, estilo).toBe(r.tamanoElegido); // al tamaño elegido, sin achicar
+    expect(r.lineas, estilo).toBeGreaterThanOrEqual(3); // respeta los 2 saltos escritos
+    expect(r.extra, estilo).toBeGreaterThan(0); // la caja creció para que entre
+    expect(r.dentro && r.nombreDentro, estilo).toBe(true);
+  }
+});

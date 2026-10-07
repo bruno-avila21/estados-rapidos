@@ -92,7 +92,7 @@ export async function render(contenedor, { navegar }) {
   explicacionLista.className = 'panel__subtitulo';
   explicacionLista.textContent =
     secciones.length > 0
-      ? 'Arrastrá la manija para reordenar, tocá el nombre para renombrarla, o asignala a un producto desde su ficha.'
+      ? 'Arrastrá la manija para reordenar, tocá el nombre para renombrarla y usá "Elegir productos" para ponérsela a varios de una vez.'
       : 'Usalas para agrupar productos por día para publicar ("Lunes", "Martes") o por rubro ("Lencería", "Electrodomésticos") — un producto puede estar en varias a la vez.';
 
   // Anuncia la nueva posición tras un arrastre/paso de teclado (aria-live) — visualmente oculto,
@@ -218,7 +218,7 @@ export async function render(contenedor, { navegar }) {
   } else {
     secciones.forEach((seccion) => {
       const cantidad = conteos.porSeccion.get(seccion.id) || 0;
-      lista.append(filaSeccion(seccion, cantidad, recargar, { moverPorTeclado, habilitarArrastreSeccion }));
+      lista.append(filaSeccion(seccion, cantidad, recargar, { moverPorTeclado, habilitarArrastreSeccion, productos }));
     });
     sincronizarFilasConSecciones(); // aria-label inicial de cada manija con su posición real
   }
@@ -306,9 +306,9 @@ export async function render(contenedor, { navegar }) {
   contenedor.append(raiz);
 }
 
-function filaSeccion(seccion, cantidad, recargar, { moverPorTeclado, habilitarArrastreSeccion }) {
+function filaSeccion(seccion, cantidad, recargar, { moverPorTeclado, habilitarArrastreSeccion, productos }) {
   const fila = document.createElement('div');
-  fila.className = 'fila fila-seccion panel-secciones__fila';
+  fila.className = 'fila fila-seccion panel-secciones__fila panel-secciones__fila--con-productos';
   fila.setAttribute('data-id', seccion.id);
 
   // Manija de arrastre (6 puntos, a la izquierda de la fila — mock "gesti_n_de_secciones_natural"):
@@ -359,8 +359,77 @@ function filaSeccion(seccion, cantidad, recargar, { moverPorTeclado, habilitarAr
   // en Ajustes ("1 producto"/"N productos") — reemplaza la "prioridad" inventada del mock.
   const conteo = document.createElement('span');
   conteo.className = 'panel-secciones__conteo fila-seccion__conteo';
-  conteo.append(crearIcono('tag'), document.createTextNode(`${cantidad} producto${cantidad === 1 ? '' : 's'}`));
-  info.append(nombre, conteo);
+  const textoConteo = document.createTextNode('');
+  const pintarConteo = (n) => {
+    textoConteo.nodeValue = `${n} producto${n === 1 ? '' : 's'}`;
+  };
+  pintarConteo(cantidad);
+  conteo.append(crearIcono('tag'), textoConteo);
+
+  // "Elegir productos" (pedido 2026-10-07): ponerle esta sección a VARIOS productos de una, sin
+  // abrir la ficha de cada uno. Despliega debajo de la fila los productos como chips (mismo
+  // componente que "Secciones asignadas" de la ficha); cada toque se guarda al instante.
+  const btnElegir = document.createElement('button');
+  btnElegir.type = 'button';
+  btnElegir.className = 'panel-secciones__elegir';
+  btnElegir.setAttribute('data-accion', 'elegir-productos');
+  btnElegir.setAttribute('aria-expanded', 'false');
+  btnElegir.textContent = 'Elegir productos';
+  info.append(nombre, conteo, btnElegir);
+
+  const panelProductos = document.createElement('div');
+  panelProductos.className = 'panel-secciones__productos';
+  panelProductos.hidden = true;
+  const chipsProductos = document.createElement('div');
+  chipsProductos.className = 'chips-secciones';
+  chipsProductos.setAttribute('role', 'group');
+  chipsProductos.setAttribute('aria-label', `Productos de la sección ${seccion.nombre}`);
+  panelProductos.append(chipsProductos);
+
+  function pintarChipsProductos() {
+    chipsProductos.textContent = '';
+    if (productos.length === 0) {
+      const vacio = document.createElement('p');
+      vacio.className = 'texto-tenue';
+      vacio.textContent = 'Todavía no cargaste productos: agregá uno desde Productos y volvé a elegirlo acá.';
+      chipsProductos.append(vacio);
+      return;
+    }
+    for (const producto of productos) {
+      const activa = producto.secciones.includes(seccion.id);
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip' + (activa ? ' chip--activo' : '');
+      chip.setAttribute('data-accion', 'toggle-producto-seccion');
+      chip.setAttribute('data-producto', producto.id);
+      chip.setAttribute('aria-pressed', String(activa));
+      if (activa) chip.append(crearIcono('check'));
+      chip.append(document.createTextNode(producto.nombre));
+      chip.addEventListener('click', async () => {
+        const nuevas = activa ? producto.secciones.filter((id) => id !== seccion.id) : [...producto.secciones, seccion.id];
+        const guardado = await repo.asignarSecciones(producto.id, nuevas);
+        if (!guardado) {
+          mostrarToast('Ese producto ya no existe');
+          recargar();
+          return;
+        }
+        // `productos` es el mismo array para todas las filas: mutarlo mantiene los demás desplegables al día.
+        producto.secciones = guardado.secciones;
+        pintarConteo(productos.filter((p) => p.secciones.includes(seccion.id)).length);
+        pintarChipsProductos();
+        chipsProductos.querySelector(`[data-producto="${producto.id}"]`)?.focus();
+      });
+      chipsProductos.append(chip);
+    }
+  }
+
+  btnElegir.addEventListener('click', () => {
+    const abrir = panelProductos.hidden;
+    if (abrir) pintarChipsProductos();
+    panelProductos.hidden = !abrir;
+    btnElegir.setAttribute('aria-expanded', String(abrir));
+    btnElegir.textContent = abrir ? 'Listo' : 'Elegir productos';
+  });
 
   // Lápiz: no es una acción nueva — enfoca el mismo input de nombre, que ya se renombra al
   // editarlo y perder el foco (`guardarNombre` arriba). El mock lo dibuja como botón aparte.
@@ -396,7 +465,7 @@ function filaSeccion(seccion, cantidad, recargar, { moverPorTeclado, habilitarAr
   accionesDerecha.className = 'panel-secciones__acciones-derecha';
   accionesDerecha.append(btnRenombrar, btnBorrar);
 
-  fila.append(manija, info, accionesDerecha);
+  fila.append(manija, info, accionesDerecha, panelProductos);
   return fila;
 }
 

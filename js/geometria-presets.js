@@ -34,6 +34,19 @@ function zona(x, y, w, h) {
   return { x, y, w, h };
 }
 
+// `extraDescripcion` (pedido 2026-10-03, "la descripción hace salto de línea"): alto ADICIONAL que
+// necesita la descripción cuando no entra en su zona de fábrica. Cada preset lo absorbe a su manera
+// (la franja del banner y la pila de la story crecen hacia arriba, la tarjeta polaroid se agranda y
+// se recentra, el editorial empuja el pie y, si ya no hay lugar, acorta el marco de la foto) — así
+// la zona decorativa siempre acompaña al texto. Tope por preset, para que la foto no desaparezca:
+// pasado ese alto, componer.js achica la letra.
+export const EXTRA_DESCRIPCION_MAX = Object.freeze({
+  'banner-inferior': 700,
+  editorial: 520,
+  polaroid: 420,
+  'story-inmersiva': 600,
+});
+
 // --- Banner inferior: foto a sangre completa + franja sólida anclada abajo (esquinas superiores
 // redondeadas). Medido sobre plantilla_preset_banner_inferior (frame 290px, escala ×3.724): label
 // de sección, nombre+precio en la misma fila, descripción de 2 líneas, separador y una fila de pie
@@ -62,6 +75,7 @@ export function geometriaBannerInferior({
   conPrecio = true,
   conDescripcion = true,
   conSeccion = true,
+  extraDescripcion = 0,
 } = {}) {
   const c = BANNER;
   let y = c.padTop;
@@ -81,8 +95,8 @@ export function geometriaBannerInferior({
   let descripcion = null;
   if (conDescripcion) {
     y += c.gapFilaDescripcion;
-    descripcion = zona(c.padSides, y, ancho - c.padSides * 2, c.descripcionH);
-    y += c.descripcionH;
+    descripcion = zona(c.padSides, y, ancho - c.padSides * 2, c.descripcionH + extraDescripcion);
+    y += c.descripcionH + extraDescripcion;
   }
 
   y += c.gapAntesDivisor;
@@ -127,6 +141,7 @@ const EDITORIAL = {
   descripcionH: 150,
   gapDescripcionPie: 26,
   pieH: 54,
+  margenInferior: 60,
 };
 
 export function geometriaEditorial({
@@ -136,11 +151,24 @@ export function geometriaEditorial({
   conDescripcion = true,
   conSeccion = true,
   conNombreNegocio = true,
+  extraDescripcion = 0,
 } = {}) {
   const c = EDITORIAL;
   const anchoFoto = ancho - c.margenLateral * 2;
-  const altoFoto = Math.round(anchoFoto * c.aspectoFoto);
-  const marco = zona(c.margenLateral, c.yTop + c.topRowH + c.gapTopFoto, anchoFoto, altoFoto);
+  // Alto de todo lo que va DEBAJO del marco: si con la descripción crecida ya no entra en el
+  // lienzo, el marco de la foto se acorta lo justo (nunca se sale por abajo).
+  const altoBajoFoto =
+    c.gapFotoTexto +
+    c.nombreH +
+    (conPrecio || conSeccion ? c.gapNombrePrecio + c.precioLineaH : 0) +
+    (conDescripcion ? c.gapPrecioDescripcion + c.descripcionH + extraDescripcion : 0) +
+    (conNombreNegocio ? c.gapDescripcionPie + c.pieH : 0);
+  const yMarco = c.yTop + c.topRowH + c.gapTopFoto;
+  const altoFoto = Math.max(
+    200,
+    Math.min(Math.round(anchoFoto * c.aspectoFoto), alto - c.margenInferior - yMarco - altoBajoFoto)
+  );
+  const marco = zona(c.margenLateral, yMarco, anchoFoto, altoFoto);
   const topRow = zona(c.margenLateral, c.yTop, anchoFoto, c.topRowH);
 
   let y = marco.y + marco.h + c.gapFotoTexto;
@@ -160,8 +188,8 @@ export function geometriaEditorial({
   let descripcion = null;
   if (conDescripcion) {
     y += c.gapPrecioDescripcion;
-    descripcion = zona(c.margenLateral, y, anchoFoto, c.descripcionH);
-    y += c.descripcionH;
+    descripcion = zona(c.margenLateral, y, anchoFoto, c.descripcionH + extraDescripcion);
+    y += c.descripcionH + extraDescripcion;
   }
 
   let pie = null;
@@ -197,6 +225,7 @@ export function geometriaPolaroid({
   alto = ALTO_LIENZO,
   conPrecio = true,
   conDescripcion = true,
+  extraDescripcion = 0,
 } = {}) {
   const c = POLAROID;
   const wTarjeta = ancho - c.margenLateral * 2;
@@ -204,7 +233,9 @@ export function geometriaPolaroid({
 
   let alturaTexto = c.gapFotoTexto + c.nombreH;
   if (conPrecio) alturaTexto += c.gapNombrePrecio + c.precioH;
-  if (conDescripcion) alturaTexto += c.gapPrecioDivisor + c.divisorH + c.gapDivisorDescripcion + c.descripcionH;
+  if (conDescripcion) {
+    alturaTexto += c.gapPrecioDivisor + c.divisorH + c.gapDivisorDescripcion + c.descripcionH + extraDescripcion;
+  }
 
   const alturaTarjeta = c.padCard + wFoto + alturaTexto + c.padCardBottom;
   const yTarjeta = Math.max(64, Math.round((alto - alturaTarjeta) / 2));
@@ -228,7 +259,7 @@ export function geometriaPolaroid({
     y += c.gapPrecioDivisor;
     divisor = zona(foto.x + (wFoto - c.anchoDivisor) / 2, y, c.anchoDivisor, c.divisorH);
     y += c.divisorH + c.gapDivisorDescripcion;
-    descripcion = zona(foto.x, y, wFoto, c.descripcionH);
+    descripcion = zona(foto.x, y, wFoto, c.descripcionH + extraDescripcion);
   }
 
   return { tarjeta, foto, nombre, precio, divisor, descripcion };
@@ -256,14 +287,16 @@ export function geometriaStoryInmersiva({
   conPrecio = true,
   conDescripcion = true,
   conSeccion = true,
+  extraDescripcion = 0,
 } = {}) {
   const c = STORY;
+  const altoFila = c.filaH + (conDescripcion ? extraDescripcion : 0);
   const anchoContenido = ancho - c.margenLateral * 2;
 
   const elementos = [];
   if (conSeccion) elementos.push({ clave: 'seccion', w: c.anchoSeccion, h: c.seccionH });
   elementos.push({ clave: 'nombre', w: anchoContenido, h: c.nombreH });
-  if (conPrecio || conDescripcion) elementos.push({ clave: 'fila', w: anchoContenido, h: c.filaH });
+  if (conPrecio || conDescripcion) elementos.push({ clave: 'fila', w: anchoContenido, h: altoFila });
 
   const posiciones = acomodarAutomatico(elementos, {
     ancho,
@@ -282,7 +315,7 @@ export function geometriaStoryInmersiva({
     if (conPrecio) precio = zona(c.margenLateral, yFila, c.anchoPrecioPill, c.filaH);
     const xDescripcion = c.margenLateral + (conPrecio ? c.anchoPrecioPill + c.gapPrecioDescripcion : 0);
     const wDescripcion = anchoContenido - (conPrecio ? c.anchoPrecioPill + c.gapPrecioDescripcion : 0);
-    if (conDescripcion) descripcion = zona(xDescripcion, yFila, wDescripcion, c.filaH);
+    if (conDescripcion) descripcion = zona(xDescripcion, yFila, wDescripcion, altoFila);
   }
 
   const primeraY = seccion ? seccion.y : nombre.y;

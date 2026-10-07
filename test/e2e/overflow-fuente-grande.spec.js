@@ -181,7 +181,13 @@ for (const ancho of ANCHOS) {
       // guardar) además del "Cancelar" del diálogo de confirmación — sin acotar, ambigüo (BUGS.md #32).
       await page.locator('.dialogo [data-accion="cancelar"]').click(); // cerrar sin borrar
 
+      // Los chips marcados arriba quedaron sin guardar: salir de la edición ahora pregunta antes
+      // (guardia de salida, 2026-10-03) — se mide ese diálogo también y se sale sin guardar.
       await page.goto('/#/ajustes');
+      await expect(page.locator('.dialogo')).toBeVisible();
+      await esperarSinDesborde(page, 'Diálogo de confirmación (cambios sin guardar)');
+      await page.locator('.dialogo [data-accion="confirmar-borrar"]').click();
+      await expect(page).toHaveURL(/#\/ajustes$/);
       await esperarSinDesborde(page, 'Ajustes (con badge Personalizado)');
 
       await page.goto('/#/plantilla?estilo=foto-precio');

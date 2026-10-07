@@ -1945,6 +1945,161 @@ details.grupo > .campo {
   bottom: -10px;
   cursor: nwse-resize;
 }
+/* Guías del arrastre: las del centro se ven tenues mientras se mueve un elemento y se resaltan
+   cuando quedó enganchado (más un rótulo con palabras); las de margen aparecen solo enganchadas.
+   El halo blanco las mantiene legibles sobre cualquier foto. */
+.editor-plantilla__guia {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.55);
+  transition: background var(--duracion) var(--ease);
+}
+.editor-plantilla__guia--centro-x,
+.editor-plantilla__guia--margen-izquierdo,
+.editor-plantilla__guia--margen-derecho {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.editor-plantilla__guia--centro-y,
+.editor-plantilla__guia--margen-superior,
+.editor-plantilla__guia--margen-inferior {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+.editor-plantilla__guia--centro-x {
+  left: 50%;
+}
+.editor-plantilla__guia--centro-y {
+  top: 50%;
+}
+.editor-plantilla__guia--margen-izquierdo {
+  left: 0;
+}
+.editor-plantilla__guia--margen-derecho {
+  right: 0;
+}
+.editor-plantilla__guia--margen-superior {
+  top: 0;
+}
+.editor-plantilla__guia--margen-inferior {
+  bottom: 0;
+}
+.editor-plantilla__guia--activa {
+  background: var(--color-primario);
+  box-shadow: 0 0 0 1px #fff;
+}
+.editor-plantilla__guia-rotulo {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  border-radius: var(--radio-chico);
+  background: var(--color-primario);
+  color: var(--color-primario-texto);
+  font-family: var(--font-cuerpo);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* Mini menú flotante del elemento seleccionado: tamaño, alineación, color y tipografía a mano,
+   centrado sobre el lienzo y pegado a la caja (arriba si hay lugar, si no abajo — el `top` lo
+   calcula plantilla.js). */
+.editor-plantilla__mini {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: max-content;
+  max-width: calc(100% - 8px);
+  padding: 4px;
+  background: var(--color-superficie-blanca);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  touch-action: manipulation;
+}
+.editor-plantilla__mini-fila {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.editor-plantilla__mini-boton {
+  flex: 0 0 auto;
+  width: var(--toque-min);
+  height: var(--toque-min);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radio-chico);
+  background: none;
+  color: var(--color-texto);
+  font-family: var(--font-cuerpo);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--duracion) var(--ease), transform var(--duracion) var(--ease);
+}
+.editor-plantilla__mini-boton--chico {
+  font-size: 0.8125rem;
+}
+.editor-plantilla__mini-boton .icono {
+  width: 20px;
+  height: 20px;
+}
+.editor-plantilla__mini-boton:hover {
+  background: var(--color-superficie-alta);
+}
+.editor-plantilla__mini-boton:focus-visible,
+.editor-plantilla__mini-fuente:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 1px;
+}
+.editor-plantilla__mini-boton:active {
+  transform: scale(0.94);
+}
+.editor-plantilla__mini-boton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.editor-plantilla__mini-boton[aria-expanded='true'],
+.editor-plantilla__mini-boton[aria-pressed='true'] {
+  background: var(--color-primario-tinte);
+}
+.editor-plantilla__mini-muestra {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--color-contorno);
+}
+.editor-plantilla__mini-fuente {
+  flex: 1 1 96px;
+  min-width: 0;
+  width: 112px;
+  height: var(--toque-min);
+  min-height: var(--toque-min);
+  padding: 0 6px;
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-chico);
+  background: var(--color-superficie-blanca);
+  color: var(--color-texto);
+  font-family: var(--font-cuerpo);
+  font-size: 0.8125rem;
+}
+.editor-plantilla__mini-colores {
+  justify-content: space-between;
+  border-top: 1px solid var(--borde-sutil);
+  padding-top: 4px;
+}
 /* Capas: lista VERTICAL dentro de UNA sola tarjeta blanca con las filas separadas por líneas finas
    (editar_plantilla_natural, "Capas y Visibilidad") — antes cada fila era su propia cajita con
    borde y radio propios; ahora `.editor-plantilla__lista-capas` es la tarjeta (borde+radio+
@@ -3401,6 +3556,44 @@ details[open] > .grupo__titulo--seccion::after {
   height: 13px;
   margin-right: 0;
 }
+/* "Elegir productos": enlace de texto bajo el contador que despliega, debajo de la fila, los
+   productos como chips para ponerles (o sacarles) esta sección de a varios. Alto táctil completo
+   con margen negativo para no estirar la fila. */
+.panel-secciones__fila--con-productos {
+  flex-wrap: wrap;
+}
+.panel-secciones__elegir {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--toque-min);
+  margin: -10px 0 -14px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primario);
+  font-family: var(--font-cuerpo);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color var(--duracion) var(--ease);
+}
+.panel-secciones__elegir:hover {
+  color: var(--color-primario-fuerte);
+}
+.panel-secciones__elegir:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.panel-secciones__elegir:active {
+  color: var(--color-acento);
+}
+.panel-secciones__productos {
+  flex: 1 0 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--borde-sutil);
+}
 /* Manija de arrastre (reskin "gesti_n_de_secciones_natural", reemplaza los botones subir/bajar de
    antes — ronda "reordenar arrastrando"): arrastre real con el dedo (pointer events, reusa
    js/reordenar.js — la API HTML5 drag/drop no dispara en Android WebView) a la IZQUIERDA de la
@@ -4374,4 +4567,55 @@ details[open] > .grupo__titulo--seccion::after {
   font-size: var(--tamano-14);
   color: var(--color-texto-tenue);
   text-align: center;
+}
+
+/* ---------- Vista previa en vivo del estado (js/utils/vista-previa-viva.js): miniatura 9:16 que se
+   rearma mientras se escribe, en Ajustes ("Texto que acompaña") y en el alta/edición. ---------- */
+.vista-previa-estado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.vista-previa-estado__marco {
+  display: block;
+  width: min(220px, 62%);
+  aspect-ratio: 1080 / 1920;
+  padding: 0;
+  border: 1px solid var(--borde-medio);
+  border-radius: var(--radio);
+  background: var(--color-superficie-alta);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--duracion) var(--ease), transform var(--duracion) var(--ease);
+}
+.vista-previa-estado__marco:hover {
+  border-color: var(--color-acento);
+}
+.vista-previa-estado__marco:focus-visible {
+  outline: 2px solid var(--color-acento);
+  outline-offset: 2px;
+}
+.vista-previa-estado__marco:active {
+  transform: scale(0.98);
+}
+.vista-previa-estado__imagen {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.vista-previa-estado__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-cuerpo);
+  font-size: var(--tamano-14);
+  color: var(--color-texto-tenue);
+}
+.vista-previa-estado__pista {
+  font-size: var(--tamano-12);
 }

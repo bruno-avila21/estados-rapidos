@@ -17,6 +17,7 @@ import { tocaCopiarAutomatica } from './respaldo-automatico.js';
 import { leerUltimoRespaldo, avisoRespaldoDescartadoHoy, marcarAvisoRespaldoDescartado } from './utils/respaldo-estado.js';
 import { generarYGuardarRespaldo } from './utils/respaldo-copia.js';
 import { mostrarToast } from './utils/toast.js';
+import { pedirConfirmacion } from './utils/confirmar.js';
 
 const vista = document.getElementById('vista');
 const encabezado = document.querySelector('.encabezado');
@@ -66,6 +67,46 @@ const RUTAS = [
   { patron: /^#\/respaldo$/, modulo: respaldo, titulo: 'Estados Rápidos', ruta: '#/respaldo', headerClase: 'encabezado--marca-negrita' },
 ];
 
+// --- Guardia de salida (pedido 2026-10-03: "te podés ir a Ajustes y perdés los cambios sin aviso").
+// Una pantalla con un formulario a medio cargar (hoy: alta/edición de producto) registra con
+// `protegerSalida(fn)` una función que dice si hay cambios sin guardar. Si la hay y dice que sí,
+// CUALQUIER salida (nav inferior, "Volver", "Cancelar", Atrás del navegador o del APK) pregunta antes
+// con el diálogo propio. Todas pasan por `hashchange`, así que alcanza con interceptar ahí.
+let guardiaSalida = null; // { hash, hayCambios } | null
+let preguntandoSalida = false;
+
+function protegerSalida(hayCambios) {
+  guardiaSalida = hayCambios ? { hash: location.hash || '#/', hayCambios } : null;
+}
+
+async function alCambiarHash() {
+  const destino = location.hash || '#/';
+  const guardia = guardiaSalida;
+  if (!guardia || destino === guardia.hash) {
+    if (!preguntandoSalida) enrutar();
+    return;
+  }
+  if (!preguntandoSalida && !guardia.hayCambios()) {
+    enrutar();
+    return;
+  }
+  // Se queda en el formulario (la URL vuelve a ser la suya, sin re-renderizar: no se pierde nada)
+  // hasta que la persona decida.
+  history.replaceState(history.state, '', guardia.hash);
+  if (preguntandoSalida) return;
+  preguntandoSalida = true;
+  const salir = await pedirConfirmacion({
+    titulo: 'Hay cambios sin guardar',
+    mensaje: 'Si salís ahora se pierde lo que cargaste en este producto.',
+    textoConfirmar: 'Salir sin guardar',
+    textoCancelar: 'Seguir editando',
+  });
+  preguntandoSalida = false;
+  if (!salir) return;
+  guardiaSalida = null;
+  navegar(destino);
+}
+
 function navegar(hash) {
   if (location.hash === hash) {
     enrutar();
@@ -80,6 +121,7 @@ async function enrutar() {
   const encontrada = RUTAS.find((r) => r.patron.test(hash)) || RUTAS[0];
   const match = hash.match(encontrada.patron);
   const params = { id: match?.[1], query: new URLSearchParams(queryString || '') };
+  guardiaSalida = null; // la pantalla que se va a dibujar registra la suya si la necesita
 
   encabezado.hidden = !!encontrada.headerOculto;
   encabezado.className = 'encabezado' + (encontrada.headerClase ? ' ' + encontrada.headerClase : '');
@@ -91,7 +133,7 @@ async function enrutar() {
   navBotones.forEach((b) => b.classList.toggle('activo', b.dataset.ruta === encontrada.ruta));
 
   try {
-    await encontrada.modulo.render(vista, { navegar, params });
+    await encontrada.modulo.render(vista, { navegar, params, protegerSalida });
   } catch (error) {
     vista.textContent = '';
     const alerta = document.createElement('div');
@@ -103,7 +145,7 @@ async function enrutar() {
   document.body.classList.add('listo');
 }
 
-window.addEventListener('hashchange', enrutar);
+window.addEventListener('hashchange', alCambiarHash);
 navBotones.forEach((b) => {
   b.addEventListener('click', () => {
     if (b.dataset.ruta) navegar(b.dataset.ruta);

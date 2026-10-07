@@ -9,8 +9,9 @@ import { mostrarToast } from '../utils/toast.js';
 import { crearIcono } from '../utils/iconos.js';
 import { abrirVisorImagen } from '../utils/visor-imagen.js';
 import { componerVistaCompleta } from '../utils/vista-completa.js';
+import { crearVistaPrevia } from '../utils/vista-previa-viva.js';
 
-export async function render(contenedor, { navegar, params }) {
+export async function render(contenedor, { navegar, params, protegerSalida }) {
   contenedor.textContent = '';
   const esNuevo = !params.id || params.id === 'nuevo';
   const producto = esNuevo ? null : await repo.obtenerProducto(params.id);
@@ -38,6 +39,7 @@ export async function render(contenedor, { navegar, params }) {
     });
     if (!ok) return;
     await repo.borrarProducto(producto.id);
+    protegerSalida?.(null); // ya no hay nada que perder: no preguntar al salir
     mostrarToast('Producto borrado');
     navegar('#/');
   }
@@ -129,23 +131,23 @@ export async function render(contenedor, { navegar, params }) {
   btnVerCompleta.setAttribute('data-accion', 'ver-completa');
   btnVerCompleta.append(crearIcono('pantalla-completa'), document.createTextNode('Ver completa'));
   btnVerCompleta.hidden = !urlPreviaActual;
-  btnVerCompleta.addEventListener('click', () =>
-    abrirVisorImagen({
-      titulo: 'Así se ve el estado',
-      obtenerBlob: () => {
-        const textoPrecio = campoPrecio.input.value.trim();
-        return componerVistaCompleta({
-          producto: {
-            nombre: campoNombre.input.value.trim() || 'Nombre del producto',
-            precio: textoPrecio ? parsearPrecio(textoPrecio) : null,
-            descripcion: textareaDescripcion.value,
-            estilo: selectEstiloOverride.value || null,
-            secciones: [...seccionesSeleccionadas],
-          },
-          fotoBlob: archivoFotoNuevo || fotoBlobActual,
-        });
+  // Lo que hay cargado en el formulario AHORA, como lo espera `componerVista` — lo comparten "Ver
+  // completa" y la vista previa en vivo de más abajo.
+  function opcionesDeVista() {
+    const textoPrecio = campoPrecio.input.value.trim();
+    return {
+      producto: {
+        nombre: campoNombre.input.value.trim() || 'Nombre del producto',
+        precio: textoPrecio ? parsearPrecio(textoPrecio) : null,
+        descripcion: textareaDescripcion.value,
+        estilo: selectEstiloOverride.value || null,
+        secciones: [...seccionesSeleccionadas],
       },
-    })
+      fotoBlob: archivoFotoNuevo || fotoBlobActual,
+    };
+  }
+  btnVerCompleta.addEventListener('click', () =>
+    abrirVisorImagen({ titulo: 'Así se ve el estado', obtenerBlob: () => componerVistaCompleta(opcionesDeVista()) })
   );
 
   marcoFoto.append(previa, previaVacia, badgeFoto, btnVerCompleta);
@@ -176,6 +178,7 @@ export async function render(contenedor, { navegar, params }) {
     previaVacia.hidden = true;
     badgeFoto.hidden = false;
     btnVerCompleta.hidden = false;
+    vistaPrevia.actualizar({ inmediato: true });
   };
   inputGaleria.addEventListener('change', alElegirFoto(inputGaleria));
   inputCamara.addEventListener('change', alElegirFoto(inputCamara));
@@ -258,6 +261,7 @@ export async function render(contenedor, { navegar, params }) {
   };
   pintarContador();
   textareaDescripcion.addEventListener('input', pintarContador);
+  textareaDescripcion.addEventListener('input', () => vistaPrevia.actualizar());
   pieDescripcion.append(notaDescripcion, contadorDescripcion);
 
   btnCopiarDescripcion.addEventListener('click', async () => {
@@ -270,6 +274,21 @@ export async function render(contenedor, { navegar, params }) {
   });
 
   panelDescripcion.append(cabeceraDescripcion, campoDescripcion, pieDescripcion);
+
+  // --- Vista previa en vivo: cómo queda el estado con la foto, el nombre, el precio y la
+  // descripción que se están cargando — se rearma sola mientras se escribe (pedido 2026-10-03). ---
+  const panelVistaPrevia = document.createElement('section');
+  panelVistaPrevia.className = 'panel';
+  const tituloVistaPrevia = document.createElement('h2');
+  tituloVistaPrevia.className = 'panel__titulo';
+  tituloVistaPrevia.textContent = 'Vista previa';
+  const subtituloVistaPrevia = document.createElement('p');
+  subtituloVistaPrevia.className = 'panel__subtitulo';
+  subtituloVistaPrevia.textContent = 'Así sale el estado con lo que cargaste. El estilo se cambia en Ajustes → Tu plantilla.';
+  const vistaPrevia = crearVistaPrevia({ obtenerOpciones: opcionesDeVista });
+  panelVistaPrevia.append(tituloVistaPrevia, subtituloVistaPrevia, vistaPrevia.raiz);
+  campoNombre.input.addEventListener('input', () => vistaPrevia.actualizar());
+  campoPrecio.input.addEventListener('input', () => vistaPrevia.actualizar());
 
   // --- Secciones (etiquetas): un producto puede estar en varias a la vez (ronda "secciones",
   // CREAR-BRIEF.md) — chips seleccionables + alta inline sin salir del formulario. ---
@@ -387,6 +406,21 @@ export async function render(contenedor, { navegar, params }) {
   selectEstiloOverride.value = producto?.estilo || '';
   campoEstiloOverride.append(labelEstiloOverride, selectEstiloOverride);
   detallesAvanzado.append(resumenAvanzado, campoEstiloOverride);
+  selectEstiloOverride.addEventListener('change', () => vistaPrevia.actualizar({ inmediato: true }));
+  vistaPrevia.actualizar({ inmediato: true });
+
+  // Cambios sin guardar: se compara el formulario contra cómo estaba al abrirlo. Mientras difiera,
+  // main.js pregunta antes de dejar salir de la pantalla (guardia de salida).
+  const fotoDelFormulario = () =>
+    JSON.stringify([
+      campoNombre.input.value,
+      campoPrecio.input.value,
+      textareaDescripcion.value,
+      selectEstiloOverride.value,
+      [...seccionesSeleccionadas].sort(),
+    ]);
+  const formularioInicial = fotoDelFormulario();
+  protegerSalida?.(() => !!archivoFotoNuevo || fotoDelFormulario() !== formularioInicial);
 
   const errorGeneral = document.createElement('div');
   errorGeneral.setAttribute('role', 'alert');
@@ -409,7 +443,7 @@ export async function render(contenedor, { navegar, params }) {
 
   filaAcciones.append(btnCancelar, btnGuardar);
 
-  form.append(panelFoto, panelInfo, panelDescripcion, panelSecciones, detallesAvanzado, errorGeneral, filaAcciones);
+  form.append(panelFoto, panelInfo, panelDescripcion, panelVistaPrevia, panelSecciones, detallesAvanzado, errorGeneral, filaAcciones);
 
   if (!esNuevo) {
     const separador = document.createElement('div');
@@ -445,6 +479,7 @@ export async function render(contenedor, { navegar, params }) {
     btnGuardar.disabled = true;
     try {
       await repo.guardarProducto(datos, archivoFotoNuevo);
+      protegerSalida?.(null); // guardado: salir ya no pierde nada
       mostrarToast(esNuevo ? 'Producto agregado' : 'Cambios guardados');
       navegar('#/');
     } catch (error) {

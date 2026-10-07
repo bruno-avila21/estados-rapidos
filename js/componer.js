@@ -30,7 +30,7 @@
 // `datos.general.nombreNegocio`/`datos.general.textoBoton` (ajustes generales, editables en la
 // pantalla Plantilla) — ninguno inventado: si falta el dato, no se dibuja (nunca "Stock"/"Ref."/
 // "Pieza única"/"Edición limitada" de relleno).
-import { calcularLineas, calcularRecorteCover } from './layout.js';
+import { calcularLineas, calcularParrafo, calcularRecorteCover } from './layout.js';
 import { formatearPrecio } from './modelo.js';
 import { cargarFuentes, familiaCanvas } from './fuentes.js';
 import {
@@ -38,11 +38,27 @@ import {
   geometriaEditorial,
   geometriaPolaroid,
   geometriaStoryInmersiva,
+  EXTRA_DESCRIPCION_MAX,
 } from './geometria-presets.js';
 
 export const ANCHO = 1080;
 export const ALTO = 1920;
 const FONDO_BASE = '#0d0f1a';
+
+const INTERLINEADO = 1.22;
+// Aire arriba y abajo del párrafo de la descripción dentro de su caja (que no toque el borde de la
+// etiqueta), y margen que se deja libre arriba del lienzo cuando la caja crece.
+const PAD_VERTICAL_PARRAFO = 10;
+const MARGEN_SUPERIOR_TEXTO = 60;
+
+const GEOMETRIA_PRESET = Object.freeze({
+  'banner-inferior': geometriaBannerInferior,
+  editorial: geometriaEditorial,
+  polaroid: geometriaPolaroid,
+  'story-inmersiva': geometriaStoryInmersiva,
+});
+// Estilos que dibujan la descripción ("Foto con precio" y "Mi plantilla" no la dibujan).
+export const ESTILOS_CON_DESCRIPCION = Object.freeze(['foto-descripcion', ...Object.keys(GEOMETRIA_PRESET)]);
 
 // --- Colores propios de los 4 presets de composición: tokens de la piel "Organic Minimalist"
 // (css/estilos.css: --color-primario #3a4d39, --color-primario-oscuro #243624, --color-acento
@@ -73,6 +89,69 @@ const COLOR_STORY_SCRIM_ABAJO = 'rgba(5,6,10,0.85)';
 const COLOR_STORY_PILL_BG = 'rgba(255,255,255,0.18)';
 const COLOR_STORY_PILL_BORDE = 'rgba(255,255,255,0.38)';
 
+/** Qué elementos opcionales entran en el dibujo (hay dato Y está visible): los mismos flags que
+ * recibe la geometría de los 4 presets. */
+function banderasDeContenido({ producto, ajustes, formatoPrecio, descripcion, general, seccionNombre }) {
+  const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
+  return {
+    textoPrecio,
+    conPrecio: ajustes?.precio?.visible !== false && !!textoPrecio,
+    conDescripcion: ajustes?.descripcion?.visible !== false && !!descripcion,
+    conSeccion: !!seccionNombre,
+    conNombreNegocio: !!general?.nombreNegocio,
+  };
+}
+
+/**
+ * Cajas de texto EFECTIVAS de un dibujo: las de `datos.ajustes`, salvo cuando la descripción no
+ * entra en su caja — ahí la caja crece (`extra` px) para que el párrafo entre partido en renglones,
+ * y nombre/precio se corren para acompañarla: en los 4 presets, lo que diga su geometría con
+ * `extraDescripcion`; en "Foto con descripción", la descripción crece hacia arriba y sube lo que
+ * tenga encima. La usa `dibujarSegunEstilo` y también el editor de plantilla, para que los
+ * recuadros del overlay coincidan con lo que se ve dibujado.
+ * @returns {{nombre: object, precio: object, descripcion: object, extra: number}}
+ */
+export function resolverCajasTexto(ctx, datos) {
+  const { estilo, ajustes, descripcion } = datos;
+  const cajas = { nombre: ajustes?.nombre, precio: ajustes?.precio, descripcion: ajustes?.descripcion, extra: 0 };
+  const caja = ajustes?.descripcion;
+  if (!ESTILOS_CON_DESCRIPCION.includes(estilo) || !caja || caja.visible === false || !descripcion) return cajas;
+
+  const geometria = GEOMETRIA_PRESET[estilo];
+  const extraMax = geometria ? EXTRA_DESCRIPCION_MAX[estilo] : Math.max(0, caja.y - MARGEN_SUPERIOR_TEXTO);
+  const { lineas, tamano } = parrafoDeCaja(ctx, descripcion, caja, caja.h + extraMax);
+  const altoNecesario = Math.ceil(lineas.length * tamano * INTERLINEADO + PAD_VERTICAL_PARRAFO * 2);
+  const extra = Math.min(extraMax, Math.max(0, altoNecesario - caja.h));
+  if (!extra) return cajas;
+
+  if (geometria) {
+    const { conPrecio, conDescripcion, conSeccion, conNombreNegocio } = banderasDeContenido(datos);
+    const flags = { conPrecio, conDescripcion, conSeccion, conNombreNegocio };
+    const antes = geometria(flags);
+    const despues = geometria({ ...flags, extraDescripcion: extra });
+    const mover = (clave) => {
+      const c = ajustes[clave];
+      if (!c || !antes[clave] || !despues[clave]) return c;
+      return { ...c, y: c.y + (despues[clave].y - antes[clave].y) };
+    };
+    const descripcionMovida = mover('descripcion');
+    return {
+      nombre: mover('nombre'),
+      precio: mover('precio'),
+      descripcion: { ...descripcionMovida, h: descripcionMovida.h + extra },
+      extra,
+    };
+  }
+
+  const subirSiEstaArriba = (c) => (c && c.y + (c.h ?? 0) <= caja.y + 1 ? { ...c, y: c.y - extra } : c);
+  return {
+    nombre: subirSiEstaArriba(ajustes.nombre),
+    precio: subirSiEstaArriba(ajustes.precio),
+    descripcion: { ...caja, y: caja.y - extra, h: caja.h + extra },
+    extra,
+  };
+}
+
 /**
  * Dibuja el estado completo en `ctx` según el estilo resuelto (ver `resolverEstilo` en modelo.js).
  * Síncrona a propósito: asume que las fuentes ya están cargadas (`await cargarFuentes()` antes) y
@@ -87,7 +166,6 @@ export function dibujarSegunEstilo(ctx, datos) {
     plantillaImagen,
     fotoImagen,
     producto,
-    ajustes,
     formatoPrecio,
     descripcion,
     encuadreFoto,
@@ -95,6 +173,12 @@ export function dibujarSegunEstilo(ctx, datos) {
     seccionNombre,
     posicion,
   } = datos;
+  // `ajustes` con las cajas de texto EFECTIVAS (la descripción crecida si hizo falta, y nombre/
+  // precio corridos para acompañarla) — el resto de la función dibuja con esto, igual que siempre.
+  const cajas = resolverCajasTexto(ctx, datos);
+  const ajustes = { ...datos.ajustes, nombre: cajas.nombre, precio: cajas.precio, descripcion: cajas.descripcion };
+  const extraDescripcion = cajas.extra;
+  const { textoPrecio, conPrecio, conDescripcion, conSeccion, conNombreNegocio } = banderasDeContenido(datos);
   limpiarLienzo(ctx);
 
   if (estilo === 'foto-precio') {
@@ -106,11 +190,8 @@ export function dibujarSegunEstilo(ctx, datos) {
   if (estilo === 'foto-descripcion') {
     dibujarFondoFoto(ctx, fotoImagen, encuadreFoto);
     if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto.nombre ?? '', ajustes.nombre);
-    if (ajustes.descripcion?.visible !== false && descripcion) {
-      dibujarCajaTexto(ctx, descripcion, { ...ajustes.descripcion, maxLineas: ajustes.descripcion.maxLineas ?? 3 });
-    }
-    const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
-    if (ajustes.precio?.visible !== false && textoPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
+    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion, { parrafo: true });
+    if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
     return;
   }
 
@@ -129,11 +210,7 @@ export function dibujarSegunEstilo(ctx, datos) {
   // fondo. Nombre/precio/descripción en sí se dibujan con `ajustes[clave]` igual que los demás
   // estilos con texto — el usuario los puede mover/redimensionar en el editor exactamente igual.
   if (estilo === 'banner-inferior') {
-    const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
-    const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
-    const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
-    const conSeccion = !!seccionNombre;
-    const geo = geometriaBannerInferior({ conPrecio, conDescripcion, conSeccion });
+    const geo = geometriaBannerInferior({ conPrecio, conDescripcion, conSeccion, extraDescripcion });
 
     dibujarFondoFoto(ctx, fotoImagen, 'cover');
     dibujarRectanguloSolido(ctx, geo.franja, COLOR_BANNER_FRANJA, { arribaIzq: geo.radioSuperior, arribaDer: geo.radioSuperior });
@@ -149,19 +226,14 @@ export function dibujarSegunEstilo(ctx, datos) {
     }
     if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto?.nombre ?? '', ajustes.nombre);
     if (conPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
-    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
+    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion, { parrafo: true });
     dibujarLineaFina(ctx, geo.divisor, COLOR_BANNER_DIVISOR);
     dibujarPieBanner(ctx, geo.pie, { nombreNegocio: general?.nombreNegocio, textoBoton: general?.textoBoton });
     return;
   }
 
   if (estilo === 'editorial') {
-    const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
-    const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
-    const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
-    const conSeccion = !!seccionNombre;
-    const conNombreNegocio = !!general?.nombreNegocio;
-    const geo = geometriaEditorial({ conPrecio, conDescripcion, conSeccion, conNombreNegocio });
+    const geo = geometriaEditorial({ conPrecio, conDescripcion, conSeccion, conNombreNegocio, extraDescripcion });
 
     ctx.save();
     ctx.fillStyle = COLOR_EDITORIAL_FONDO;
@@ -180,16 +252,13 @@ export function dibujarSegunEstilo(ctx, datos) {
         .join('  •  ');
       dibujarCajaTexto(ctx, textoLinea, ajustes.precio);
     }
-    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
+    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion, { parrafo: true });
     if (conNombreNegocio) dibujarPieEditorial(ctx, geo.pie, general.nombreNegocio);
     return;
   }
 
   if (estilo === 'polaroid') {
-    const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
-    const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
-    const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
-    const geo = geometriaPolaroid({ conPrecio, conDescripcion });
+    const geo = geometriaPolaroid({ conPrecio, conDescripcion, extraDescripcion });
 
     dibujarFondoPuntos(ctx, COLOR_POLAROID_FONDO, COLOR_POLAROID_PUNTOS);
     dibujarRectanguloSolido(ctx, geo.tarjeta, COLOR_POLAROID_TARJETA, { todas: 10 }, { blur: 36, color: 'rgba(58,48,40,0.16)', y: 10 });
@@ -198,17 +267,13 @@ export function dibujarSegunEstilo(ctx, datos) {
     if (conPrecio) dibujarCajaTexto(ctx, `— ${textoPrecio}`, ajustes.precio);
     if (conDescripcion) {
       dibujarLineaFina(ctx, geo.divisor, COLOR_POLAROID_DIVISOR);
-      dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
+      dibujarCajaTexto(ctx, descripcion, ajustes.descripcion, { parrafo: true });
     }
     return;
   }
 
   if (estilo === 'story-inmersiva') {
-    const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
-    const conPrecio = ajustes.precio?.visible !== false && !!textoPrecio;
-    const conDescripcion = ajustes.descripcion?.visible !== false && !!descripcion;
-    const conSeccion = !!seccionNombre;
-    const geo = geometriaStoryInmersiva({ conPrecio, conDescripcion, conSeccion });
+    const geo = geometriaStoryInmersiva({ conPrecio, conDescripcion, conSeccion, extraDescripcion });
 
     dibujarFondoFoto(ctx, fotoImagen, 'cover');
     dibujarDegradadoVertical(ctx, geo.scrim, COLOR_STORY_SCRIM_ARRIBA, COLOR_STORY_SCRIM_ABAJO);
@@ -230,7 +295,7 @@ export function dibujarSegunEstilo(ctx, datos) {
         bordeColor: COLOR_STORY_PILL_BORDE,
       });
     }
-    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion);
+    if (conDescripcion) dibujarCajaTexto(ctx, descripcion, ajustes.descripcion, { parrafo: true });
     return;
   }
 
@@ -305,6 +370,32 @@ function dibujarNombrePrecio(ctx, producto, ajustes, formatoPrecio) {
   if (ajustes.nombre?.visible !== false) dibujarCajaTexto(ctx, producto?.nombre ?? '', ajustes.nombre);
   const textoPrecio = formatearPrecio(producto?.precio, formatoPrecio);
   if (ajustes.precio?.visible !== false && textoPrecio) dibujarCajaTexto(ctx, textoPrecio, ajustes.precio);
+}
+
+function fuenteDeCaja(caja, tamano) {
+  const cursiva = caja.familia === 'newsreader-italica' ? 'italic ' : '';
+  return `${cursiva}${caja.peso || 400} ${tamano}px ${familiaCanvas(caja.familia)}`;
+}
+
+/** Renglones y tamaño de letra de un PÁRRAFO (la descripción) para una caja y un alto dado: parte
+ * en todas las líneas que hagan falta y respeta los saltos escritos (ver `calcularParrafo`). */
+function parrafoDeCaja(ctx, texto, caja, altoCaja) {
+  const tamanoInicial = caja.tamano || 48;
+  ctx.save();
+  const resultado = calcularParrafo({
+    texto,
+    anchoMax: caja.w - 24,
+    altoMax: Math.max(0, altoCaja - PAD_VERTICAL_PARRAFO * 2),
+    medirAncho: (t, tamano) => {
+      ctx.font = fuenteDeCaja(caja, tamano);
+      return ctx.measureText(t).width;
+    },
+    tamanoInicial,
+    tamanoMinimo: Math.max(16, Math.round(tamanoInicial * 0.45)),
+    interlineado: INTERLINEADO,
+  });
+  ctx.restore();
+  return resultado;
 }
 
 function lienzoNuevo() {
@@ -662,9 +753,10 @@ function dibujarFondoCaja(ctx, caja) {
 }
 
 /** Dibuja una caja de texto completa: fondo/etiqueta + texto ajustado (achica o parte en líneas, o
- * trunca con "…" si `caja.elipsis` — los 4 presets de composición). `caja.familia ===
+ * trunca con "…" si `caja.elipsis` — los 4 presets de composición); con `parrafo: true` (la
+ * descripción) parte en todos los renglones que entren en el alto de la caja. `caja.familia ===
  * 'newsreader-italica'` fuerza `font-style: italic` real (la descripción del preset "Polaroid"). */
-function dibujarCajaTexto(ctx, texto, caja) {
+function dibujarCajaTexto(ctx, texto, caja, { parrafo = false } = {}) {
   if (!caja || caja.visible === false) return;
   dibujarFondoCaja(ctx, caja);
 
@@ -678,7 +770,7 @@ function dibujarCajaTexto(ctx, texto, caja) {
   const tamanoInicial = caja.tamano || 48;
   const tamanoMinimo = Math.max(16, Math.round(tamanoInicial * 0.45));
   const maxLineas = caja.maxLineas ?? 2;
-  const { lineas, tamano } = calcularLineas({
+  const { lineas, tamano } = parrafo ? parrafoDeCaja(ctx, texto, caja, caja.h ?? ALTO) : calcularLineas({
     texto,
     anchoMax: caja.w - 24, // margen interno para que el texto no toque el borde de la etiqueta
     medirAncho,
@@ -704,7 +796,7 @@ function dibujarCajaTexto(ctx, texto, caja) {
   ctx.textAlign = alineacion;
   const xTexto = alineacion === 'left' ? caja.x + 12 : alineacion === 'right' ? caja.x + caja.w - 12 : caja.x + caja.w / 2;
 
-  const interlineado = tamano * 1.22;
+  const interlineado = tamano * INTERLINEADO;
   const altoTotal = interlineado * lineas.length;
   const alto = caja.h ?? altoTotal;
   let y = caja.y + Math.max(interlineado / 2, (alto - altoTotal) / 2 + interlineado / 2);

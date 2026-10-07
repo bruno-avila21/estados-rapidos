@@ -238,3 +238,47 @@ test('el contador de una sección nueva (sin productos) arranca en 0', async ({ 
   await crearSeccion(page, 'Vacía');
   await expect(filaSeccionPorNombre(page, 'Vacía').locator('.fila-seccion__conteo')).toHaveText('0 productos');
 });
+
+// --- "Elegir productos" (2026-10-07): ponerle una sección a varios productos desde Secciones ---
+
+test('"Elegir productos" le asigna la sección a varios productos sin abrir cada ficha', async ({ page }) => {
+  await page.goto('/');
+  await crearProducto(page, { nombre: 'Remera', precio: 1000 });
+  await crearProducto(page, { nombre: 'Pantalón', precio: 2000 });
+  await crearSeccion(page, 'Ofertas');
+
+  const fila = filaSeccionPorNombre(page, 'Ofertas');
+  await expect(fila.locator('.fila-seccion__conteo')).toHaveText('0 productos');
+  await fila.locator('[data-accion="elegir-productos"]').click();
+  await fila.locator('[data-accion="toggle-producto-seccion"]', { hasText: 'Remera' }).click();
+  await fila.locator('[data-accion="toggle-producto-seccion"]', { hasText: 'Pantalón' }).click();
+  await expect(fila.locator('.fila-seccion__conteo')).toHaveText('2 productos');
+  await expect(fila.locator('[data-accion="toggle-producto-seccion"][aria-pressed="true"]')).toHaveCount(2);
+
+  // Sacar uno también se guarda al instante, y sobrevive a recargar la pantalla.
+  await fila.locator('[data-accion="toggle-producto-seccion"]', { hasText: 'Pantalón' }).click();
+  await expect(fila.locator('.fila-seccion__conteo')).toHaveText('1 producto');
+  await page.reload();
+  await expect(filaSeccionPorNombre(page, 'Ofertas').locator('.fila-seccion__conteo')).toHaveText('1 producto');
+
+  // La ficha del producto la muestra asignada.
+  await page.goto('/');
+  await page.locator('[data-accion="editar"]', { hasText: 'Remera' }).first().click();
+  await expect(page.locator('[data-accion="toggle-seccion"]', { hasText: 'Ofertas' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('una sección creada desde la ficha de un producto queda disponible para los demás', async ({ page }) => {
+  await page.goto('/#/producto/nuevo');
+  await page.locator('#campo-nombre').fill('Campera');
+  await page.locator('[data-accion-input="elegir-galeria"]').setInputFiles(FOTO);
+  await page.locator('[data-accion="mostrar-nueva-seccion"]').click();
+  await page.locator('input[aria-label="Nombre de la nueva sección"]').fill('Invierno');
+  await page.locator('[data-accion="nueva-seccion"]').click();
+  await expect(page.locator('[data-accion="toggle-seccion"]', { hasText: 'Invierno' })).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-accion="guardar"]').click();
+  await expect(page.locator('[data-accion="editar"]', { hasText: 'Campera' }).first()).toBeVisible();
+
+  await crearProducto(page, { nombre: 'Bufanda', secciones: ['Invierno'] });
+  await page.goto('/#/secciones');
+  await expect(filaSeccionPorNombre(page, 'Invierno').locator('.fila-seccion__conteo')).toHaveText('2 productos');
+});
